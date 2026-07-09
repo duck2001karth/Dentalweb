@@ -9,6 +9,10 @@ export default withAuth(
     const token = req.nextauth.token as any;
     const pathname = req.nextUrl.pathname;
 
+    if (pathname.startsWith("/auth") || pathname.startsWith("/api/auth")) {
+      return NextResponse.next();
+    }
+
     if (token && token.isActive === false) {
       return NextResponse.redirect(new URL("/auth?error=suspended", req.url));
     }
