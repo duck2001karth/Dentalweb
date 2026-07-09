@@ -21,15 +21,11 @@ export default function AuthenticationPage() {
   const router = useRouter();
 
   useEffect(() => {
-
-    // SOLO redirigir cuando ya autenticó
     if (status === "authenticated") {
       router.push("/");
     }
 
   }, [status, router]);
-
-  // Evita render mientras verifica sesión
   if (status === "loading") {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -41,8 +37,6 @@ export default function AuthenticationPage() {
   return (
     <div className="h-screen bg-background text-foreground">
       <div className="h-full md:container relative flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0">
-
-        {/* LADO IZQUIERDO */}
         <div className="relative flex-col bg-muted p-8 lg:p-10 text-slate-900 dark:border-r lg:flex h-60 md:h-full overflow-hidden">
 
           <div
@@ -76,27 +70,18 @@ export default function AuthenticationPage() {
           </div>
         </div>
 
-        {/* LOGIN */}
         <div className="lg:p-8 mt-8 md:mt-0 px-4">
-
           <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-
             <div className="flex flex-col space-y-2 text-center">
-
               <h1 className="text-2xl font-semibold tracking-tight">
                 Acceso al Sistema
               </h1>
-
               <p className="text-sm text-muted-foreground">
                 Inicia sesión con tu cuenta para acceder a tu historial clínico y citas.
               </p>
-
             </div>
-
             <UserAuthForm />
-
             <AuthFooter />
-
           </div>
         </div>
       </div>
