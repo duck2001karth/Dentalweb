@@ -1,15 +1,36 @@
+import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
-  console.log("=================================");
-  console.log("MIDDLEWARE EJECUTADO");
-  console.log("PATH:", request.nextUrl.pathname);
-  console.log("=================================");
-
-  return NextResponse.next();
-}
+export default withAuth(
+  function middleware(req) {
+    const token = req.nextauth.token;
+    const pathname = req.nextUrl.pathname;
+    if (pathname.startsWith("/auth") || pathname.startsWith("/_next") || pathname.startsWith("/api/auth")) {
+      return NextResponse.next();
+    }
+    if (pathname.startsWith("/admin")) {
+      if (token?.role !== "ADMIN") {
+        return NextResponse.redirect(new URL("/unauthorized", req.url));
+      }
+    }
+    return NextResponse.next();
+  },
+  {
+    callbacks: {
+      authorized: ({ token }) => !!token,
+    },
+    pages: {
+      signIn: "/auth",
+    },
+  }
+);
 
 export const config = {
-  matcher: ["/:path*"],
+  matcher: [
+    "/admin/:path*", 
+    "/pacientes/:path*", 
+    "/paciente/:path*", 
+    "/agenda/:path*", 
+    "/agendavand/:path*"
+  ],
 };
