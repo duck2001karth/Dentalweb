@@ -1,11 +1,8 @@
-// middleware.ts
-
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
 export default withAuth(
   function middleware(req) {
-
     const token = req.nextauth.token as any;
     const pathname = req.nextUrl.pathname;
 
@@ -13,36 +10,33 @@ export default withAuth(
       return NextResponse.next();
     }
 
-    if (token && token.isActive === false) {
+    if (!token) {
+      return NextResponse.redirect(new URL("/auth", req.url));
+    }
+
+    if (token.isActive === false) {
       return NextResponse.redirect(new URL("/auth?error=suspended", req.url));
     }
 
-    if (pathname.startsWith("/admin")) {
-      if (token?.role !== "ADMIN") {
-        return NextResponse.redirect(new URL("/unauthorized", req.url));
-      }
+    if (pathname.startsWith("/admin") && token.role !== "ADMIN") {
+      return NextResponse.redirect(new URL("/unauthorized", req.url));
     }
-
     const clinicalRoutes = ["/pacientes", "/paciente", "/agenda", "/agendavand"];
-    const isClinicalRoute = clinicalRoutes.some((route) => pathname.startsWith(route));
-
-    if (isClinicalRoute) {
+    if (clinicalRoutes.some(route => pathname.startsWith(route))) {
       const allowedRoles = ["ADMIN", "DOCTOR", "RECEPTIONIST"];
-      
-      if (!token?.role || !allowedRoles.includes(token.role)) {
+      if (!allowedRoles.includes(token.role)) {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
+
     return NextResponse.next();
   },
   {
     callbacks: {
-      authorized: ({ token }) => {
-        return !!token;
-      },
+      authorized: ({ token }) => !!token,
     },
     pages: {
-      signIn: "/auth", 
+      signIn: "/auth",
     },
   }
 );
@@ -53,6 +47,6 @@ export const config = {
     "/pacientes/:path*",
     "/paciente/:path*",
     "/agenda/:path*",
-    "/agendavand/:path*",
+    "/agendavand/:path*"
   ],
 };
