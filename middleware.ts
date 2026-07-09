@@ -5,31 +5,27 @@ import type { NextRequest } from "next/server";
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
-  if (pathname.startsWith("/auth") || pathname.startsWith("/api/auth")) {
+  if (pathname.startsWith("/auth") || pathname.startsWith("/_next") || pathname.startsWith("/api/auth")) {
     return NextResponse.next();
   }
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const protectedRoutes = ["/admin", "/pacientes", "/paciente", "/agenda", "/agendavand"];
+  const isProtected = protectedRoutes.some(route => pathname.startsWith(route));
 
+  if (isProtected) {
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
 
-  if (!token) {
-    return NextResponse.redirect(new URL("/auth", req.url));
-  }
-
-  if (pathname.startsWith("/admin")) {
-    if (token.role !== "ADMIN") {
+    if (!token) {
+      return NextResponse.redirect(new URL("/auth", req.url));
+    }
+    if (pathname.startsWith("/admin") && token.role !== "ADMIN") {
       return NextResponse.redirect(new URL("/unauthorized", req.url));
     }
   }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/admin/:path*", 
-    "/pacientes/:path*", 
-    "/paciente/:path*", 
-    "/agenda/:path*", 
-    "/agendavand/:path*"
-  ],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
 };
