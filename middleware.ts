@@ -16,7 +16,6 @@ export default withAuth(
       }
     }
 
-    // Permite el paso a ADMIN, DOCTOR y RECEPTIONIST. Bloquea a otros (ej: pacientes, invitados)
     if (pathname.startsWith("/pacientes") || pathname.startsWith("/agenda") || pathname.startsWith("/paciente/")) {
       const allowedRoles = ["ADMIN", "DOCTOR", "RECEPTIONIST"];
       if (!allowedRoles.includes(token?.role)) {
@@ -38,11 +37,12 @@ export default withAuth(
   }
 );
 
-// ¡IMPORTANTE! Debes agregar las nuevas rutas al matcher para que el middleware las escuche
 export const config = {
   matcher: [
-    "/admin/:path*",     
-    "/dashboard/:path*",  
-
+    "/admin/:path*",
+    "/pacientes/:path*",
+    "/paciente/:path*", // Incluye la ruta con ID dinámico
+    "/agenda/:path*",
+    "/agendavand/:path*",
   ],
 };
