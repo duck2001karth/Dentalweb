@@ -1,0 +1,456 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 1. ROLES Y LOGS (Sistema Base)
+// ==========================================
+
+enum UserRole {
+  ADMIN
+  DOCTOR
+  RECEPTIONIST
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String   
+  details   String?  
+  ipAddress String?  
+  userAgent String?  
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  level     LogLevel @default(INFO)
+  message   String
+  metadata  Json?    
+  createdAt DateTime @default(now())
+}
+
+// ==========================================
+// 2. NEXT-AUTH (Autenticación y Usuarios)
+// ==========================================
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+// ==========================================
+// MÓDULOS Usuario
+// ==========================================
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  phoneNumber   String?
+  
+  role          UserRole  @default(DOCTOR)
+  specialty     String?   
+  isActive      Boolean   @default(true)
+  
+  accounts      Account[]
+  sessions      Session[]
+  
+  odontogramRecords OdontogramRecord[]
+  periodontograms Periodontogram[]
+
+  documents PatientDocument[]
+  prescriptions Prescription[]
+
+  clinicalDocument ClinicalDocument[]
+  treatmentPlans TreatmentPlan[]
+  
+  appointments  Appointment[]  @relation("DoctorAppointments")
+  clinicalNotes ClinicalNote[] @relation("DoctorNotes")
+  auditLogs     AuditLog[]   
+
+  notifications Notification[]
+
+  comments      PatientComment[] @relation("DoctorComments")
+  assignedTasks PatientTask[]    @relation("TaskAssignee")
+  createdTasks  PatientTask[]    @relation("TaskCreator")
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ==========================================
+// 3. MÓDULOS CLÍNICOS
+// ==========================================
+
+model Patient {
+  id                    String    @id @default(uuid())
+  ci                    String    @unique // Cédula de Identidad 
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String?   
+  birthDate             DateTime?
+  address               String?
+  
+  tipoRegistro          String?   
+  cedulaAcudiente       String?
+  tipoIdentificacion    String?   
+  nombreSocial          String?
+  sexo                  String?
+  genero                String?
+  grupoSanguineo        String?
+  pertenenciaEtnica     String?
+  estadoCivil           String?
+  nivelEducativo        String?
+  profesion             String?
+  tipoPaciente          String?   
+  eps                   String?   
+  ciudad                String?
+  departamento          String?
+  zonaResidencia        String?   
+  telefonoFijo          String?
+
+  nombreAcompanante     String?
+  telefonoAcompanante   String?
+  nombreResponsable     String?
+  telefonoResponsable   String?
+  parentescoResponsable String?
+
+  convenio              String?   
+  gestante              Boolean   @default(false)
+  observaciones         String?   @db.Text
+  medicalAlerts         String?   @db.Text 
+  
+  appointments          Appointment[]
+  clinicalNotes         ClinicalNote[] 
+
+  anamnesis     Anamnesis?
+  odontogramRecords OdontogramRecord[]
+
+  periodontograms Periodontogram[]
+  documents PatientDocument[]
+
+  prescriptions Prescription[]
+  clinicalDocument ClinicalDocument[]
+
+  treatmentPlans        TreatmentPlan[]
+
+  comments              PatientComment[]
+  tasks                 PatientTask[]
+  
+  isDeleted             Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+enum AppointmentStatus {
+  SCHEDULED     
+  WAITING       
+  IN_PROGRESS   
+  COMPLETED     
+  CANCELLED     
+  NO_SHOW       
+}
+
+enum PaymentStatus {
+  UP_TO_DATE    
+  DEBT          
+  EVALUATION    
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  date        DateTime          
+  startTime   String            
+  endTime     String            
+  
+  status      AppointmentStatus @default(SCHEDULED)
+  payment     PaymentStatus     @default(UP_TO_DATE)
+  box         String?           
+  reason      String?           
+  
+  patientId   String
+  patient     Patient           @relation(fields: [patientId], references: [id])
+  
+  doctorId    String
+  doctor      User              @relation("DoctorAppointments", fields: [doctorId], references: [id])
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+enum NoteType {
+  EVOLUTION    
+  PRESCRIPTION 
+  GENERAL      
+}
+
+model ClinicalNote {
+  id                    String   @id @default(uuid())
+  type                  NoteType @default(EVOLUTION)
+  content               String   @db.Text
+  
+  // Campos multimedia
+  fileUrl               String?  @db.Text // Para la foto adjunta
+  professionalSignature String?  @db.Text // Firma del doctor (Base64)
+  patientSignature      String?  @db.Text // Firma del paciente (Base64)
+  
+  patientId             String
+  patient               Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  authorId              String
+  author                User     @relation("DoctorNotes", fields: [authorId], references: [id])
+  
+  isSigned              Boolean  @default(false) 
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Anamnesis {
+  id        String   @id @default(uuid())
+  patientId String   @unique // Relación 1 a 1 con el paciente
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  data      Json     
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OdontogramRecord {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  planId        String?  
+  treatmentPlan TreatmentPlan? @relation(fields: [planId], references: [id])
+
+  toothNumber Int      // Número de pieza (ej: 18, 11, 48)
+  surfaces    String[] // Array de caras: ["distal", "occlusal", "mesial", "vestibular", "palatina"]
+  status      String   // "CARIES", "RESTAURACION", "AUSENTE", "SANO", etc.
+  notes       String?
+  
+  isEvolution Boolean  @default(false) // Si es diagnóstico o evolución
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  
+  createdAt   DateTime @default(now())
+}
+
+model Periodontogram {
+  id        String   @id @default(uuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  data      Json     
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PatientDocument {
+  id        String   @id @default(uuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  name      String
+  type      String
+  size      String
+  url       String   @db.Text // Guardaremos el archivo en Base64 aquí
+  
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Prescription {
+  id           String   @id @default(uuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  medications  String   @db.Text
+  indications  String   @db.Text
+  
+  authorId     String?
+  author       User?    @relation(fields: [authorId], references: [id])
+  doctorSignature String?  @db.Text
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ClinicalDocument {
+  id               String   @id @default(uuid())
+  patientId        String
+  patient          Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  title            String
+  content          String   @db.Text
+  
+  specialistName   String?
+  specialistIdDoc  String?  
+  
+  authorId         String?
+  author           User?    @relation(fields: [authorId], references: [id])
+  
+  doctorSignature  String?  @db.Text 
+  patientSignature String?  @db.Text 
+  
+  isVoided         Boolean  @default(false) 
+
+  createdAt        DateTime @default(now())
+}
+
+model TreatmentPlan {
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  doctorId    String?
+  doctor      User?    @relation(fields: [doctorId], references: [id])
+  
+  name        String   // Ej: "Ortodoncia Invisible", "Rehabilitación Superior"
+  status      String   @default("DRAFT") // DRAFT (Diagnóstico), ACTIVE (En Curso), COMPLETED (Finalizado)
+  
+  totalCost   Float    @default(0) // Presupuesto Total
+  totalPaid   Float    @default(0) // Lo que el paciente ya pagó (Abonado)
+  
+  odontogramRecords OdontogramRecord[]
+  commentsToPatient String? @db.Text
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  items       TreatmentItem[]
+  
+}
+
+model TreatmentItem {
+  id              String   @id @default(cuid())
+  treatmentPlanId String
+  plan            TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+  
+  tooth           String?  // Pieza dental (Ej: "11", "45")
+  procedureName   String   // Ej: "Corona de Porcelana"
+  cost            Float    @default(0)
+  isCompleted     Boolean  @default(false) // Para calcular el progreso %
+}
+
+
+// ==========================================
+// 4. MÓDULOS DE GESTIÓN INTERNA 
+// ==========================================
+
+model PatientComment {
+  id        String   @id @default(uuid())
+  text      String   @db.Text
+  
+  // Relación con el paciente
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  // Relación con el usuario (Doctor/Recepcionista) que escribió el comentario
+  authorId  String
+  author    User     @relation("DoctorComments", fields: [authorId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PatientTask {
+  id          String   @id @default(uuid())
+  title       String
+  isCompleted Boolean  @default(false)
+  dueDate     DateTime? 
+  
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  assignedToId String?
+  assignedTo   User?    @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  
+  creatorId   String
+  creator     User     @relation("TaskCreator", fields: [creatorId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  type        String   // Ej: "PAYMENT", "APPOINTMENT", "CLINICAL", "SYSTEM", "ALERT"
+  targetRole  String   // Ej: "DOCTOR", "RECEPTIONIST", "ADMIN", "ALL"
+  isRead      Boolean  @default(false)
+  
+  // Opcional: Relacionar la notificación con un usuario específico si es privada
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+// ==========================================
+// 5. MÓDULO ADMINISTRATIVO (Catálogos y Config)
+// ==========================================
+
+model ProcedureCatalog {
+  id          String   @id @default(cuid())
+  code        String?  @unique // Ej: "OP-01" para Operatoria 01
+  name        String   // Ej: "Resina Simple"
+  category    String   // Ej: "Operatoria", "Cirugía", "Endodoncia"
+  basePrice   Float    @default(0) // Precio en dólares o moneda local
+  isActive    Boolean  @default(true) // El admin puede pausar un tratamiento sin borrarlo
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
