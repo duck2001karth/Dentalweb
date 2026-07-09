@@ -16,6 +16,7 @@ export const authOptions: NextAuthOptions = {
         data: {
           ...data,
           role: UserRole.DOCTOR,
+          isActive: true,
         },
       });
     },
@@ -34,15 +35,15 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
       }
-
-      if (user || trigger === "update") {
+      if (token.id && (user || trigger === "update")) {
         const dbUser = await prisma.user.findUnique({
           where: {
             id: token.id as string,
           },
           select: {
             id: true,
-            role: true,
+            role: true,        
+            isActive: true,     
             phoneNumber: true,
             specialty: true,
             image: true,
@@ -53,8 +54,9 @@ export const authOptions: NextAuthOptions = {
 
         if (dbUser) {
           token.role = dbUser.role;
+          token.isActive = dbUser.isActive;
           token.phoneNumber = dbUser.phoneNumber ?? "";
-          token.specialty = dbUser.specialty ?? ""; 
+          token.specialty = dbUser.specialty ?? "";
           token.picture = dbUser.image ?? "";
           token.email = dbUser.email ?? "";
           token.name = dbUser.name ?? "";
@@ -68,6 +70,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user && token) {
         session.user.id = token.id as string;
         session.user.role = token.role as UserRole;
+        session.user.isActive = token.isActive as boolean;
         session.user.phoneNumber = token.phoneNumber as string;
         session.user.specialty = token.specialty as string;
         session.user.image = token.picture as string;

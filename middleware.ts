@@ -1,8 +1,11 @@
+// middleware.ts
+
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
 export default withAuth(
   function middleware(req) {
+
     const token = req.nextauth.token as any;
     const pathname = req.nextUrl.pathname;
 
@@ -16,23 +19,26 @@ export default withAuth(
       }
     }
 
-    if (pathname.startsWith("/pacientes") || pathname.startsWith("/agenda") || pathname.startsWith("/paciente/")) {
+    const clinicalRoutes = ["/pacientes", "/paciente", "/agenda", "/agendavand"];
+    const isClinicalRoute = clinicalRoutes.some((route) => pathname.startsWith(route));
+
+    if (isClinicalRoute) {
       const allowedRoles = ["ADMIN", "DOCTOR", "RECEPTIONIST"];
-      if (!allowedRoles.includes(token?.role)) {
+      
+      if (!token?.role || !allowedRoles.includes(token.role)) {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
-
     return NextResponse.next();
   },
   {
     callbacks: {
       authorized: ({ token }) => {
-        return !!token; 
+        return !!token;
       },
     },
     pages: {
-      signIn: "/auth",
+      signIn: "/auth", 
     },
   }
 );
@@ -41,7 +47,7 @@ export const config = {
   matcher: [
     "/admin/:path*",
     "/pacientes/:path*",
-    "/paciente/:path*", // Incluye la ruta con ID dinámico
+    "/paciente/:path*",
     "/agenda/:path*",
     "/agendavand/:path*",
   ],
