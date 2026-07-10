@@ -1,24 +1,42 @@
+import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 
 export async function middleware(req: NextRequest) {
   const pathname = req.nextUrl.pathname;
 
-  if (pathname.startsWith("/auth") || pathname.startsWith("/_next") || pathname.startsWith("/api/auth")) {
-    return NextResponse.next();
+  const token = await getToken({
+    req,
+    secret: process.env.NEXTAUTH_SECRET,
+  });
+
+  console.log("=================================");
+  console.log("PATH:", pathname);
+  console.log("TOKEN:", token);
+  console.log("ROLE:", token?.role);
+  console.log("=================================");
+
+  // Si no está autenticado
+  if (!token) {
+    return NextResponse.redirect(new URL("/auth", req.url));
   }
 
-  const protectedRoutes = ["/admin", "/pacientes", "/paciente", "/agenda", "/agendavand"];
-  const isProtected = protectedRoutes.some(route => pathname.startsWith(route));
-
-  if (isProtected) {
-    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-
-    if (!token) {
-      return NextResponse.redirect(new URL("/auth", req.url));
+  // Solo ADMIN puede acceder a /admin
+  if (pathname.startsWith("/admin")) {
+    if (token.role !== "ADMIN") {
+      return NextResponse.redirect(new URL("/", req.url));
     }
-    if (pathname.startsWith("/admin") && token.role !== "ADMIN") {
+  }
+
+  // Rutas clínicas
+  if (
+    pathname.startsWith("/pacientes") ||
+    pathname.startsWith("/paciente") ||
+    pathname.startsWith("/agenda") ||
+    pathname.startsWith("/agendavand")
+  ) {
+    const allowedRoles = ["ADMIN", "DOCTOR", "RECEPTIONIST"];
+
+    if (!allowedRoles.includes(String(token.role))) {
       return NextResponse.redirect(new URL("/unauthorized", req.url));
     }
   }
@@ -27,5 +45,12 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: [
+    "/admin/:path*",
+    "/pacientes/:path*",
+    "/paciente/:path*",
+    "/agenda/:path*",
+    "/agendavand/:path*",
+    "/dashboard/:path*",
+  ],
 };
