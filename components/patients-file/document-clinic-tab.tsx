@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useRef, useEffect, useCallback } from "react"
-import { Printer, Trash2, Edit, PenTool, Loader2, User, FileSignature, Save, X, RefreshCw, FileText } from "lucide-react"
+import React, { useState, useEffect, useCallback } from "react"
+import { Printer, Trash2, Edit, PenTool, Loader2, User, FileSignature, Save, X, RefreshCw, FileText, CheckCircle2 } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -13,50 +13,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
-
-// --- COMPONENTE INTERNO: PAD DE FIRMAS TÁCTIL ---
-const SignaturePad = ({ onSave, onCancel, title }: { onSave: (img: string) => void, onCancel: () => void, title: string }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [isDrawing, setIsDrawing] = useState(false)
-
-  const startDrawing = (e: any) => { setIsDrawing(true); draw(e); }
-  const stopDrawing = () => { setIsDrawing(false); canvasRef.current?.getContext("2d")?.beginPath(); }
-
-  const draw = (e: any) => {
-    if (!isDrawing) return
-    const canvas = canvasRef.current; const ctx = canvas?.getContext("2d")
-    if (!canvas || !ctx) return
-    if (e.type.includes('touch')) e.preventDefault() 
-    const rect = canvas.getBoundingClientRect()
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-    ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.strokeStyle = "#000000"
-    ctx.lineTo(clientX - rect.left, clientY - rect.top)
-    ctx.stroke(); ctx.beginPath(); ctx.moveTo(clientX - rect.left, clientY - rect.top)
-  }
-
-  return (
-    <div className="flex flex-col gap-4 items-center">
-      <p className="font-medium text-foreground">{title}</p>
-      <div className="border-2 border-dashed border-border rounded-lg bg-white overflow-hidden touch-none">
-        <canvas ref={canvasRef} width={400} height={200} onMouseDown={startDrawing} onMouseUp={stopDrawing} onMouseOut={stopDrawing} onMouseMove={draw} onTouchStart={startDrawing} onTouchEnd={stopDrawing} onTouchMove={draw} className="cursor-crosshair"/>
-      </div>
-      <div className="flex gap-2 w-full justify-between mt-2">
-        <Button variant="outline" onClick={() => canvasRef.current?.getContext("2d")?.clearRect(0, 0, 400, 200)}>Limpiar</Button>
-        <div className="flex gap-2">
-          <Button variant="ghost" onClick={onCancel}>Cancelar</Button>
-          <Button onClick={() => onSave(canvasRef.current?.toDataURL("image/png") || "")} className="bg-[#008bcd] text-white">Guardar Firma</Button>
-        </div>
-      </div>
-    </div>
-  )
-}
+import { SignaturePad } from "@/components/patients-file/signature-pad" 
+import { documentStatuses } from "@/constants/status"
 
 export function DocumentosClinicosTab({ patientId, patientData }: { patientId: string, patientData?: any }) {
   const { data: session } = useSession()
   const { toast } = useToast()
-  
-  // --- CONTROL DE ROLES DE SEGURIDAD ---
   const currentUser = session?.user as any
   const canEditDocs = currentUser?.role === "DOCTOR" || currentUser?.role === "ADMIN"
 
@@ -83,9 +45,14 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
   }, [patientId, toast])
 
   useEffect(() => { fetchDocs() }, [fetchDocs])
+  const getDocumentStatusKey = (doc: any) => {
+    if (doc.isVoided) return "VOIDED";
+    if (doc.patientSignature && doc.doctorSignature) return "COMPLETED";
+    if (doc.patientSignature || doc.doctorSignature) return "PARTIAL";
+    return "DRAFT";
+  }
 
   const handleSaveDocument = async () => {
-    // Doble validación de seguridad (Front y API asumiendo que tienes protección backend)
     if (!canEditDocs) return toast({ title: "Acceso Denegado", description: "No tienes permisos para crear certificados.", variant: "destructive" })
     
     if (!newTitle.trim() || !newContent.trim()) return toast({ title: "Faltan datos", variant: "destructive" })
@@ -100,12 +67,12 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
   }
 
   const handleEditInit = (doc: any) => { 
-    if (!canEditDocs) return; // Bloqueo de seguridad
+    if (!canEditDocs) return; 
     setSelectedDoc(null); setEditingDocId(doc.id); setNewTitle(doc.title); setNewContent(doc.content); setIsCreating(true); 
   }
 
   const handleDeleteDocument = async (id: string) => {
-    if (!canEditDocs) return; // Bloqueo de seguridad
+    if (!canEditDocs) return; 
     try {
       await fetch(`/api/clinical-documents/${id}`, { method: "DELETE" })
       toast({ title: "Documento anulado", variant: "success" })
@@ -115,7 +82,7 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
   }
 
   const handleRestoreDocument = async (id: string) => {
-    if (!canEditDocs) return; // Bloqueo de seguridad
+    if (!canEditDocs) return; 
     try {
       await fetch(`/api/clinical-documents/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isVoided: false }) })
       toast({ title: "Documento restaurado", variant: "success" })
@@ -125,7 +92,6 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
 
   const handleSaveSignature = async (base64Image: string) => {
     if (!selectedDoc || !signingRole) return
-    // La recepcionista puede recoger la firma del paciente, pero no la del doctor
     if (signingRole === "doctor" && currentUser?.role === "RECEPTIONIST") {
         return toast({ title: "Acceso Denegado", description: "El médico debe firmar desde su propia cuenta.", variant: "destructive" })
     }
@@ -159,31 +125,30 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
         </div>
         
         <div className="flex gap-2">
-          {/* El botón de ver anulados sí se lo dejamos a todos para transparencia */}
           <Button variant={showVoided ? "secondary" : "outline"} onClick={() => setShowVoided(!showVoided)} className={showVoided ? "bg-muted text-foreground" : "bg-background"}>
             {showVoided ? "Volver a activos" : "Ver anulados"}
           </Button>
           
-          {/* BOTÓN CREAR: Solo Doctor o Admin */}
           {!showVoided && canEditDocs && (
-            <Button onClick={() => { setEditingDocId(null); setNewTitle(""); setNewContent(""); setIsCreating(true); }} className="bg-[#5cb85c] hover:bg-[#4cae4c] text-white">
+            <Button onClick={() => { setEditingDocId(null); setNewTitle(""); setNewContent(""); setIsCreating(true); }} className="bg-[#008bcd] hover:bg-[#0070a8] text-white">
               Nuevo documento clínico
             </Button>
           )}
         </div>
       </div>
-
-      {/* GRID DE TARJETAS */}
       {displayedDocs.length === 0 ? (
         <div className="bg-card border border-dashed border-border rounded-xl p-10 text-center text-muted-foreground">
           {showVoided ? "No hay documentos anulados." : "Aún no se han creado documentos clínicos."}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayedDocs.map(doc => (
+          {displayedDocs.map(doc => {
+            const statusKey = getDocumentStatusKey(doc);
+            const statusConfig = documentStatuses[statusKey];
+            const StatusIcon = statusConfig.icon;
+
+            return (
             <div key={doc.id} className={cn("bg-card border rounded-lg shadow-sm flex flex-col items-center p-6 transition-colors relative group", doc.isVoided ? "border-red-200 bg-red-50/10" : "border-border hover:border-[#008bcd]/50")}>
-              
-              {/* Acciones Hover: Solo Doctor o Admin */}
               {canEditDocs && (
                 <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {!doc.isVoided ? (
@@ -205,22 +170,27 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
                 </div>
               )}
 
-              <div className="flex justify-between w-full text-xs text-muted-foreground mb-4">
-                <div className="flex items-center gap-1"><User size={12}/> {doc.author?.name || "Administrador"}</div>
-                <div className="flex items-center gap-1">{format(new Date(doc.createdAt), "dd MMM yyyy", { locale: es })}</div>
+              {/* BADGE DE ESTADO */}
+              <div className={`mt-2 mb-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusConfig.bg} ${statusConfig.color}`}>
+                <StatusIcon className="w-3.5 h-3.5" />
+                <span>{statusConfig.label}</span>
               </div>
               
               <h3 className={cn("font-bold text-center text-lg mb-4 px-4", doc.isVoided ? "text-red-700" : "text-foreground")}>{doc.title}</h3>
               
-              <Button variant="link" onClick={() => setSelectedDoc(doc)} className={cn("font-bold", doc.isVoided ? "text-red-600" : "text-[#008bcd]")}>
+              <div className="flex justify-between w-full text-xs text-muted-foreground mb-4 border-t border-border pt-4 mt-auto">
+                <div className="flex items-center gap-1"><User size={12}/> {doc.author?.name || "Administrador"}</div>
+                <div className="flex items-center gap-1">{format(new Date(doc.createdAt), "dd MMM yyyy", { locale: es })}</div>
+              </div>
+
+              <Button variant="outline" onClick={() => setSelectedDoc(doc)} className={cn("w-full font-bold", doc.isVoided ? "text-red-600 border-red-200 hover:bg-red-50" : "text-[#008bcd] border-[#008bcd]/30 hover:bg-[#008bcd]/10")}>
                 Ver documento clínico <span className="ml-1">»</span>
               </Button>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
-
-      {/* MODAL CREAR / EDITAR (Solo renderizado si tiene permisos por seguridad extra) */}
       {canEditDocs && (
         <Dialog open={isCreating} onOpenChange={setIsCreating}>
           <DialogContent className="max-w-4xl bg-card border-border">
@@ -229,7 +199,10 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
               <div><label className="text-sm font-bold text-muted-foreground mb-1 block">Título</label><Input placeholder="Ej: Certificado Médico" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="bg-background"/></div>
               <div><label className="text-sm font-bold text-muted-foreground mb-1 block">Cuerpo del Documento</label><Textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} className="min-h-[300px] bg-background"/></div>
             </div>
-            <DialogFooter className="mt-4"><Button variant="outline" onClick={() => setIsCreating(false)}>Cancelar</Button><Button onClick={handleSaveDocument} className="bg-[#5cb85c] text-white">Guardar</Button></DialogFooter>
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setIsCreating(false)}>Cancelar</Button>
+              <Button onClick={handleSaveDocument} className="bg-[#008bcd] text-white">Guardar</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}
@@ -248,13 +221,23 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
       <Dialog open={!!selectedDoc} onOpenChange={(open) => !open && setSelectedDoc(null)}>
         <DialogContent className="max-w-[95vw] md:max-w-6xl h-[90vh] flex flex-col bg-card border-border overflow-hidden p-0 [&>button]:hidden">
           <DialogHeader className="shrink-0 flex flex-row justify-between items-center px-6 py-4 border-b border-border bg-muted/10">
-            <DialogTitle className="text-xl font-light flex items-center gap-2">
-              <FileText size={20} className="text-[#008bcd]"/> {selectedDoc?.title} {selectedDoc?.isVoided && <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full ml-2">ANULADO</span>}
-            </DialogTitle>
-            <div className="flex gap-2">
-              {/* BOTÓN EDITAR EN VISTA DETALLADA: Solo Doctor o Admin */}
-              {!selectedDoc?.isVoided && canEditDocs && <Button size="sm" variant="outline" onClick={() => handleEditInit(selectedDoc)}><Edit size={14} className="mr-1"/> Editar</Button>}
+            <DialogTitle className="text-xl font-light flex items-center gap-3">
+              <FileText size={20} className="text-[#008bcd]"/> {selectedDoc?.title}
               
+              {/* STATUS DEL DOCUMENTO EN LA VISTA DETALLADA */}
+              {selectedDoc && (() => {
+                const config = documentStatuses[getDocumentStatusKey(selectedDoc)];
+                return (
+                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${config.bg} ${config.color} ml-2`}>
+                    <config.icon className="w-3.5 h-3.5" />
+                    {config.label}
+                  </span>
+                );
+              })()}
+            </DialogTitle>
+
+            <div className="flex gap-2">
+              {!selectedDoc?.isVoided && canEditDocs && <Button size="sm" variant="outline" onClick={() => handleEditInit(selectedDoc)}><Edit size={14} className="mr-1"/> Editar</Button>}
               <Button size="sm" variant="outline" onClick={() => window.print()}><Printer size={14} className="mr-1"/> Imprimir</Button>
               <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setSelectedDoc(null)}><X size={18}/></Button>
             </div>
@@ -282,7 +265,6 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
                     ) : (
                       <div className="flex flex-col gap-3">
                         <span className="text-red-500 font-medium text-sm">Pendiente de firma</span>
-                        {/* La Recepcionista SÍ puede recoger la firma del paciente */}
                         {!selectedDoc.isVoided && <Button variant="outline" className="w-full print:hidden" onClick={() => setSigningRole("patient")}><PenTool size={14} className="mr-2"/> Firmar</Button>}
                       </div>
                     )}
@@ -312,9 +294,29 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
         </DialogContent>
       </Dialog>
 
+      {/* MODAL PAD DE FIRMAS (Usando el Componente Reutilizable) */}
       <Dialog open={!!signingRole} onOpenChange={(open) => !open && setSigningRole(null)}>
-        <DialogContent className="sm:max-w-md bg-card border-border"><DialogHeader><DialogTitle>Registrar Firma Digital</DialogTitle></DialogHeader>{signingRole && <SignaturePad title={signingRole === "doctor" ? "Firma del Profesional" : "Firma del Paciente"} onSave={handleSaveSignature} onCancel={() => setSigningRole(null)} />}</DialogContent>
+        <DialogContent className="sm:max-w-md bg-card border-border">
+          <DialogHeader>
+            <DialogTitle>Registrar Firma Digital</DialogTitle>
+          </DialogHeader>
+          {signingRole && (
+            <div className="mt-4">
+              <SignaturePad 
+                label={signingRole === "doctor" ? "Firma del Profesional Tratante" : "Firma del Paciente"} 
+                onSign={(data) => handleSaveSignature(data)} 
+                onClear={() => {}} // Local clear is managed inside the pad
+              />
+              <div className="flex justify-end gap-2 mt-6 border-t border-border pt-4">
+                <Button variant="outline" onClick={() => setSigningRole(null)}>Cancelar</Button>
+                {/* El botón de guardar ahora se activa desde el componente SignaturePad interno, pero si se quiere forzar la parada, el pad dispara onSign al soltar el trazo */}
+                <span className="text-xs text-muted-foreground mt-2.5">El trazo se captura automáticamente. Cierra esta ventana si has terminado.</span>
+              </div>
+            </div>
+          )}
+        </DialogContent>
       </Dialog>
+
     </div>
   )
 }

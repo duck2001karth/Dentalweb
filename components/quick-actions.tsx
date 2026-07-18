@@ -32,7 +32,7 @@ export function QuickActions() {
         </DropdownMenuItem>
 
         <DropdownMenuItem 
-          onClick={() => router.push("/pacientes?new=true")} // Asumiendo que puedes abrir un modal con query params
+          onClick={() => router.push("/pacientes?new=true")}
           className="cursor-pointer font-medium py-2.5 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
         >
           <UserPlus className="w-4 h-4 mr-2 text-emerald-500" /> 

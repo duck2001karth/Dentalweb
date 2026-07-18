@@ -13,6 +13,8 @@ export interface ClinicalNote {
   authorId: string
   isSigned: boolean
   createdAt: string
+  updatedAt: string
+  status: string
 }
 
 export type ClinicalNoteInput = Omit<ClinicalNote, "id" | "isSigned" | "createdAt" | "updatedAt">

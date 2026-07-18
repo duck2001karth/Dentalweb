@@ -5,8 +5,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
   try {
     const params = await props.params;
     const body = await req.json();
-
-    const { isSigned, content, fileUrl } = body;
+    const { isSigned, content, fileUrl, status } = body;
 
     const note = await prisma.clinicalNote.update({
       where: { id: params.id },
@@ -14,6 +13,7 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string 
         ...(isSigned !== undefined && { isSigned }),
         ...(content !== undefined && { content }),
         ...(fileUrl !== undefined && { fileUrl }),
+        ...(status !== undefined && { status }), 
       },
     });
 

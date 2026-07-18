@@ -58,9 +58,11 @@ export function AppCommand({ className, ...props }: any) {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  // CORRECCIÓN: Atajo unificado a Ctrl + B (o Cmd + B)
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      if ((e.key === "b" || e.key === "B") && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
         ref.current?.focus()
       }
@@ -68,14 +70,14 @@ export function AppCommand({ className, ...props }: any) {
     document.addEventListener("keydown", down)
     return () => document.removeEventListener("keydown", down)
   }, [])
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!query.trim()) return
     setIsOpen(false)
-    router.push(`/pacientes?q=${encodeURIComponent(query)}`)
+    router.push(`/paciente?q=${encodeURIComponent(query)}`)
     ref.current?.blur()
   }
-
   const navigateToPatient = (id: string) => {
     setIsOpen(false)
     setQuery("")
@@ -102,7 +104,7 @@ export function AppCommand({ className, ...props }: any) {
               setQuery(e.target.value)
               setIsOpen(true)
             }}
-            className="flex-1 h-11 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-0 px-2 font-medium"
+            className="flex-1 h-11 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-0 px-2 font-medium text-foreground"
             placeholder="Buscar paciente por nombre o CI..."
             onFocus={() => {
               setIsFocused(true)
@@ -117,14 +119,14 @@ export function AppCommand({ className, ...props }: any) {
                <Loader2 className="animate-spin text-[#008bcd]" size={18} />
             ) : (
                <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border bg-muted/50 px-2 text-[10px] font-medium text-muted-foreground opacity-70">
-                 <span className="text-xs">⌘</span>K
+                 <span className="text-xs">⌘</span>B
                </kbd>
             )}
           </div>
         </div>
       </form>
 
-      {/* DROPDOWN (MODAL FLOTANTE DE RESULTADOS) */}
+      {/* DROPDOWN DE RESULTADOS */}
       {isOpen && query.trim().length > 0 && (
         <div className="absolute top-full left-0 mt-2 w-full bg-card border border-border shadow-2xl rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
           {isLoading ? (
@@ -138,6 +140,7 @@ export function AppCommand({ className, ...props }: any) {
               </div>
               {filteredPatients.map((patient: any) => (
                 <button
+                  type="button"
                   key={patient.id}
                   onClick={() => navigateToPatient(patient.id)}
                   className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 text-left transition-colors border-b border-border/50 last:border-0 group"

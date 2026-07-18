@@ -7,6 +7,7 @@ import { es } from "date-fns/locale"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { treatmentStatuses } from "@/constants/status"
 
 interface EvolutionCardProps {
   note: any
@@ -17,7 +18,11 @@ interface EvolutionCardProps {
   onPreviewImage: (url: string) => void
 }
 
+
+
 export function EvolutionCard({ note, canEdit, canDelete, onEdit, onDelete, onPreviewImage }: EvolutionCardProps) {
+  const statusConfig = treatmentStatuses[note.status] || treatmentStatuses.IN_PROGRESS;
+  const StatusIcon = statusConfig.icon;
   return (
     <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group print:mb-6 print:break-inside-avoid print:block">
       
@@ -36,8 +41,10 @@ export function EvolutionCard({ note, canEdit, canDelete, onEdit, onDelete, onPr
               {format(new Date(note.createdAt), "d 'de' MMMM yyyy, HH:mm", { locale: es })}
             </span>
           </div>
-
-          {/* MENÚ ACCIONES PROTEGIDO POR ROLES SEPARADOS */}
+          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${statusConfig.bg} ${statusConfig.color}`}>
+            <StatusIcon className="w-3 h-3" />
+            {statusConfig.label}
+          </div>
           {(canEdit || canDelete) && (
             <div className="print:hidden">
               <DropdownMenu>

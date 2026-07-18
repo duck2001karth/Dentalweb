@@ -11,12 +11,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 
 import { useGetClinicalNotes, useCreateClinicalNote } from "@/hooks/clinical-notes"
 import { HistorialPrint } from "./history-print"
 import { HistoryCard } from "@/components/patients-file/history-card"
 import { SignaturePad } from "@/components/patients-file/signature-pad" 
+
+// IMPORTAMOS LOS ESTADOS
+import { treatmentStatuses, documentStatuses } from "@/constants/status"
 
 export function HistorialTab({ patientId }: { patientId: string }) {
   const { data: session } = useSession()
@@ -42,6 +46,8 @@ export function HistorialTab({ patientId }: { patientId: string }) {
 
   const [noteType, setNoteType] = useState<"EVOLUTION" | "PRESCRIPTION" | "GENERAL">("EVOLUTION")
   const [noteContent, setNoteContent] = useState("")
+  // ESTADO NUEVO PARA EL ESTATUS
+  const [noteStatus, setNoteStatus] = useState<string>(treatmentStatuses.IN_PROGRESS.value)
   const [fileBase64, setFileBase64] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
   const [profSignature, setProfSignature] = useState<string | null>(null)
@@ -88,7 +94,8 @@ export function HistorialTab({ patientId }: { patientId: string }) {
       try {
         const res = await fetch(`/api/clinical-notes/${editingId}`, {
           method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: noteContent, fileUrl: fileBase64 || null, professionalSignature: profSignature || null, patientSignature: patientSignature || null })
+          // INCLUIMOS EL STATUS EN EL PATCH
+          body: JSON.stringify({ content: noteContent, status: noteStatus, fileUrl: fileBase64 || null, professionalSignature: profSignature || null, patientSignature: patientSignature || null })
         });
         if (!res.ok) throw new Error()
         toast({ title: "Registro actualizado", variant: "success" })
@@ -96,7 +103,8 @@ export function HistorialTab({ patientId }: { patientId: string }) {
       } catch (error) { toast({ title: "Error al actualizar", variant: "destructive" }) } finally { setIsSavingEdit(false) }
     } else {
       createClinicalNote(
-        { type: noteType, content: noteContent, authorId: currentUser?.id, patientId, fileUrl: fileBase64 || undefined, professionalSignature: profSignature || undefined, patientSignature: patientSignature || undefined } as any, 
+        // INCLUIMOS EL STATUS EN EL POST
+        { type: noteType, content: noteContent, status: noteStatus, authorId: currentUser?.id, patientId, fileUrl: fileBase64 || undefined, professionalSignature: profSignature || undefined, patientSignature: patientSignature || undefined } as any, 
         { onSuccess: () => { toast({ title: "Registro guardado", variant: "success" }); setIsNoteModalOpen(false); resetForm(); refetch() },
           onError: () => toast({ title: "Error al guardar", variant: "destructive" }) }
       )
@@ -124,17 +132,41 @@ export function HistorialTab({ patientId }: { patientId: string }) {
 
   const openModal = (type: "EVOLUTION" | "PRESCRIPTION" | "GENERAL") => {
     if (!canEditClinicalData) return;
-    resetForm(); setNoteType(type); setIsNoteModalOpen(true)
+    resetForm(); 
+    setNoteType(type); 
+    // ESTABLECEMOS EL ESTADO POR DEFECTO DEPENDIENDO DEL TIPO
+    setNoteStatus(type === "EVOLUTION" ? treatmentStatuses.IN_PROGRESS.value : documentStatuses.COMPLETED.value);
+    setIsNoteModalOpen(true)
   }
 
   const openEditModal = (note: any) => {
     if (!canEditClinicalData) return;
-    setEditingId(note.id); setNoteType(note.type); setNoteContent(note.content); setFileBase64(note.fileUrl || null); setFileName(note.fileUrl ? "Imagen previa" : null); setProfSignature(note.professionalSignature || null); setPatientSignature(note.patientSignature || null); setIsNoteModalOpen(true);
+    setEditingId(note.id); 
+    setNoteType(note.type); 
+    setNoteContent(note.content); 
+    // RECUPERAMOS EL ESTADO EXISTENTE
+    setNoteStatus(note.status || (note.type === "EVOLUTION" ? treatmentStatuses.IN_PROGRESS.value : documentStatuses.COMPLETED.value));
+    setFileBase64(note.fileUrl || null); 
+    setFileName(note.fileUrl ? "Imagen previa" : null); 
+    setProfSignature(note.professionalSignature || null); 
+    setPatientSignature(note.patientSignature || null); 
+    setIsNoteModalOpen(true);
   }
 
-  const resetForm = () => { setEditingId(null); setNoteContent(""); setFileBase64(null); setFileName(null); setProfSignature(null); setPatientSignature(null) }
+  const resetForm = () => { 
+    setEditingId(null); 
+    setNoteContent(""); 
+    setNoteStatus(treatmentStatuses.IN_PROGRESS.value);
+    setFileBase64(null); 
+    setFileName(null); 
+    setProfSignature(null); 
+    setPatientSignature(null) 
+  }
 
   const isWorking = isCreating || isSavingEdit;
+
+  // Lógica para elegir qué diccionario de estados usar en el Select
+  const currentStatusDictionary = noteType === "EVOLUTION" ? treatmentStatuses : documentStatuses;
 
   return (
     <>
@@ -177,6 +209,26 @@ export function HistorialTab({ patientId }: { patientId: string }) {
             </DialogHeader>
             
             <div className="py-2 space-y-5">
+              {/* SELECTOR DE ESTADO */}
+              <div className="space-y-2">
+                <Label className="text-foreground font-semibold">Estado del Registro</Label>
+                <Select value={noteStatus} onValueChange={setNoteStatus}>
+                  <SelectTrigger className="h-11 bg-background border-border rounded-xl">
+                    <SelectValue placeholder="Seleccionar estado..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.values(currentStatusDictionary).map((s) => (
+                      <SelectItem key={s.value} value={s.value}>
+                        <div className="flex items-center gap-2">
+                          <s.icon className={`w-4 h-4 ${s.color}`} />
+                          <span className={`font-bold ${s.color}`}>{s.label}</span>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {noteType === "GENERAL" && !editingId && (
                 <div className="relative border-2 border-dashed border-border rounded-xl p-10 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-muted/30 transition-colors">
                   <input type="file" onChange={handleFileUpload} accept="image/*,application/pdf" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
@@ -266,7 +318,6 @@ export function HistorialTab({ patientId }: { patientId: string }) {
           </div>
 
           <div className="flex items-center gap-2 w-full lg:w-auto mt-4 lg:mt-0">
-            {/* BOTÓN NUEVO REGISTRO: Solo Doctor o Admin */}
             {canEditClinicalData && (
               <Popover>
                 <PopoverTrigger asChild>

@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { SignaturePad } from "@/components/patients-file/signature-pad"
+import { treatmentStatuses } from "@/constants/status";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface EvolutionModalProps {
   isOpen: boolean
@@ -22,12 +24,15 @@ interface EvolutionModalProps {
   onSave: () => void
   isWorking: boolean
   handleImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
+  status: string;
+  setStatus: (status: string) => void;
 }
 
 export function EvolutionModal({
   isOpen, onOpenChange, editingId, noteContent, setNoteContent,
   fileBase64, setFileBase64, fileName, setFileName,
-  setProfSignature, setPatientSignature, onSave, isWorking, handleImageUpload
+  setProfSignature, setPatientSignature, onSave, isWorking, handleImageUpload, status, 
+  setStatus,
 }: EvolutionModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -53,6 +58,24 @@ export function EvolutionModal({
             />
           </div>
 
+          <div className="space-y-2.5">
+          <label className="text-xs font-bold text-foreground">Estado del Tratamiento</label>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger className="h-11">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.values(treatmentStatuses).map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  <div className="flex items-center gap-2">
+                    <s.icon className={`w-4 h-4 ${s.color}`} />
+                    <span className={`font-bold ${s.color}`}>{s.label}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
           <div className="space-y-2">
             <Label className="text-foreground font-semibold">Adjuntar imagen (Opcional)</Label>
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">

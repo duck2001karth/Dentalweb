@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useSession } from "next-auth/react" 
 import {
   Calendar,
   ChevronDown,
@@ -57,6 +58,10 @@ type Item = {
 export const Nav = () => {
   const pathname = usePathname()
   const [isHovered, setIsHovered] = React.useState(false)
+  const { data: session } = useSession()
+  const userRole = (session?.user as any)?.role
+  const showAdminModule = userRole === "ADMIN" || userRole === "RECEPTIONIST"
+  const isAdmin = userRole === "ADMIN"
 
   return (
     <nav
@@ -67,30 +72,31 @@ export const Nav = () => {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* LOGO DE LA CLÍNICA */}
-        <div className="h-[110px] flex items-center justify-center shrink-0 transition-all duration-300 border-b border-border bg-background">
-          {isHovered ? (
-            <div className="flex items-center justify-center w-full px-0 py-2 transition-opacity duration-300 delay-75">
-              <Image 
-                src="/iconode.png" 
-                alt="Logo Carmo Dental"
-                width={220} 
-                height={65}  
-                /* Agregamos scale-125 para forzar un zoom del 25% */
-                className="object-contain drop-shadow-sm w-full h-auto max-h-[75px] scale-125 origin-center"
-                priority
-              />
-            </div>
-          ) : (
-            <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20 shadow-sm border border-blue-100 dark:border-blue-800/30 transition-all">
-              <Stethoscope className="h-5 w-5 text-[#008bcd] dark:text-blue-400" />
-            </div>
-          )}
-        </div>
+      <Link 
+        href="/"
+        className="h-[110px] flex items-center justify-center shrink-0 transition-all duration-300 border-b border-border bg-background hover:bg-muted/30 cursor-pointer"
+      >
+        {isHovered ? (
+          <div className="flex items-center justify-center w-full px-0 py-2 transition-opacity duration-300 delay-75">
+            <Image 
+              src="/iconode.png" 
+              alt="Logo Carmo Dental"
+              width={220} 
+              height={65}  
+              className="object-contain drop-shadow-sm w-full h-auto max-h-[75px] scale-125 origin-center"
+              priority
+            />
+          </div>
+        ) : (
+          <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-blue-50 dark:bg-blue-900/20 shadow-sm border border-blue-100 dark:border-blue-800/30 transition-all">
+            <Stethoscope className="h-5 w-5 text-[#008bcd] dark:text-blue-400" />
+          </div>
+        )}
+      </Link>
+
       <ScrollArea className="flex-1 w-full py-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <div className="flex flex-col gap-2 text-sm px-2 pb-10 ">
           
-          {/* MÓDULOS PRINCIPALES */}
           {mainNavItems.map((item) => (
              <NavItem key={item.name} href={item.href} icon={item.icon} name={item.name} isExpanded={isHovered} />
           ))}
@@ -116,17 +122,25 @@ export const Nav = () => {
               </CollapsibleContent>
             </Collapsible>
             
-            {/* COLLAPSIBLE: ADMINISTRACIÓN */}
-            <Collapsible defaultOpen={true}>
-              <CollapsibleTrigger className="w-full group">
-                <SectionTrigger isExpanded={isHovered} icon={Briefcase}>Administración</SectionTrigger>
-              </CollapsibleTrigger>
-              <CollapsibleContent className={cn(!isHovered && "hidden")}>
-                {adminNavItems.map((item) => (
-                  <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
-                ))}
-              </CollapsibleContent>
-            </Collapsible>
+            {/* COLLAPSIBLE: ADMINISTRACIÓN (Protegido por Rol) */}
+            {showAdminModule && (
+              <Collapsible defaultOpen={true}>
+                <CollapsibleTrigger className="w-full group">
+                  <SectionTrigger isExpanded={isHovered} icon={Briefcase}>Administración</SectionTrigger>
+                </CollapsibleTrigger>
+                <CollapsibleContent className={cn(!isHovered && "hidden")}>
+                  {adminNavItems.map((item) => {
+                    if (item.name === "Configuración" && !isAdmin) {
+                      return null;
+                    }
+                    
+                    return (
+                      <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
+                    )
+                  })}
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
           </div>
         </div>
@@ -134,8 +148,6 @@ export const Nav = () => {
     </nav>
   )
 }
-
-// --- COMPONENTES AUXILIARES ---
 
 interface NavItemProps {
   item?: Item
@@ -203,7 +215,6 @@ export const NavItem = ({
   )
 }
 
-// Componente para los títulos colapsables
 const SectionTrigger = ({
   children,
   isExpanded,

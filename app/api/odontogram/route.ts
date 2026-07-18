@@ -54,46 +54,32 @@ export async function POST(req: Request) {
 
 export async function DELETE(req: Request) {
   try {
-    // 1. Verificamos la sesión
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
     const { searchParams } = new URL(req.url);
+    
     const id = searchParams.get("id");
-
-    if (!id) {
-      return NextResponse.json({ error: "Falta el ID del registro" }, { status: 400 });
+    const patientId = searchParams.get("patientId");
+    const toothNumber = searchParams.get("toothNumber");
+    if (id) {
+      await prisma.odontogramRecord.delete({
+        where: { id: id }
+      });
+      return NextResponse.json({ success: true, message: "Registro anulado" });
     }
 
-    // 2. Buscamos el registro en la base de datos
-    const record = await prisma.odontogramRecord.findUnique({
-      where: { id }
-    });
-
-    if (!record) {
-      return NextResponse.json({ error: "Registro no encontrado" }, { status: 404 });
+    if (patientId && toothNumber) {
+      await prisma.odontogramRecord.deleteMany({
+        where: {
+          patientId: patientId,
+          toothNumber: parseInt(toothNumber, 10)
+        }
+      });
+      return NextResponse.json({ success: true, message: "Pieza saneada" });
     }
 
-    // 3. REGLA DE SEGURIDAD (RBAC)
-    // Permitimos borrar SI el usuario es ADMIN, O SI el usuario es el autor original del registro
-    const isAdmin = session.user.role === "ADMIN";
-    const isAuthor = record.authorId === session.user.id;
-
-    if (!isAdmin && !isAuthor) {
-      return NextResponse.json({ error: "No tienes permisos para borrar este registro" }, { status: 403 });
-    }
-
-    // 4. Procedemos a eliminar
-    await prisma.odontogramRecord.delete({
-      where: { id }
-    });
-
-    return NextResponse.json({ success: true, message: "Registro anulado correctamente" });
+    return NextResponse.json({ error: "Faltan parámetros" }, { status: 400 });
 
   } catch (error) {
-    console.error("Error DELETE Odontogram:", error);
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+    console.error("Error eliminando registro del odontograma:", error);
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }

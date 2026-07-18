@@ -3,7 +3,8 @@
 import React, { useState, useEffect, useCallback } from "react"
 import { 
   Printer, Save, X, Loader2, ChevronLeft, 
-  Stethoscope, History, PlusCircle, CheckCircle, Search 
+  Stethoscope, History, PlusCircle, CheckCircle, Search,
+  Maximize2, Minimize2
 } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { format } from "date-fns"
@@ -14,82 +15,29 @@ import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
-import { Maximize2, Minimize2 } from "lucide-react"
+import { ToothPiece } from "@/components/patients-file/odontooth-piece"
+import { odontogramStatuses } from "@/constants/status"
 
 // --- NOMENCLATURA INTERNACIONAL ---
 const LESION_OPTIONS = [
-  { label: "Caries", value: "CARIES", type: "surfaces", color: "bg-red-500", icon: "🔴" },
-  { label: "Fractura", value: "FRACTURA", type: "tooth", color: "bg-red-500", icon: "⚡" },
-  { label: "Infección Pulpar", value: "ENDO_INDICADA", type: "tooth", color: "bg-red-500", icon: "🔺" },
-  { label: "Restauración Defectuosa", value: "REST_MALA", type: "surfaces", color: "bg-red-500", icon: "⭕" },
-  { label: "Extracción Indicada", value: "EXT_INDICADA", type: "tooth", color: "bg-red-500", icon: "❌" },
-  { label: "Sellante Defectuoso", value: "SELLANTE_MALO", type: "tooth", color: "bg-red-500", icon: "S" },
+  { label: "Caries", value: "CARIES", type: "surfaces", icon: "🔴" },
+  { label: "Fractura", value: "FRACTURA", type: "tooth", icon: "⚡" },
+  { label: "Infección Pulpar", value: "ENDO_INDICADA", type: "tooth", icon: "🔺" },
+  { label: "Restauración Defectuosa", value: "REST_MALA", type: "surfaces", icon: "⭕" },
+  { label: "Extracción Indicada", value: "EXT_INDICADA", type: "tooth", icon: "❌" },
+  { label: "Sellante Defectuoso", value: "SELLANTE_MALO", type: "tooth", icon: "S" },
 ]
 
 const PREEXISTENCE_OPTIONS = [
-  { label: "Restauración Buena", value: "REST_BUENA", type: "surfaces", color: "bg-[#008bcd]", icon: "🔵" },
-  { label: "Corona Buena", value: "CORONA_BUENA", type: "tooth", color: "bg-[#008bcd]", icon: "🔘" },
-  { label: "Endodoncia Realizada", value: "ENDO_REALIZADA", type: "tooth", color: "bg-[#008bcd]", icon: "🔺" },
-  { label: "Extracción Realizada / Ausente", value: "EXT_REALIZADA", type: "tooth", color: "bg-[#008bcd]", icon: "❌" },
-  { label: "Sellante Bueno", value: "SELLANTE_BUENO", type: "tooth", color: "bg-[#008bcd]", icon: "S" },
+  { label: "Restauración Buena", value: "REST_BUENA", type: "surfaces", icon: "🔵" },
+  { label: "Corona Buena", value: "CORONA_BUENA", type: "tooth", icon: "🔘" },
+  { label: "Endodoncia Realizada", value: "ENDO_REALIZADA", type: "tooth", icon: "🔺" },
+  { label: "Ausente", value: "EXT_REALIZADA", type: "tooth", icon: "❌" },
+  { label: "Sellante Bueno", value: "SELLANTE_BUENO", type: "tooth", icon: "S" },
 ]
 
 const ALL_STATUS_OPTIONS = [...LESION_OPTIONS, ...PREEXISTENCE_OPTIONS]
 const getStatusLabel = (val: string) => ALL_STATUS_OPTIONS.find(o => o.value === val)?.label || val
-
-// Agregamos la prop 'canEdit' al componente de la pieza dental
-const ToothPiece = ({ number, toothRecords = [], selectedSurfaces = [], onClick, canEdit }: any) => {
-  const hasStatus = (status: string) => toothRecords.some((r: any) => r.status === status)
-  
-  const getFill = (surface: string) => {
-    if (selectedSurfaces.includes(surface)) return "#bae6fd" 
-    const surfaceRecords = toothRecords.filter((r: any) => r.surfaces.includes(surface))
-    if (surfaceRecords.length === 0) return "transparent"
-    const recent = surfaceRecords[0]
-    if (recent.status === "CARIES") return "#ef4444"
-    if (recent.status === "REST_BUENA" || recent.status === "REST_MALA") return "#008bcd"
-    return "transparent"
-  }
-
-  const getStroke = (surface: string) => {
-    if (selectedSurfaces.includes(surface)) return "#0ea5e9"
-    const surfaceRecords = toothRecords.filter((r: any) => r.surfaces.includes(surface))
-    if (surfaceRecords.length > 0 && surfaceRecords[0].status === "REST_MALA") return "#ef4444" 
-    return "#64748b"
-  }
-
-  const isAbsent = hasStatus("EXT_REALIZADA")
-
-  const cursorClass = canEdit ? "cursor-pointer hover:scale-105" : "cursor-default"
-
-  return (
-    <div className={cn("flex flex-col items-center gap-1 group", isAbsent && "opacity-40")}>
-      <span 
-        className={cn("text-[10px] font-bold text-muted-foreground", canEdit && "group-hover:text-[#008bcd] cursor-pointer", selectedSurfaces.length > 0 && "text-[#008bcd]")} 
-        onClick={() => canEdit && onClick("TODA_LA_PIEZA")}
-      >
-        {number}
-      </span>
-      <svg width="36" height="36" viewBox="0 0 100 100" className={cn("transition-transform relative drop-shadow-sm", cursorClass)}>
-        <polygon points="0,0 25,25 75,25 100,0" fill={getFill("top")} stroke={getStroke("top")} strokeWidth="2" onClick={() => canEdit && onClick("top")} />
-        <polygon points="0,0 25,25 25,75 0,100" fill={getFill("left")} stroke={getStroke("left")} strokeWidth="2" onClick={() => canEdit && onClick("left")} />
-        <polygon points="100,0 75,25 75,75 100,100" fill={getFill("right")} stroke={getStroke("right")} strokeWidth="2" onClick={() => canEdit && onClick("right")} />
-        <polygon points="0,100 25,75 75,75 100,100" fill={getFill("bottom")} stroke={getStroke("bottom")} strokeWidth="2" onClick={() => canEdit && onClick("bottom")} />
-        <rect x="25" y="25" width="50" height="50" fill={getFill("center")} stroke={getStroke("center")} strokeWidth="2" onClick={() => canEdit && onClick("center")} />
-
-        {hasStatus("EXT_INDICADA") && <g className="pointer-events-none"><line x1="0" y1="0" x2="100" y2="100" stroke="#ef4444" strokeWidth="6" /><line x1="100" y1="0" x2="0" y2="100" stroke="#ef4444" strokeWidth="6" /></g>}
-        {hasStatus("EXT_REALIZADA") && <g className="pointer-events-none"><line x1="0" y1="0" x2="100" y2="100" stroke="#008bcd" strokeWidth="6" /><line x1="100" y1="0" x2="0" y2="100" stroke="#008bcd" strokeWidth="6" /></g>}
-        {hasStatus("ENDO_INDICADA") && <polygon points="50,15 85,85 15,85" fill="none" stroke="#ef4444" strokeWidth="6" className="pointer-events-none"/>}
-        {hasStatus("ENDO_REALIZADA") && <polygon points="50,15 85,85 15,85" fill="none" stroke="#008bcd" strokeWidth="6" className="pointer-events-none"/>}
-        {hasStatus("CORONA_MALA") && <circle cx="50" cy="50" r="45" fill="none" stroke="#ef4444" strokeWidth="6" className="pointer-events-none"/>}
-        {hasStatus("CORONA_BUENA") && <circle cx="50" cy="50" r="45" fill="none" stroke="#008bcd" strokeWidth="6" className="pointer-events-none"/>}
-        {hasStatus("SELLANTE_MALO") && <text x="50" y="65" fill="#ef4444" fontSize="45" fontWeight="bold" textAnchor="middle" className="pointer-events-none">S</text>}
-        {hasStatus("SELLANTE_BUENO") && <text x="50" y="65" fill="#008bcd" fontSize="45" fontWeight="bold" textAnchor="middle" className="pointer-events-none">S</text>}
-        {hasStatus("FRACTURA") && <line x1="15" y1="85" x2="85" y2="15" stroke="#ef4444" strokeWidth="6" className="pointer-events-none"/>}
-      </svg>
-    </div>
-  )
-}
 
 export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlanView = false }: { patientId: string; planId?: string; onToothClickCallback?: (tooth: number) => void; isPlanView?: boolean }) {
   const { data: session } = useSession()
@@ -273,7 +221,7 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
             </span>
           )}
           
-          {/* Selector Elegante de Vista (Diagnóstico / Evolución) */}
+          {/* Selector Elegante de Vista */}
           <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border">
             <button 
               onClick={() => setView("diagnostico")} 
@@ -289,10 +237,8 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
             </button>
           </div>
 
-          {/* Separador */}
           <div className="w-px h-6 bg-border mx-1"></div>
 
-          {/* Botón Focus Suave */}
           <Button 
             variant="ghost" 
             size="icon" 
@@ -300,11 +246,7 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
             className="rounded-lg shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors h-8 w-8"
             title={isFocusMode ? "Salir de pantalla completa" : "Pantalla completa"}
           >
-            {isFocusMode ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
+            {isFocusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
           
         </div>
@@ -324,7 +266,7 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
         </div>
       </div>
 
-      {/* MENÚ INTERACTIVO FLOTANTE - Solo se abrirá si tiene permisos */}
+      {/* MENÚ INTERACTIVO FLOTANTE */}
       {menuStep !== "NONE" && canEditClinicalData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
           <div className="bg-background w-[90%] max-w-[500px] rounded-[24px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -455,6 +397,7 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
           </div>
         </div>
       )}
+
       {/* TABLA DE REGISTROS DE HISTORIAL */}
       {!planId && (
       <div className="mt-8">
@@ -479,8 +422,19 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
                     <td className="p-4 font-medium">{format(new Date(record.createdAt), "dd/MM/yyyy HH:mm")}</td>
                     <td className="p-4 font-black text-center text-[#008bcd] text-base">{record.toothNumber}</td>
                     <td className="p-4 capitalize font-medium">{record.surfaces.includes("TODA_LA_PIEZA") ? "Toda la pieza" : record.surfaces.join(", ")}</td>
-                    <td className="p-4 font-bold text-slate-700 dark:text-slate-200">{getStatusLabel(record.status)}</td>
-                    {/* ACCIÓN PROTEGIDA POR ROL */}
+                    <td className="p-4">
+                      {(() => {
+                        const config = odontogramStatuses[record.status];
+                        if (!config) return <span className="font-bold text-slate-700">{getStatusLabel(record.status)}</span>;
+                        
+                        return (
+                          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${config.bg} ${config.color}`}>
+                            <config.icon /> 
+                            <span>{config.label}</span>
+                          </div>
+                        );
+                      })()}
+                    </td>
                     {canEditClinicalData && (
                       <td className="p-4 text-center">
                           <Button variant="ghost" size="sm" className="text-red-500 font-bold hover:bg-red-50" onClick={() => handleDelete(record.id)}>Anular</Button>

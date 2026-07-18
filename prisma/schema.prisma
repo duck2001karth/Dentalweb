@@ -120,6 +120,9 @@ model User {
   assignedTasks PatientTask[]    @relation("TaskAssignee")
   createdTasks  PatientTask[]    @relation("TaskCreator")
 
+  paymentsProcessed Payment[]     @relation("UserPayments")
+  liquidations      Liquidation[] @relation("DoctorLiquidations")
+
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -184,6 +187,8 @@ model Patient {
   comments              PatientComment[]
   tasks                 PatientTask[]
   
+  payments          Payment[]
+
   isDeleted             Boolean   @default(false)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
@@ -235,6 +240,7 @@ model ClinicalNote {
   id                    String   @id @default(uuid())
   type                  NoteType @default(EVOLUTION)
   content               String   @db.Text
+  status                String?
   
   // Campos multimedia
   fileUrl               String?  @db.Text // Para la foto adjunta
@@ -367,6 +373,8 @@ model TreatmentPlan {
   odontogramRecords OdontogramRecord[]
   commentsToPatient String? @db.Text
 
+  payments          Payment[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
@@ -453,4 +461,97 @@ model ProcedureCatalog {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ==========================================
+// 6. MÓDULOS ADMINISTRATIVOS PREMIUM
+// ==========================================
+
+enum PaymentMethod {
+  CASH          // Efectivo
+  CREDIT_CARD   // Tarjeta de Crédito
+  DEBIT_CARD    // Tarjeta de Débito
+  TRANSFER      // Transferencia / QR
+  INSURANCE     // Seguro Médico
+  OTHER
+}
+
+enum PaymentState {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+// -- FACTURACIÓN / PAGOS --
+model Payment {
+  id              String        @id @default(uuid())
+  amount          Float         // Monto pagado
+  method          PaymentMethod @default(CASH)
+  status          PaymentState  @default(COMPLETED)
+  receiptNumber   String?       @unique // Número de factura o recibo fiscal
+  notes           String?       @db.Text
+
+  // Relaciones
+  patientId       String
+  patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  treatmentPlanId String?
+  treatmentPlan   TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id])
+
+  processedById   String?
+  processedBy     User?         @relation("UserPayments", fields: [processedById], references: [id])
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+// -- INVENTARIO --
+model InventoryItem {
+  id              String   @id @default(uuid())
+  name            String
+  sku             String?  @unique // Código de barras o identificador
+  category        String   // Ej: Insumos, Instrumental, Medicamentos
+  stock           Int      @default(0)
+  minStock        Int      @default(5) // Para alertas de escasez
+  unitCost        Float    @default(0) // Costo de compra
+  supplier        String?  // Proveedor principal
+
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// -- LIQUIDACIONES (Pagos a Doctores) --
+model Liquidation {
+  id              String   @id @default(uuid())
+  doctorId        String
+  doctor          User     @relation("DoctorLiquidations", fields: [doctorId], references: [id])
+  
+  amount          Float    // Total a pagar al doctor por sus tratamientos
+  periodStart     DateTime // Inicio del periodo de corte
+  periodEnd       DateTime // Fin del periodo de corte
+  status          String   @default("PENDING") // PENDING, PAID
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// -- CONFIGURACIÓN GENERAL --
+model ClinicSettings {
+  id              String   @id @default(uuid()) // Solo habrá 1 registro en esta tabla
+  clinicName      String   @default("Carmo Dental")
+  taxRate         Float    @default(0) // Impuestos (Ej: 13% o 18%)
+  currency        String   @default("USD")
+  
+  logoUrl         String?  // Para la imagen corporativa
+  watermarkUrl    String?  // Para fondos de recetas/reportes
+  
+  address         String?
+  phone           String?
+  email           String?
+  
+  footerText      String?  @db.Text // Texto legal para pie de página en facturas/recetas
+  
+  updatedAt       DateTime @updatedAt
 }

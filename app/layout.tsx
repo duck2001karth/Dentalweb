@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { GeistSans } from "geist/font/sans";
 
 import { cn } from "@/lib/utils";
+import { siteConfig } from "@/config/site"; 
 
 import ClientProvider from "@/components/user-login/client-provider";
 import { TailwindIndicator } from "@/components/tailwind-indicator";
@@ -13,10 +14,11 @@ import { Toaster } from "@/components/toaster";
 import { NextAuthProvider } from "@/components/providers/session-provider";
 
 export const metadata: Metadata = {
-  title: "Carmo Dental | Sistema Clínico",
-  description:
-    "Sistema de gestión administrativa y clínica para Carmo Dental.",
-
+  title: {
+    default: siteConfig.name,
+    template: `%s | ${siteConfig.name}`,
+  },
+  description: siteConfig.description,
   icons: {
     icon: "/diente.ico",
   },
@@ -42,9 +44,7 @@ interface RootLayoutProps {
   children: React.ReactNode;
 }
 
-export default function RootLayout({
-  children,
-}: RootLayoutProps) {
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="es" suppressHydrationWarning>
       <body
@@ -66,7 +66,7 @@ export default function RootLayout({
                   {children}
                 </div>
                 <div className="print:hidden">
-                  <Toaster/>
+                  <Toaster />
                 </div>
               </div>
               <TailwindIndicator />

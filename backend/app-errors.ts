@@ -1,6 +1,4 @@
 
-
-// Error genérico del cual heredan los demás
 export class AppError extends Error {
   public statusCode: number;
   

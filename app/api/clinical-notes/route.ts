@@ -22,7 +22,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { type, content, authorId, patientId, fileUrl, professionalSignature, patientSignature } = body.input;
+    const { type, content, authorId, patientId, fileUrl, professionalSignature, patientSignature, status } = body.input;
 
     if (!content || !authorId || !patientId) {
       return NextResponse.json({ error: "Faltan datos requeridos" }, { status: 400 });
@@ -32,6 +32,7 @@ export async function POST(req: Request) {
       data: {
         type, 
         content,
+        status,
         authorId,
         patientId,
         fileUrl,                 

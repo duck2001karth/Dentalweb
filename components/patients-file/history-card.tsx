@@ -6,6 +6,7 @@ import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
 import { Button } from "@/components/ui/button"
+import { treatmentStatuses, documentStatuses } from "@/constants/status";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface HistoryCardProps {
@@ -21,6 +22,11 @@ interface HistoryCardProps {
 export function HistoryCard({ note, canEdit, canDelete, onEdit, onDelete, onAclarar, onPreviewImage }: HistoryCardProps) {
   const isEvolution = note.type === "EVOLUTION"
   const isPrescription = note.type === "PRESCRIPTION"
+  const statusConfig = note.type === "EVOLUTION" 
+  ? treatmentStatuses[note.status] || treatmentStatuses.IN_PROGRESS 
+  : documentStatuses[note.status] || documentStatuses.COMPLETED;
+
+const StatusIcon = statusConfig.icon;
 
   return (
     <div className="relative flex flex-col md:flex-row items-start mb-10 group">
@@ -67,7 +73,10 @@ export function HistoryCard({ note, canEdit, canDelete, onEdit, onDelete, onAcla
                     <Check className="w-3.5 h-3.5" /> Aclarada
                  </span>
                 )}
-                
+                <div className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusConfig.bg} ${statusConfig.color}`}>
+                  <StatusIcon className="w-3.5 h-3.5" />
+                  {statusConfig.label}
+                </div>
                 {/* MENÚ DE ACCIONES: Doctor puede Editar, Admin puede Editar y Eliminar */}
                 {(canEdit || canDelete) && (
                   <DropdownMenu>

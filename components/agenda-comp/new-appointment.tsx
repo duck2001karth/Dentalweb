@@ -1,12 +1,11 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { format, isToday } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
   CalendarIcon, Clock, User, Plus, Stethoscope, 
-  MapPin, AlignLeft, Loader2, Activity, Tags, CheckCircle2,
-  Search
+  MapPin, AlignLeft, Loader2, Activity, Tags, CheckCircle2
 } from "lucide-react"
 import { useSession } from "next-auth/react"
 
@@ -20,127 +19,12 @@ import {
 } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
 import { useToast } from "@/hooks/use-toast"
 import { useGetPatients } from "@/hooks/patients"
 import { useCreateAppointment } from "@/hooks/appointments"
+import { PatientSelector } from "./patient-selector" 
+import { appointmentStatuses } from "@/constants/status"
 
-// =========================================================================
-// 1. SUBCOMPONENTE: BUSCADOR INMUNE A BLOQUEOS (PATIENT SELECTOR)
-// =========================================================================
-interface PatientSelectorProps {
-  patientId: string
-  setPatientId: (id: string) => void
-  patients: any[]
-  isLoading: boolean
-}
-
-function PatientSelector({ patientId, setPatientId, patients, isLoading }: PatientSelectorProps) {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isOpen, setIsOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
-
-  const selectedPatient = patients?.find((p: any) => p.id === patientId)
-  const filteredPatients = patients?.filter((p: any) => {
-    const term = searchTerm.toLowerCase()
-    return (
-      p.firstName.toLowerCase().includes(term) ||
-      p.lastName.toLowerCase().includes(term) ||
-      p.ci.includes(term)
-    )
-  }) || []
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  if (selectedPatient) {
-    return (
-      <div className="flex items-center justify-between px-4 py-2 bg-[#008bcd]/10 border border-[#008bcd]/30 rounded-xl h-11 shadow-sm animate-in fade-in duration-200">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <CheckCircle2 className="w-4 h-4 text-[#008bcd] shrink-0" />
-          <span className="font-bold text-[#008bcd] truncate">
-            {selectedPatient.firstName} {selectedPatient.lastName}
-          </span>
-          <span className="text-[#008bcd]/70 font-semibold text-xs shrink-0 ml-1">
-            (CI: {selectedPatient.ci})
-          </span>
-        </div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-3 text-[#008bcd] hover:bg-[#008bcd]/20 hover:text-[#008bcd] font-bold rounded-lg"
-          onClick={() => {
-            setPatientId("")
-            setSearchTerm("")
-          }}
-        >
-          Cambiar
-        </Button>
-      </div>
-    )
-  }
-
-  return (
-    <div ref={containerRef} className="relative w-full">
-      <div className="relative">
-        <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-        <Input
-          type="text"
-          placeholder={isLoading ? "Cargando pacientes..." : "Escribe el nombre, apellido o CI..."}
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value)
-            setIsOpen(true)
-          }}
-          onFocus={() => setIsOpen(true)}
-          disabled={isLoading}
-          className="pl-9 bg-background border-border h-11 focus-visible:ring-[#008bcd] text-foreground placeholder:text-muted-foreground font-medium shadow-sm transition-all"
-        />
-      </div>
-
-      {isOpen && searchTerm.length > 0 && (
-        <div className="absolute top-full left-0 w-full mt-1.5 bg-popover border border-border shadow-2xl rounded-xl z-[120] max-h-56 overflow-y-auto custom-scrollbar py-1 divide-y divide-border/40 animate-in fade-in slide-in-from-top-1 duration-150">
-          {filteredPatients.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground font-medium">
-              No se encontraron coincidencias para "{searchTerm}"
-            </div>
-          ) : (
-            filteredPatients.map((patient: any) => (
-              <div
-                key={patient.id}
-                className="flex flex-col px-4 py-2.5 cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors text-left"
-                onClick={() => {
-                  setPatientId(patient.id)
-                  setIsOpen(false)
-                  setSearchTerm("")
-                }}
-              >
-                <span className="font-bold text-sm text-foreground">
-                  {patient.firstName} {patient.lastName}
-                </span>
-                <span className="text-muted-foreground font-semibold text-xs mt-0.5">
-                  Cédula: {patient.ci}
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// =========================================================================
-// 2. UTILIDADES DE TIEMPO
-// =========================================================================
 interface NewAppointmentModalProps {
   customTrigger?: React.ReactNode
   defaultDate?: Date
@@ -156,9 +40,6 @@ const addThirtyMins = (time: string) => {
   return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
 }
 
-// =========================================================================
-// 3. COMPONENTE MAESTRO: DIÁLOGO DE AGENDAMIENTO
-// =========================================================================
 export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTime, defaultDoctorId }: NewAppointmentModalProps) {
   const [open, setOpen] = useState(false)
   const { data: session } = useSession()
@@ -173,7 +54,7 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
   const [box, setBox] = useState<string>("Box 1")
   const [reason, setReason] = useState<string>("")
 
-  const [status, setStatus] = useState<string>("SCHEDULED")
+  const [status, setStatus] = useState<string>(appointmentStatuses.SCHEDULED.value)
   const [situation, setSituation] = useState<string>("Primera Consulta")
   const [startTime, setStartTime] = useState(defaultStartTime || "09:00")
   const [endTime, setEndTime] = useState(addThirtyMins(defaultStartTime || "09:00"))
@@ -183,6 +64,13 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
 
   const { patients, isLoading: isLoadingPatients } = useGetPatients()
   const { createAppointment, isLoading: isSaving } = useCreateAppointment()
+
+  // --- 2. FILTRAR ESTADOS INICIALES PERMITIDOS ---
+  const validInitialStatuses = [
+    appointmentStatuses.SCHEDULED,
+    appointmentStatuses.IN_WAITING_ROOM,
+    appointmentStatuses.IN_PROGRESS
+  ]
 
   useEffect(() => {
     if (open) {
@@ -204,7 +92,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
     }
   }, [open, defaultDate, defaultDoctorId, currentUser, isAdminOrStaff])
 
-  // Cargar personal médico si es Admin o Recepcionista
   useEffect(() => {
     if (open && isAdminOrStaff && doctorsList.length === 0) {
       setIsLoadingDoctors(true)
@@ -283,7 +170,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
       
       <DialogContent className="sm:max-w-[850px] p-0 bg-background border-border overflow-hidden rounded-2xl shadow-2xl">
         
-        {/* ENCABEZADO */}
         <div className="bg-gradient-to-r from-blue-500/10 via-transparent to-transparent px-6 py-5 border-b border-border">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black text-foreground flex items-center gap-3">
@@ -301,7 +187,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
         <form onSubmit={handleSubmit} className="px-6 py-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             
-            {/* COLUMNA 1: INFORMACIÓN DEL PACIENTE */}
             <div className="space-y-5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#008bcd] border-b border-border pb-2">
                 1. Información del Paciente
@@ -311,6 +196,7 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                 <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
                   <User className="w-4 h-4 text-muted-foreground" /> Paciente
                 </Label>
+                {/* 3. USO DEL COMPONENTE AISLADO */}
                 <PatientSelector 
                   patientId={patientId} 
                   setPatientId={setPatientId} 
@@ -346,7 +232,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                   </SelectContent>
                 </Select>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2.5">
                   <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
@@ -357,13 +242,20 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="SCHEDULED"><span className="text-blue-600 dark:text-blue-400 font-bold text-sm">Agendada</span></SelectItem>
-                      <SelectItem value="WAITING"><span className="text-amber-600 dark:text-amber-400 font-bold text-sm">En Espera</span></SelectItem>
-                      <SelectItem value="IN_PROGRESS"><span className="text-purple-600 dark:text-purple-400 font-bold text-sm">En Box</span></SelectItem>
+                      {validInitialStatuses.map((s) => {
+                        const Icon = s.icon;
+                        return (
+                          <SelectItem key={s.value} value={s.value}>
+                            <div className="flex items-center gap-2">
+                              <Icon className={`w-4 h-4 ${s.color}`} />
+                              <span className={`${s.color} font-bold text-sm`}>{s.label}</span>
+                            </div>
+                          </SelectItem>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2.5">
                   <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
                     <Tags className="w-4 h-4 text-muted-foreground" /> Situación
@@ -382,13 +274,10 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                 </div>
               </div>
             </div>
-
-            {/* COLUMNA 2: PROGRAMACIÓN DE TIEMPO */}
             <div className="space-y-5">
               <h3 className="text-xs font-bold uppercase tracking-wider text-[#008bcd] border-b border-border pb-2">
                 2. Horario y Ubicación
               </h3>
-
               <div className="space-y-2.5">
                 <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
                   <CalendarIcon className="w-4 h-4 text-muted-foreground" /> Fecha de la Cita
@@ -409,7 +298,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                   </PopoverContent>
                 </Popover>
               </div>
-
               <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border">
                 <div className="space-y-2.5">
                   <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
@@ -438,7 +326,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2.5">
                   <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
@@ -456,7 +343,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                     </SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2.5">
                   <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
                     <AlignLeft className="w-4 h-4 text-muted-foreground" /> Detalle Corto
@@ -471,10 +357,7 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                 </div>
               </div>
             </div>
-
           </div>
-
-          {/* ACCIONES DEL FORMULARIO */}
           <div className="mt-8 pt-5 border-t border-border flex justify-end gap-3">
             <Button 
               type="button" 
@@ -497,7 +380,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
             </Button>
           </div>
         </form>
-
       </DialogContent>
     </Dialog>
   )

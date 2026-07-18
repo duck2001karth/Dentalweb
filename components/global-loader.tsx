@@ -27,8 +27,6 @@ export const GlobalLoader = () => {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md animate-in fade-in duration-300">
       <div className="flex flex-col items-center justify-center gap-8">
-        
-        {/* Ícono animado Premium */}
         <div className="relative flex items-center justify-center">
           <div className="absolute h-24 w-24 rounded-full border-2 border-[#008bcd]/30 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
           <div className="absolute h-32 w-32 rounded-full border border-[#008bcd]/10 animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite_1s]"></div>

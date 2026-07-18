@@ -1,30 +1,53 @@
-import { usePathname, useRouter } from "next/navigation"
-import { statuses } from "@/constants/statuses"
+import { usePathname } from "next/navigation";
+
+// Definimos las entidades principales que manejará tu clínica
+type ClinicalEntity = "paciente" | "agenda" | "admin" | "configuracion" | "soporte" | null;
 
 type PageContext = {
-  type: "project" | "context" | "status" | null
-  id: string | null
-}
+  entity: ClinicalEntity; 
+  id: string | null;      
+  subModule: string | null; 
+};
 
 export function usePageContext(): PageContext {
-  const pathname = usePathname()
+  const pathname = usePathname();
 
-  const pathSegments = pathname.split("/").filter((segment) => segment)
+  // Dividimos la ruta y eliminamos espacios vacíos.
+  const pathSegments = pathname.split("/").filter(Boolean);
 
-  if (pathSegments.length < 2) {
-    return { type: null, id: null }
+  if (pathSegments.length === 0) {
+    return { entity: null, id: null, subModule: null };
   }
 
-  const [type, id] = pathSegments
+  const root = pathSegments[0]; 
 
-  switch (type) {
-    case "project":
-    case "context":
-      return { type, id }
-    case "status":
-      const status = statuses.find((status) => status.slug === id)
-      return { type, id: status?.value || "" }
-    default:
-      return { type: null, id: null }
+  // 1. LÓGICA PARA RUTAS DE PACIENTES 
+  if (root === "paciente" || root === "pacientes") {
+    return {
+      entity: "paciente",
+      id: pathSegments[1] || null, 
+      subModule: pathSegments[2] || null,
+    };
   }
+
+  // 2. LÓGICA PARA EL PANEL DE ADMINISTRACIÓN 
+  if (root === "admin") {
+    const section = pathSegments[1] as ClinicalEntity;
+    
+    return {
+      entity: "admin",
+      id: null, 
+      subModule: pathSegments[2] || section || "dashboard",
+    };
+  }
+
+  // 3. LÓGICA PARA LA AGENDA
+  if (root === "agenda" || root === "agendavand") {
+    return {
+      entity: "agenda",
+      id: pathSegments[1] || null, 
+      subModule: null,
+    };
+  }
+  return { entity: null, id: null, subModule: null };
 }

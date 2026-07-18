@@ -1,13 +1,21 @@
-export type SiteConfig = typeof siteConfig
+export type SiteConfig = typeof siteConfig;
 
 export const siteConfig = {
   name: "Carmo Dental",
   description:
-    "Tareas al Día combina la gestión de tareas con inteligencia artificial para que los estudiantes puedan organizar su trabajo y enfocarse en lo que realmente importa",
+    "Sistema de gestión integral para la clínica odontológica Carmo Dental. Administración de pacientes, agenda de citas, tratamientos, evolución clínica y facturación electrónica.",
   mainNav: [
     {
-      title: "Inicio",
-      href: "/",
+      title: "Panel de Inicio",
+      href: "/admin",
+    },
+    {
+      title: "Pacientes",
+      href: "/pacientes",
+    },
+    {
+      title: "Agenda",
+      href: "/agenda",
     },
   ],
-}
+};
