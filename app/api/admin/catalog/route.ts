@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-// 1. LEER (GET): Obtener todo el catálogo
 export async function GET(req: Request) {
   try {
     const items = await prisma.procedureCatalog.findMany({
@@ -16,7 +15,6 @@ export async function GET(req: Request) {
   }
 }
 
-// 2. CREAR (POST): Agregar una nueva prestación
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -38,7 +36,6 @@ export async function POST(req: Request) {
   }
 }
 
-// 3. ACTUALIZAR (PATCH): Cambiar precio, nombre o desactivar
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
@@ -60,7 +57,6 @@ export async function PATCH(req: Request) {
   }
 }
 
-// 4. ELIMINAR (DELETE): Borrado físico (Opcional
 export async function DELETE(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
