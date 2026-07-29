@@ -1,29 +1,23 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
-import { 
-  ChevronLeft, Edit2, User, Users, ClipboardList, 
-  Plus, ChevronDown, CheckCircle, FileSignature, 
-  Loader2, Save, Edit, Search, AlertCircle, FileText
-} from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
+import { ChevronLeft, Plus, CheckCircle, AlertCircle, FileSignature, Loader2, Save, Edit, FileText, AlertTriangle } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Input } from "@/components/ui/input"
 import { OdontogramaTab } from "@/components/patients-file/odontogram-tab"
-import { TreatmentActions } from "./treatment-actions"
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
-} from "@/components/ui/dialog"
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu"
+import { TreatmentSidebar } from "./treatment-sidebar"
+import { TreatmentTable } from "./treatment-table"
+import { TreatmentPlanModals } from "./treatment-plan-modals"
+import { TreatmentPrintView } from "./treatment-print-view"
+import { AssignCollaboratorsModal } from "./treatment-collaborators"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
+import { TreatmentPlan, TreatmentItem } from "@/types/treatments"
 
-// Helper para edad
 const calculateAge = (birthDateString?: string | Date | null) => {
   if (!birthDateString) return ""
   const today = new Date()
@@ -37,14 +31,16 @@ const calculateAge = (birthDateString?: string | Date | null) => {
 export function TreatmentPlanDetail({
   plan, patient, onBack, onSaveComment, isSavingComment,
 }: {
-  plan: any; patient: any; onBack: () => void; onSaveComment: (text: string) => void; isSavingComment: boolean
+  plan: TreatmentPlan; patient: any; onBack: () => void; onSaveComment: (text: string) => void; isSavingComment: boolean
 }) {
+  const { data: session } = useSession()
+  const currentUser = session?.user as any
   const { toast } = useToast()
+  const router = useRouter()
 
-  // Estados
+  const [planItems, setPlanItems] = useState<TreatmentItem[]>(plan.items || [])
   const [isEditingComments, setIsEditingComments] = useState(false)
   const [commentText, setCommentText] = useState(plan.commentsToPatient || "")
-  const [activeToothFromOdontogram, setActiveToothFromOdontogram] = useState<number | null>(null)
   
   const [discountPercent, setDiscountPercent] = useState(0)
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false)
@@ -60,180 +56,247 @@ export function TreatmentPlanDetail({
 
   const [isEvolutionModalOpen, setIsEvolutionModalOpen] = useState(false)
   const [evolutionProgress, setEvolutionProgress] = useState(0)
-  const [selectedItemToEvolve, setSelectedItemToEvolve] = useState<any>(null)
+  const [selectedItemToEvolve, setSelectedItemToEvolve] = useState<TreatmentItem | null>(null)
   const [evolutionNote, setEvolutionNote] = useState("")
 
-  // Cálculos Financieros
-  const baseTotal = plan.totalCost || 0
+  const [isDiagnosisModalOpen, setIsDiagnosisModalOpen] = useState(false)
+  const [selectedDiagnosis, setSelectedDiagnosis] = useState("")
+  const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false)
+
+  const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState(false)
+  const [collaborators, setCollaborators] = useState<string[]>([])
+  const [isMultiConvenioOpen, setIsMultiConvenioOpen] = useState(false)
+  const [printMode, setPrintMode] = useState<string>("COMPLETO")
+
+  // Modal de Cobro / Abono
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
+  const [selectedItemToPay, setSelectedItemToPay] = useState<TreatmentItem | null>(null)
+  const [paymentAmount, setPaymentAmount] = useState("")
+  const [paymentMethod, setPaymentMethod] = useState("CASH")
+
+  useEffect(() => { setPlanItems(plan.items || []) }, [plan.items])
+
+  const refreshPlanData = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/treatments?patientId=${patient?.id}`)
+      if (res.ok) {
+        const data = await res.json()
+        const currentPlan = data.find((p: any) => p.id === plan.id)
+        if (currentPlan && currentPlan.items) setPlanItems(currentPlan.items)
+      }
+    } catch (e) { console.error("Error al refrescar", e) }
+    router.refresh()
+  }, [patient?.id, plan.id, router])
+
+  const baseTotal = planItems.reduce((acc, item) => {
+    const itemDscto = item.discount || 0;
+    const itemCost = item.cost || 0;
+    return acc + (itemCost - (itemCost * (itemDscto / 100)));
+  }, 0)
+
   const discountAmount = baseTotal * (discountPercent / 100)
   const finalTotalCost = baseTotal - discountAmount
-  const totalPaid = plan.totalPaid || 0
-  const debt = finalTotalCost - totalPaid
+  const totalPaid = planItems.reduce((acc, item) => acc + (item.paidAmount || 0), 0)
+  const debt = Math.max(0, finalTotalCost - totalPaid)
 
-  // Firmas y Consentimientos
-  const docList = patient?.clinicalDocument || plan?.patient?.clinicalDocument || []
-  const noteList = patient?.clinicalNotes || plan?.patient?.clinicalNotes || []
+  const docList = patient?.clinicalDocument || (plan as any)?.patient?.clinicalDocument || []
+  const appointmentList = patient?.appointments || (plan as any)?.patient?.appointments || []
   const signedConsents = docList.filter((doc: any) => doc.patientSignature)
-  const signedEvolutions = noteList.filter((note: any) => note.patientSignature)
   
   const autoRecoveredSignature = 
-    patient?.signatureBase64 || plan?.patient?.signatureBase64 ||
-    (signedConsents.length > 0 ? signedConsents[0].patientSignature : null) || 
-    (signedEvolutions.length > 0 ? signedEvolutions[0].patientSignature : null)
+    patient?.signatureBase64 || (plan as any)?.patient?.signatureBase64 ||
+    (signedConsents.length > 0 ? signedConsents[0].patientSignature : null)
 
-  const pendingConsents = docList.length - signedConsents.length
-  const patientAge = calculateAge(patient?.birthDate)
+  const realPatientAge = calculateAge(patient?.birthDate)
 
-  // Acciones
-  const handleSaveComments = () => { {onSaveComment(commentText); setIsEditingComments(false)} }
+  const handleSaveComments = () => { onSaveComment(commentText); setIsEditingComments(false) }
   const handleApplyDiscount = () => {
     const val = parseFloat(tempDiscount); if (!isNaN(val) && val >= 0 && val <= 100) setDiscountPercent(val)
     setIsDiscountModalOpen(false)
   }
-  const handleAddSection = () => {
-    if (!sectionName.trim()) return;
-    toast({ title: "Sección agregada", description: `Fase: ${sectionName}`, variant: "success" })
-    setIsSectionModalOpen(false); setSectionName("")
-  }
+
   const openCatalogModal = async () => {
     setIsCatalogModalOpen(true)
     try {
       const res = await fetch('/api/admin/catalog'); if (res.ok) setCatalogItems((await res.json()).filter((item: any) => item.isActive))
-    } catch (error) { toast({ title: "Error", description: "No se pudo cargar el catálogo.", variant: "destructive" }) }
+    } catch (error) { toast({ title: "Error catálogo", variant: "destructive" }) }
   }
-  const handleAddManualProcedure = async (procedure: any) => {
+
+  const handleAddManualProcedure = async (procedure: any, toothNum?: string) => {
     setIsAddingProcedure(true)
     try {
       const res = await fetch(`/api/treatments/${plan.id}/items`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ procedureId: procedure.id, name: procedure.name, price: procedure.basePrice, toothNumber: null, surfaces: [] })
+        body: JSON.stringify({ procedureId: procedure.id, name: procedure.name, price: procedure.basePrice, toothNumber: toothNum || null, surfaces: [] })
       });
       if (!res.ok) throw new Error();
-      toast({ title: "Prestación agregada", variant: "success" }); setIsCatalogModalOpen(false); window.location.reload(); 
+      toast({ title: "Prestación agregada", variant: "success" });
+      setIsCatalogModalOpen(false);
+      await refreshPlanData();
     } catch (e) { toast({ title: "Error", variant: "destructive" }) } finally { setIsAddingProcedure(false) }
   }
-  const openEvolutionModal = (item: any, progress: number) => { setSelectedItemToEvolve(item); setEvolutionProgress(progress); setEvolutionNote(""); setIsEvolutionModalOpen(true) }
-  const handleSaveEvolution = () => { setIsEvolutionModalOpen(false); toast({ title: "Evolución registrada", variant: "success" }) }
+
+  const handleClearPlan = async () => {
+    try {
+      const res = await fetch(`/api/treatments/${plan.id}/clear`, { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      toast({ title: "Presupuesto vaciado", variant: "success" });
+      setIsConfirmClearOpen(false);
+      await refreshPlanData();
+    } catch (e) { toast({ title: "Error al vaciar", variant: "destructive" }) }
+  }
+
+  const openEvolutionModal = (item: TreatmentItem, progress: number) => { 
+    setSelectedItemToEvolve(item); 
+    setEvolutionProgress(progress); 
+    setEvolutionNote(""); 
+    setIsEvolutionModalOpen(true) 
+  }
+
+  // GUARDAR EVOLUCIÓN CON SOLICITUD DE FIRMA AUTOMÁTICA SI SE HACE AL 100%
+  const handleSaveEvolution = async () => { 
+    if (!selectedItemToEvolve) return;
+    try {
+      const res = await fetch(`/api/treatments/items/${selectedItemToEvolve.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          progress: evolutionProgress,
+          isCompleted: evolutionProgress === 100
+        })
+      });
+
+      if (!res.ok) throw new Error();
+
+      setPlanItems(prev => prev.map(item => 
+        item.id === selectedItemToEvolve.id 
+          ? { ...item, progress: evolutionProgress, isCompleted: evolutionProgress === 100 } 
+          : item
+      ));
+
+      setIsEvolutionModalOpen(false); 
+
+      if (evolutionProgress === 100 && !autoRecoveredSignature) {
+        toast({ 
+          title: "Evolución al 100% completada", 
+          description: "Se requiere la firma del paciente para validar la evolución.", 
+          variant: "success" 
+        });
+
+        const signatureSection = document.getElementById("firma-conformidad-section");
+        if (signatureSection) signatureSection.scrollIntoView({ behavior: "smooth" });
+      } else {
+        toast({ title: "Evolución registrada", description: `Progreso al ${evolutionProgress}%`, variant: "success" });
+      }
+
+      refreshPlanData();
+    } catch (e) {
+      toast({ title: "Error al registrar evolución", variant: "destructive" });
+    }
+  }
+
+  const handleUpdateItemDiscount = async (itemId: string, discount: number) => {
+    try {
+      const res = await fetch(`/api/treatments/items/${itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discount })
+      });
+      if (!res.ok) throw new Error();
+
+      setPlanItems(prev => prev.map(item => item.id === itemId ? { ...item, discount } : item));
+      toast({ title: "Descuento aplicado", description: `${discount}% de descuento en el ítem`, variant: "success" });
+    } catch (e) {
+      toast({ title: "Error al guardar descuento", variant: "destructive" });
+    }
+  }
+
+  const handleOpenPaymentModal = (item: TreatmentItem) => {
+    setSelectedItemToPay(item);
+    setPaymentAmount("");
+    setIsPaymentModalOpen(true);
+  }
+
+  const handleSavePayment = async () => {
+    if (!selectedItemToPay) return;
+
+    const amountVal = parseFloat(paymentAmount);
+    if (isNaN(amountVal) || amountVal <= 0) {
+      toast({ title: "Monto inválido", description: "Ingrese un valor mayor a $0.00", variant: "destructive" });
+      return;
+    }
+
+    const itemCost = selectedItemToPay.cost || 0;
+    const itemDscto = selectedItemToPay.discount || 0;
+    const finalItemPrice = itemCost - (itemCost * (itemDscto / 100));
+    const currentPaid = selectedItemToPay.paidAmount || 0;
+    const pendingBalance = Math.max(0, finalItemPrice - currentPaid);
+
+    if (amountVal > pendingBalance + 0.01) {
+      toast({ 
+        title: "El abono excede el saldo", 
+        description: `El monto máximo a abonar para esta prestación es $${pendingBalance.toFixed(2)}`, 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    const newPaidAmount = currentPaid + amountVal;
+    const isFullyPaid = newPaidAmount >= finalItemPrice;
+
+    try {
+      const res = await fetch(`/api/treatments/items/${selectedItemToPay.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paidAmount: newPaidAmount,
+          isPaid: isFullyPaid
+        })
+      });
+
+      if (!res.ok) throw new Error();
+
+      setPlanItems(prev => prev.map(item => 
+        item.id === selectedItemToPay.id 
+          ? { ...item, paidAmount: newPaidAmount, isPaid: isFullyPaid } 
+          : item
+      ));
+
+      setIsPaymentModalOpen(false);
+      toast({ title: "Abono registrado", description: `Se guardó el pago de $${amountVal.toFixed(2)}`, variant: "success" });
+      refreshPlanData();
+    } catch (e) {
+      toast({ title: "Error al registrar el pago", variant: "destructive" });
+    }
+  }
 
   const filteredCatalog = catalogItems.filter(p => p.name.toLowerCase().includes(catalogSearch.toLowerCase()) || p.category.toLowerCase().includes(catalogSearch.toLowerCase()))
   const getSignatureSrc = (base64String: string) => base64String.includes('data:image') ? base64String : `data:image/png;base64,${base64String}`
 
   return (
-    <div className="w-full animate-in fade-in slide-in-from-right-4 duration-500 pb-20 relative">
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .print-container, .print-container * { visibility: visible; }
-          .print-container { position: absolute; left: 0; top: 0; width: 100%; padding: 2cm; background: white; color: black; font-family: sans-serif; }
-          .print-hidden { display: none !important; }
-          .watermark { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); opacity: 0.1; z-index: -1; width: 500px; pointer-events: none; }
-          @page { size: auto; margin: 0mm; }
-        }
-      `}</style>
+    <div className="w-full animate-in fade-in duration-500 pb-20 relative">
+      
+      <TreatmentPrintView 
+        plan={{ ...plan, items: planItems }} 
+        patient={patient} 
+        patientAge={realPatientAge} 
+        baseTotal={baseTotal} 
+        discountPercent={discountPercent} 
+        discountAmount={discountAmount} 
+        finalTotalCost={finalTotalCost} 
+        commentText={commentText} 
+        autoRecoveredSignature={autoRecoveredSignature} 
+        getSignatureSrc={getSignatureSrc} 
+        printMode={printMode}
+      />
 
-      <div className="hidden print:block print-container">
-        <img src="/logosn.png" alt="Marca de Agua" className="watermark" />
-        
-        {/* Cabecera del PDF */}
-        <div className="flex justify-between items-end border-b-2 border-[#00b0e9] pb-4 mb-6">
-          <div>
-            <h1 className="text-4xl font-black text-[#00b0e9] tracking-tighter">CARMODENTAL</h1>
-            <p className="text-sm font-bold text-slate-700 tracking-widest uppercase">Clínica de Especialidades Odontológicas</p>
-          </div>
-          <div className="text-right text-xs font-bold text-slate-700">
-            <p>{plan.doctor?.name || "Dr. Asignado"}</p>
-            <p>RUC.: 1719231696001</p>
-          </div>
-        </div>
-
-        <div className="flex justify-between text-sm mb-6">
-          <p>Fecha de emisión: <b>{format(new Date(), "dd/MM/yyyy")}</b></p>
-          <p className="font-black text-red-600">Nº {plan.id?.slice(-6)?.toUpperCase()}</p>
-        </div>
-
-        {/* Datos del paciente en PDF */}
-        <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg text-sm mb-8 space-y-2">
-          <div className="flex justify-between">
-            <p><span className="font-bold text-[#00b0e9]">Paciente:</span> {patient?.firstName} {patient?.lastName}</p>
-            <p><span className="font-bold text-[#00b0e9]">Edad:</span> {patientAge ? `${patientAge} Años` : "--"}</p>
-          </div>
-          <p><span className="font-bold text-[#00b0e9]">Doc. Identidad:</span> {patient?.ci}</p>
-          <p><span className="font-bold text-red-600">Alergias:</span> {patient?.medicalAlerts || "Ninguna registrada"}</p>
-        </div>
-
-        {/* Tabla de Prestaciones PDF */}
-        <h3 className="text-xl font-bold text-[#00b0e9] border-b border-slate-200 pb-2 mb-4">Presupuesto de Tratamiento</h3>
-        <table className="w-full text-sm mb-8">
-          <thead className="bg-slate-100 font-bold">
-            <tr>
-              <th className="text-left p-2 border border-slate-200">Prestación</th>
-              <th className="text-center p-2 border border-slate-200">Pieza</th>
-              <th className="text-right p-2 border border-slate-200">Costo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {plan.items?.map((item: any, idx: number) => (
-              <tr key={idx}>
-                <td className="p-2 border border-slate-200">{item.procedureName}</td>
-                <td className="text-center p-2 border border-slate-200">{item.tooth || "-"}</td>
-                <td className="text-right p-2 border border-slate-200">${item.cost?.toLocaleString('en-US', {minimumFractionDigits: 2})}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {/* Totales PDF */}
-        <div className="flex justify-end mb-8">
-          <div className="w-1/3 text-sm space-y-2">
-            <div className="flex justify-between"><span className="font-bold">Subtotal:</span><span>${baseTotal.toLocaleString('en-US', {minimumFractionDigits: 2})}</span></div>
-            <div className="flex justify-between"><span className="font-bold">Descuento ({discountPercent}%):</span><span>-${discountAmount.toLocaleString('en-US', {minimumFractionDigits: 2})}</span></div>
-            <div className="flex justify-between text-lg font-black text-[#00b0e9] border-t border-slate-200 pt-2"><span className="font-bold">TOTAL:</span><span>${finalTotalCost.toLocaleString('en-US', {minimumFractionDigits: 2})}</span></div>
-          </div>
-        </div>
-
-        {/* Observaciones PDF */}
-        <div className="mb-16">
-          <h4 className="font-bold text-[#00b0e9] mb-2">Observaciones / Indicaciones:</h4>
-          <p className="text-sm text-slate-700 whitespace-pre-wrap">{commentText || "Validez del plan de tratamiento por 30 días. Plan sujeto a evaluación clínica."}</p>
-        </div>
-
-        {/* Firmas PDF */}
-        <div className="flex justify-around items-end mt-20 pt-10">
-          <div className="text-center">
-             <div className="h-16 w-40 border-b border-black mb-2 flex items-end justify-center">
-                {/* Simulador de firma del doctor si existiera */}
-             </div>
-             <p className="font-bold text-xs uppercase">FIRMA DEL PROFESIONAL</p>
-          </div>
-          <div className="text-center">
-             <div className="h-16 w-40 border-b border-black mb-2 flex items-end justify-center">
-                {autoRecoveredSignature && <img src={getSignatureSrc(autoRecoveredSignature)} className="h-14 w-auto object-contain" />}
-             </div>
-             <p className="font-bold text-xs uppercase">FIRMA DEL PACIENTE</p>
-             <p className="text-[10px]">CI: {patient?.ci}</p>
-          </div>
-        </div>
-
-        {/* Footer PDF */}
-        <div className="fixed bottom-10 left-0 w-full text-center text-xs text-[#00b0e9] border-t-2 border-[#00b0e9] pt-4">
-          <p className="font-bold">DIRECCIÓN: SOLANDA SECTOR 4, JOSÉ ARGUDO S24-72 Y AV. SOLANDA</p>
-          <p>Cel.: 0998 990 215 • e-mail: carmodental@gmail.com • Quito - Ecuador</p>
-        </div>
-      </div>
-
-
-      {/* ========================================================================= */}
-      {/* VISTA NORMAL DE PANTALLA (INTERFAZ DE USUARIO) */}
-      {/* ========================================================================= */}
       <div className="print-hidden">
-        
-        {/* HEADER */}
         <div className="flex items-center gap-4 mb-6 pb-4 border-b border-border">
-          <Button variant="outline" size="icon" onClick={onBack} className="h-9 w-9 rounded-xl shadow-sm border-border bg-background hover:bg-muted">
+          <Button variant="outline" size="icon" onClick={onBack} className="h-9 w-9 rounded-xl border-border bg-background hover:bg-muted">
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h2 className="text-2xl font-black text-foreground flex items-center gap-2">
+            <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
               Plan de tratamiento <span className="text-[#00b0e9] font-medium">#{plan.id?.slice(-6)?.toUpperCase()}</span>
             </h2>
             <p className="text-sm text-muted-foreground font-medium">Paciente: {patient?.firstName} {patient?.lastName}</p>
@@ -241,108 +304,45 @@ export function TreatmentPlanDetail({
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* SIDEBAR IZQUIERDO */}
-          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-6 sticky top-24 self-start">
-            <div className="shadow-lg rounded-xl overflow-hidden border border-border bg-card">
-              <div className="bg-[#00b0e9] p-5 text-white relative">
-                <p className="text-sm font-semibold opacity-90 mb-1">Plan de tratamiento</p>
-                <h3 className="text-2xl font-black leading-tight">{plan.name}</h3>
-              </div>
-              <div className="p-5 space-y-4">
-                <div className="text-center pb-4 border-b border-border/50">
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Presupuesto total</p>
-                  <h4 className="text-4xl font-black text-[#00b0e9]">${finalTotalCost.toLocaleString('en-US', {minimumFractionDigits: 2})}</h4>
-                </div>
-                <div className="flex justify-between items-center text-sm font-bold text-foreground">
-                  <span>Descuento comercial</span>
-                  <span className="flex items-center gap-2 cursor-pointer hover:text-[#00b0e9]" onClick={() => { setTempDiscount(discountPercent.toString()); setIsDiscountModalOpen(true); }}>
-                    {discountPercent}% <Edit2 className="w-3 h-3" />
-                  </span>
-                </div>
-                <div className="space-y-2 text-sm pt-2">
-                  <div className="flex justify-between text-muted-foreground border-b border-dashed border-border pb-1"><span>Realizado</span><span>$0.00</span></div>
-                  <div className="flex justify-between text-muted-foreground border-b border-dashed border-border pb-1"><span>Abonado</span><span>${totalPaid.toLocaleString('en-US', {minimumFractionDigits: 2})}</span></div>
-                  <div className="flex justify-between font-bold text-foreground pt-1"><span>Saldo por abonar</span><span>${debt.toLocaleString('en-US', {minimumFractionDigits: 2})}</span></div>
-                </div>
-                <Button className="w-full bg-[#00b0e9] hover:bg-[#0095c6] text-white font-bold mt-2">Cotizar con convenios</Button>
-              </div>
-            </div>
+          <TreatmentSidebar 
+            plan={plan} patient={patient} finalTotalCost={finalTotalCost}
+            discountPercent={discountPercent} setTempDiscount={setTempDiscount}
+            setIsDiscountModalOpen={setIsDiscountModalOpen} totalPaid={totalPaid}
+            debt={debt} handleCotizarConvenio={() => setIsMultiConvenioOpen(true)}
+            setIsCollaboratorsOpen={setIsCollaboratorsOpen} collaborators={collaborators}
+            appointmentList={appointmentList} planItems={planItems}
+          />
 
-            <div className="bg-card border border-border shadow-sm rounded-xl p-5 space-y-5 text-sm">
-              <div className="flex gap-3"><User className="w-5 h-5 text-muted-foreground" /><div><p className="text-xs font-semibold text-muted-foreground">Profesional a cargo</p><p className="font-bold text-[#00b0e9]">{plan.doctor?.name || "Dr(a) Asignado"}</p></div></div>
-              <div className="flex gap-3"><Users className="w-5 h-5 text-muted-foreground" /><div><p className="text-xs font-semibold text-muted-foreground">Colaboradores</p><button className="font-bold text-[#00b0e9] hover:underline">Asignar colaboradores</button></div></div>
-              <div className="flex gap-3"><ClipboardList className="w-5 h-5 text-muted-foreground" /><div><p className="text-xs font-semibold text-muted-foreground">Convenio / EPS</p><p className="font-bold text-foreground">{patient?.convenio || "Sin convenio"}</p></div></div>
-            </div>
-          </div>
-
-          {/* PANEL DERECHO */}
           <div className="lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
-            
-            {/* ODONTOGRAMA */}
-            <div className="bg-white dark:bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+            <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
               <div className="p-4 bg-slate-50 dark:bg-muted/20 border-b border-border">
-                <OdontogramaTab patientId={patient?.id} planId={plan.id} isPlanView={true} onToothClickCallback={(toothNumber: number) => setActiveToothFromOdontogram(toothNumber)} />
+                <OdontogramaTab patientId={patient?.id} planId={plan.id} isPlanView={true} onPlanUpdate={refreshPlanData} />
               </div>
             </div>
 
-            {/* PRESTACIONES */}
-            <div className="bg-white dark:bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-border flex flex-wrap gap-2 items-center justify-between bg-slate-50 dark:bg-muted/10">
-                 <div className="flex gap-2">
-                   <Button variant="outline" size="sm" onClick={() => setIsSectionModalOpen(true)} className="text-[#00b0e9] border-[#00b0e9] hover:bg-[#00b0e9]/10"><Plus className="w-4 h-4 mr-1"/> Sección</Button>
-                   <Button variant="outline" size="sm" onClick={openCatalogModal} className="text-emerald-600 border-emerald-600 hover:bg-emerald-50"><Plus className="w-4 h-4 mr-1"/> Prestación</Button>
-                   
-                   {/* NUEVO MENÚ DE ACCIONES */}
-                   <TreatmentActions planId={plan.id} patientEmail={patient?.email} onClearPlan={() => console.log("Vaciar presupuesto")} />
-                 </div>
-                 <div className="text-sm font-semibold text-[#00b0e9] cursor-pointer">Arcadas y Sextantes <ChevronDown className="w-4 h-4 inline" /></div>
-              </div>
+            <TreatmentTable 
+              planItems={planItems}
+              setIsSectionModalOpen={setIsSectionModalOpen}
+              openCatalogModal={openCatalogModal}
+              setIsDiagnosisModalOpen={setIsDiagnosisModalOpen}
+              setIsConfirmClearOpen={setIsConfirmClearOpen}
+              openEvolutionModal={openEvolutionModal}
+              onUpdateItemDiscount={handleUpdateItemDiscount}
+              onSelectPrintMode={(mode: string) => setPrintMode(mode)}
+              onOpenPaymentModal={handleOpenPaymentModal}
+            />
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left whitespace-nowrap">
-                  <thead className="text-xs uppercase text-muted-foreground font-bold border-b border-border bg-white dark:bg-card">
-                    <tr>
-                      <th className="px-4 py-3 w-10"></th><th className="px-4 py-3">Prestación</th><th className="px-4 py-3 text-center">Pieza</th>
-                      <th className="px-4 py-3 text-center">Dscto</th><th className="px-4 py-3 text-right">Precio</th><th className="px-4 py-3 text-center">Pago</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {plan.items?.length > 0 ? (
-                      plan.items.map((item: any) => (
-                        <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3 text-center">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild><Button variant="ghost" className="w-8 h-8 p-0 rounded-full border-2 border-slate-300 hover:border-[#00b0e9]"></Button></DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="w-48">
-                                <DropdownMenuItem className="font-bold text-emerald-600" onClick={() => openEvolutionModal(item, 100)}>Realizar (100%)</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => openEvolutionModal(item, 50)}>Evolucionar (50%)</DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-500" onClick={() => openEvolutionModal(item, 0)}>Deshacer (0%)</DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </td>
-                          <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{item.procedureName}</td>
-                          <td className="px-4 py-3 text-center">{item.tooth ? <span className="border border-border rounded px-2 py-1 text-xs">{item.tooth}</span> : <span className="text-muted-foreground">-</span>}</td>
-                          <td className="px-4 py-3 text-center">0%</td>
-                          <td className="px-4 py-3 text-right font-bold text-slate-700 dark:text-slate-200">${item.cost?.toLocaleString('en-US', {minimumFractionDigits:2})}</td>
-                          <td className="px-4 py-3 text-center"><div className="w-3 h-3 rounded-full bg-red-500 mx-auto"></div></td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr><td colSpan={6} className="text-center py-10 text-muted-foreground">No hay prestaciones agregadas. Usa el odontograma o el botón "+ Prestación".</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* SECCIÓN DOCUMENTOS Y FIRMAS */}
-            <div className="bg-white dark:bg-card rounded-xl border border-border shadow-sm p-6 space-y-6">
-              
+            {/* SECCIÓN FIRMA Y CONSENTIMIENTOS CON ANCLA */}
+            <div id="firma-conformidad-section" className="bg-card rounded-xl border border-border shadow-sm p-6 space-y-6">
               <div className="border-b border-border pb-4 flex justify-between items-center">
-                <h4 className="text-lg font-bold flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-500" /> Firma de Conformidad</h4>
+                <div>
+                  <h4 className="text-lg font-bold flex items-center gap-2 text-foreground">
+                    <CheckCircle className="w-5 h-5 text-emerald-500" /> Firma del paciente
+                  </h4>
+                  <p className="text-xs text-muted-foreground">(Se incluirán en la impresión de evoluciones)</p>
+                </div>
               </div>
 
-              {/* LIENZO BLANCO PARA LA FIRMA (Soluciona Modo Oscuro/Claro) */}
               {autoRecoveredSignature ? (
                  <div className="flex flex-col sm:flex-row items-center gap-6 p-5 bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl">
                    <div className="bg-white p-2 rounded-lg border border-slate-200 shadow-sm flex items-center justify-center h-20 w-40">
@@ -354,90 +354,97 @@ export function TreatmentPlanDetail({
                    </div>
                  </div>
               ) : (
-                 <div className="p-4 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-900/30 rounded-xl flex items-start gap-3">
-                   <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                   <div>
-                     <p className="font-bold text-amber-800 dark:text-amber-400 text-sm">Pendiente de firma</p>
-                     <p className="text-xs text-amber-700 dark:text-amber-500 mb-3">El paciente no ha firmado ningún documento. Solicite la firma de este presupuesto.</p>
-                     <Button size="sm" className="bg-amber-500 hover:bg-amber-600 text-white font-bold h-8"><FileSignature className="w-4 h-4 mr-1"/> Capturar firma digital</Button>
-                   </div>
+                 <div className="p-8 bg-slate-50/50 dark:bg-muted/10 border border-border rounded-xl text-center space-y-3">
+                   <p className="text-sm font-semibold text-muted-foreground">Hay 1 documento pendiente por firmar</p>
+                   <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-9 px-6 rounded-xl shadow-sm">
+                     <FileSignature className="w-4 h-4 mr-2"/> Solicitar firma
+                   </Button>
                  </div>
               )}
-              {/* CONSENTIMIENTOS */}
+
               <div className="border-t border-border pt-6">
-                <h5 className="font-bold text-sm mb-3 flex items-center gap-2"><FileText className="w-4 h-4 text-slate-400"/> Consentimientos Informados</h5>
+                <h5 className="font-bold text-sm mb-3 flex items-center gap-2 text-foreground"><FileText className="w-4 h-4 text-muted-foreground"/> Consentimientos Informados</h5>
                 {signedConsents.length > 0 ? (
                    <div className="space-y-2 mb-4">
                      {signedConsents.map((doc: any, i: number) => (
-                        <div key={i} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-muted/20 border border-border rounded-lg">
-                          <span className="text-sm font-semibold">{doc.title || "Consentimiento Informado"}</span>
+                        <div key={i} className="flex justify-between items-center p-3 bg-muted/20 border border-border rounded-lg">
+                          <span className="text-sm font-semibold text-foreground">{doc.title || "Consentimiento Informado"}</span>
                           <span className="text-xs font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md">Firmado</span>
                         </div>
                      ))}
                    </div>
                 ) : ( <p className="text-sm text-muted-foreground mb-4">No se han registrado consentimientos firmados para este paciente.</p> )}
                 
-                {/* BOTÓN FANTASMA/OUTLINE LIGERO */}
-              <Link href={`/paciente/${patient.id}?tab=consentimientos`}>
+                <Link href={`/paciente/${patient.id}?tab=consentimientos`}>
                   <Button variant="outline" size="sm" className="text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 bg-transparent font-medium rounded-lg">
                     <Plus className="w-4 h-4 mr-1.5"/> Redactar nuevo consentimiento
                   </Button>
                 </Link>
               </div>
-              {/* OBSERVACIONES CLÍNICAS REFINADAS */}
+
+              {/* COMENTARIOS */}
               <div className="border-t border-border pt-6">
                 <div className="flex justify-between items-center mb-3">
-                  <h5 className="font-bold text-sm text-foreground flex items-center gap-2">
-                    Observaciones Clínicas 
-                    <span className="font-medium text-muted-foreground text-[11px] uppercase tracking-wider bg-muted/50 px-2 py-0.5 rounded-md">Visible en impresión</span>
-                  </h5>
+                  <div>
+                    <h5 className="font-bold text-sm text-foreground">Comentarios para el paciente</h5>
+                    <p className="text-xs text-muted-foreground">Se incluirán en la impresión de presupuestos</p>
+                  </div>
+
                   {isEditingComments ? (
                     <Button onClick={handleSaveComments} disabled={isSavingComment} size="sm" className="bg-[#00b0e9] hover:bg-[#0095c6] text-white shadow-sm rounded-xl h-8 px-4 font-bold">
                       {isSavingComment ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Save className="w-3 h-3 mr-1.5" />} Guardar
                     </Button>
                   ) : (
                     <Button variant="ghost" size="sm" onClick={() => setIsEditingComments(true)} className="text-[#00b0e9] hover:bg-[#00b0e9]/10 rounded-xl h-8 px-4 font-bold">
-                      <Edit className="w-3 h-3 mr-1.5" /> Editar nota
+                      <Edit className="w-3 h-3 mr-1.5" /> Editar
                     </Button>
                   )}
                 </div>
                 
                 {isEditingComments ? (
-                  <Textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} className="min-h-[120px] bg-background border-border rounded-xl shadow-inner focus-visible:ring-[#00b0e9] resize-none p-4" placeholder="Recomendaciones post-tratamiento, condiciones de validez del presupuesto..." />
+                  <Textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} className="min-h-[120px] bg-background border-border rounded-xl shadow-inner focus-visible:ring-[#00b0e9] resize-none p-4 text-sm font-medium" placeholder="Recomendaciones post-tratamiento, condiciones de validez del presupuesto..." />
                 ) : (
-                  <div className="relative overflow-hidden">
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#00b0e9] rounded-l-xl"></div>
-                    <div className="text-sm text-slate-700 dark:text-slate-300 p-5 pl-6 bg-slate-50/50 dark:bg-muted/10 rounded-xl border border-border/60 min-h-[80px] whitespace-pre-wrap leading-relaxed shadow-sm">
-                      {commentText || <span className="italic text-muted-foreground">Validez del plan de tratamiento por 30 días. Plan sujeto a evaluación clínica.</span>}
-                    </div>
+                  <div className="p-4 bg-muted/10 rounded-xl border border-border min-h-[80px] text-sm text-foreground/80 leading-relaxed shadow-sm">
+                    {commentText || <span className="italic text-muted-foreground">Validez del plan de tratamiento por 30 días. Plan sujeto a evaluación clínica.</span>}
                   </div>
                 )}
               </div>
 
             </div>
-
           </div>
         </div>
       </div>
 
-      {/* ========================================================================= */}
-      {/* MODALES FLOTANTES */}
-      {/* ========================================================================= */}
-      <Dialog open={isSectionModalOpen} onOpenChange={setIsSectionModalOpen}>
-        <DialogContent className="sm:max-w-[400px]"><DialogHeader><DialogTitle>Agregar Nueva Sección</DialogTitle></DialogHeader><div className="py-4"><p className="text-sm text-muted-foreground mb-4">Agrupa tus prestaciones por fases.</p><Input placeholder="Nombre de la sección..." value={sectionName} onChange={(e) => setSectionName(e.target.value)} autoFocus /></div><DialogFooter><Button variant="outline" onClick={() => setIsSectionModalOpen(false)}>Cancelar</Button><Button onClick={handleAddSection} className="bg-[#00b0e9] text-white">Crear Sección</Button></DialogFooter></DialogContent>
-      </Dialog>
+      {/* MODALES CON PERMISOS Y PLANTILLAS REALES */}
+      <TreatmentPlanModals 
+        plan={{ ...plan, items: planItems }} patient={patient} currentUser={currentUser}
+        isSectionModalOpen={isSectionModalOpen} setIsSectionModalOpen={setIsSectionModalOpen} sectionName={sectionName} setSectionName={setSectionName} handleAddSection={() => setIsSectionModalOpen(false)}
+        isDiscountModalOpen={isDiscountModalOpen} setIsDiscountModalOpen={setIsDiscountModalOpen} tempDiscount={tempDiscount} setTempDiscount={setTempDiscount} handleApplyDiscount={handleApplyDiscount}
+        isCatalogModalOpen={isCatalogModalOpen} setIsCatalogModalOpen={setIsCatalogModalOpen} catalogSearch={catalogSearch} setCatalogSearch={setCatalogSearch} filteredCatalog={filteredCatalog} handleAddManualProcedure={handleAddManualProcedure} isAddingProcedure={isAddingProcedure}
+        isEvolutionModalOpen={isEvolutionModalOpen} setIsEvolutionModalOpen={setIsEvolutionModalOpen} evolutionProgress={evolutionProgress} selectedItemToEvolve={selectedItemToEvolve} evolutionNote={evolutionNote} setEvolutionNote={setEvolutionNote} handleSaveEvolution={handleSaveEvolution}
+        isDiagnosisModalOpen={isDiagnosisModalOpen} setIsDiagnosisModalOpen={setIsDiagnosisModalOpen} selectedDiagnosis={selectedDiagnosis} setSelectedDiagnosis={setSelectedDiagnosis} handleSaveDiagnosis={() => setIsDiagnosisModalOpen(false)}
+        isMultiConvenioOpen={isMultiConvenioOpen} setIsMultiConvenioOpen={setIsMultiConvenioOpen} onApplyMultiConvenio={(dsctoVal: number) => setDiscountPercent(dsctoVal)}
+        isPaymentModalOpen={isPaymentModalOpen} setIsPaymentModalOpen={setIsPaymentModalOpen} selectedItemToPay={selectedItemToPay} paymentAmount={paymentAmount} setPaymentAmount={setPaymentAmount} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} handleSavePayment={handleSavePayment}
+      />
 
-      <Dialog open={isDiscountModalOpen} onOpenChange={setIsDiscountModalOpen}>
-        <DialogContent className="sm:max-w-[400px]"><DialogHeader><DialogTitle>Descuento comercial</DialogTitle></DialogHeader><div className="py-4"><p className="text-sm text-muted-foreground mb-4">Porcentaje de descuento aplicado al presupuesto.</p><div className="relative"><Input type="number" min="0" max="100" value={tempDiscount} onChange={(e) => setTempDiscount(e.target.value)} className="pr-8" /><span className="absolute right-3 top-1/2 -translate-y-1/2 font-bold text-muted-foreground">%</span></div></div><DialogFooter><Button variant="outline" onClick={() => setIsDiscountModalOpen(false)}>Cancelar</Button><Button onClick={handleApplyDiscount} className="bg-[#00b0e9] text-white">Aplicar descuento</Button></DialogFooter></DialogContent>
-      </Dialog>
+      <AssignCollaboratorsModal isOpen={isCollaboratorsOpen} setIsOpen={setIsCollaboratorsOpen} doctorsList={[]} currentCollaborators={collaborators} onSaveCollaborators={(sel) => setCollaborators(sel)} />
 
-      <Dialog open={isCatalogModalOpen} onOpenChange={setIsCatalogModalOpen}>
-        <DialogContent className="sm:max-w-[600px] h-[80vh] flex flex-col p-0"><DialogHeader className="p-6 border-b border-border pb-4"><DialogTitle>Catálogo de Prestaciones</DialogTitle></DialogHeader><div className="p-4 border-b border-border bg-muted/20"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" /><Input placeholder="Buscar por nombre o categoría..." value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} className="pl-9 bg-background" autoFocus/></div></div><div className="flex-1 overflow-y-auto p-2">{filteredCatalog.length > 0 ? filteredCatalog.map((proc) => (<button key={proc.id} onClick={() => handleAddManualProcedure(proc)} disabled={isAddingProcedure} className="w-full text-left p-4 hover:bg-muted/50 border-b border-border flex justify-between items-center transition-colors"><div><p className="font-bold text-foreground">{proc.name}</p><p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{proc.category}</p></div><p className="font-black text-emerald-600">${proc.basePrice.toLocaleString()}</p></button>)) : (<div className="p-10 text-center text-muted-foreground">No se encontraron prestaciones.</div>)}</div></DialogContent>
-      </Dialog>
+      <AlertDialog open={isConfirmClearOpen} onOpenChange={setIsConfirmClearOpen}>
+        <AlertDialogContent className="bg-card border-border rounded-[24px] shadow-2xl sm:max-w-[420px]">
+          <AlertDialogHeader className="flex flex-col items-center text-center space-y-3">
+            <div className="w-14 h-14 bg-destructive/10 text-destructive rounded-2xl flex items-center justify-center">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <AlertDialogTitle className="text-xl font-black text-foreground">¿Vaciar todo el presupuesto?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">Esta acción eliminará de forma permanente todas las prestaciones cargadas a este plan de tratamiento.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="w-full flex sm:justify-center gap-3 mt-4">
+            <AlertDialogCancel className="border-border hover:bg-accent text-foreground font-bold rounded-xl h-11 px-5">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearPlan} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold rounded-xl h-11 px-6 shadow-sm">Sí, Vaciar Presupuesto</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      <Dialog open={isEvolutionModalOpen} onOpenChange={setIsEvolutionModalOpen}>
-        <DialogContent className="sm:max-w-[600px] bg-background"><DialogHeader><DialogTitle className="text-xl font-bold uppercase">Evolución para {patient?.firstName}</DialogTitle></DialogHeader><div className="py-4 space-y-4"><div><p className="text-sm font-semibold mb-2">Profesional que realizó la prestación</p><select className="w-full border border-border rounded-md h-10 px-3 text-sm bg-background"><option>{plan.doctor?.name || "Dr. Asignado"}</option></select></div><div><div className="flex justify-between items-center mb-2"><p className="text-sm font-semibold">Evolución escrita (opcional):</p></div><Textarea value={evolutionNote} onChange={(e) => setEvolutionNote(e.target.value)} className="min-h-[120px] resize-none" placeholder="Escriba los detalles clínicos aquí..."/></div></div><DialogFooter className="px-6 py-4 bg-slate-50 dark:bg-muted/20 border-t border-border flex justify-end gap-2 -mx-6 -mb-6 mt-2"><Button variant="outline" onClick={() => setIsEvolutionModalOpen(false)} className="font-bold">Cancelar</Button><Button onClick={handleSaveEvolution} className="bg-[#5cb85c] hover:bg-[#4cae4c] text-white font-bold px-6">Evolucionar ({evolutionProgress}%)</Button></DialogFooter></DialogContent>
-      </Dialog>
     </div>
   )
 }

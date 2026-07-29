@@ -42,10 +42,10 @@ const clinicaNavItems = [
 ]
 
 const adminNavItems = [
-  { name: "Facturación", href: "/facturacion", icon: CreditCard },
-  { name: "Inventario", href: "/inventario", icon: Box },
-  { name: "Liquidaciones", href: "/liquidaciones", icon: Briefcase },
-  { name: "Configuración", href: "/configuracion", icon: Settings },
+  { name: "Facturación", href: "/facturacion", icon: CreditCard, roles: ["ADMIN", "RECEPTIONIST"] },
+  { name: "Inventario", href: "/inventario", icon: Box, roles: ["ADMIN", "RECEPTIONIST"] },
+  { name: "Liquidaciones", href: "/liquidaciones", icon: Briefcase, roles: ["ADMIN"] },
+  { name: "Configuración", href: "/configuracion", icon: Settings, roles: ["ADMIN"] },
 ]
 
 type Item = {
@@ -58,10 +58,11 @@ type Item = {
 export const Nav = () => {
   const pathname = usePathname()
   const [isHovered, setIsHovered] = React.useState(false)
+  
   const { data: session } = useSession()
-  const userRole = (session?.user as any)?.role
-  const showAdminModule = userRole === "ADMIN" || userRole === "RECEPTIONIST"
-  const isAdmin = userRole === "ADMIN"
+  const userRole = (session?.user as any)?.role || "DOCTOR" 
+  const visibleAdminItems = adminNavItems.filter(item => item.roles.includes(userRole))
+  const showAdminModule = visibleAdminItems.length > 0
 
   return (
     <nav
@@ -122,22 +123,15 @@ export const Nav = () => {
               </CollapsibleContent>
             </Collapsible>
             
-            {/* COLLAPSIBLE: ADMINISTRACIÓN (Protegido por Rol) */}
             {showAdminModule && (
               <Collapsible defaultOpen={true}>
                 <CollapsibleTrigger className="w-full group">
                   <SectionTrigger isExpanded={isHovered} icon={Briefcase}>Administración</SectionTrigger>
                 </CollapsibleTrigger>
                 <CollapsibleContent className={cn(!isHovered && "hidden")}>
-                  {adminNavItems.map((item) => {
-                    if (item.name === "Configuración" && !isAdmin) {
-                      return null;
-                    }
-                    
-                    return (
-                      <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
-                    )
-                  })}
+                  {visibleAdminItems.map((item) => (
+                    <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
+                  ))}
                 </CollapsibleContent>
               </Collapsible>
             )}
@@ -228,7 +222,7 @@ const SectionTrigger = ({
     <div
       className={cn(
         "flex items-center w-full rounded-lg py-2 transition-all duration-200 mt-2",
-        "hover:bg-accent",
+        "hover:bg-accent cursor-pointer",
         !isExpanded
           ? "justify-center px-0"
           : "justify-between px-3"

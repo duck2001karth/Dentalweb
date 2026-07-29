@@ -41,7 +41,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 }
 
-// Emviar a papelera (DELETE) - En vez de eliminar, actualizamos el status a "CANCELLED"
+// Enviar a papelera (DELETE) - En vez de eliminar, actualizamos el status a "CANCELLED"
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params

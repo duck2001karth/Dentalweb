@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast"
 import { AlertTriangle } from "lucide-react"
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { CreatePlanModal } from "./create-plan-modal"
+import { CreatePlanModal } from "@/components/plans-treatment/create-plan-modal"
 
 import { TreatmentPlanList } from "@/components/plans-treatment/treatment-list"
 import { TreatmentPlanDetail } from "@/components/plans-treatment/treatment-detail"

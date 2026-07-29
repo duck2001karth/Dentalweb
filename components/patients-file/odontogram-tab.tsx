@@ -2,17 +2,25 @@
 
 import React, { useState, useEffect, useCallback } from "react"
 import { 
-  Printer, Save, X, Loader2, ChevronLeft, 
-  Stethoscope, History, PlusCircle, CheckCircle, Search,
-  Maximize2, Minimize2
+  X, Loader2, ChevronLeft, 
+  Stethoscope, History, CheckCircle, Search,
+  Maximize2, Minimize2, Calendar, User, MessageSquare, FilterX, AlertTriangle, PlusCircle
 } from "lucide-react"
 import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, 
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter, 
+  AlertDialogHeader, AlertDialogTitle 
+} from "@/components/ui/alert-dialog"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { ToothPiece } from "@/components/patients-file/odontooth-piece"
@@ -36,16 +44,22 @@ const PREEXISTENCE_OPTIONS = [
   { label: "Sellante Bueno", value: "SELLANTE_BUENO", type: "tooth", icon: "S" },
 ]
 
-const ALL_STATUS_OPTIONS = [...LESION_OPTIONS, ...PREEXISTENCE_OPTIONS]
+const HEALTHY_OPTION = { label: "Diente sano", value: "DIENTE_SANO", type: "tooth", icon: "✓" }
+
+const ALL_STATUS_OPTIONS = [...LESION_OPTIONS, ...PREEXISTENCE_OPTIONS, HEALTHY_OPTION]
 const getStatusLabel = (val: string) => ALL_STATUS_OPTIONS.find(o => o.value === val)?.label || val
 
-export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlanView = false }: { patientId: string; planId?: string; onToothClickCallback?: (tooth: number) => void; isPlanView?: boolean }) {
+export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlanView = false, onPlanUpdate }: { 
+  patientId: string; planId?: string; onToothClickCallback?: (tooth: number) => void; isPlanView?: boolean; onPlanUpdate?: () => void;
+}) {
   const { data: session } = useSession()
   const { toast } = useToast()
+  const router = useRouter()
+  
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
   const [isFocusMode, setIsFocusMode] = useState(false)
   const toggleFocus = () => setIsFocusMode(!isFocusMode)
 
-  // --- REGLAS DE SEGURIDAD POR ROL ---
   const currentUser = session?.user as any
   const canEditClinicalData = currentUser?.role === "DOCTOR" || currentUser?.role === "ADMIN"
 
@@ -58,13 +72,18 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
 
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null)
   const [currentSurfaces, setCurrentSurfaces] = useState<string[]>([])
-  const [menuStep, setMenuStep] = useState<"NONE" | "OPTIONS" | "LESIONS" | "PREEXISTENCES" | "PROCEDURES" | "SAVE_FORM">("NONE")
+  const [menuStep, setMenuStep] = useState<"NONE" | "OPTIONS" | "LESIONS" | "PREEXISTENCES" | "SAVE_FORM">("NONE")
   const [selectedStatus, setSelectedStatus] = useState<any>(null)
   const [recordComment, setRecordComment] = useState("")
   
   const [catalogoReal, setCatalogoReal] = useState<any[]>([])
   const [procedureSearch, setProcedureSearch] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const [historySearch, setHistorySearch] = useState("")
+  const [dateFrom, setDateFrom] = useState("")
+  const [dateTo, setDateTo] = useState("")
+  const [selectedRecordForDetail, setSelectedRecordForDetail] = useState<any>(null)
+  const [recordToDelete, setRecordToDelete] = useState<any>(null)
 
   const arcada1 = [18, 17, 16, 15, 14, 13, 12, 11]; const arcada2 = [21, 22, 23, 24, 25, 26, 27, 28]
   const arcada4 = [48, 47, 46, 45, 44, 43, 42, 41]; const arcada3 = [31, 32, 33, 34, 35, 36, 37, 38]
@@ -96,10 +115,7 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
   }, [fetchRecords, fetchCatalog, planId, canEditClinicalData])
 
   useEffect(() => {
-    if (!searchTerm) {
-      setProcedureSearch(catalogoReal)
-      return
-    }
+    if (!searchTerm) { setProcedureSearch(catalogoReal); return; }
     const filtered = catalogoReal.filter(p => 
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       p.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -110,7 +126,6 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
 
   const handleSurfaceClick = (tooth: number, surface: string) => {
     if (!canEditClinicalData) return;
-
     if (selectedTooth !== tooth) { 
         setSelectedTooth(tooth)
         setCurrentSurfaces(surface === "TODA_LA_PIEZA" ? [] : [surface]) 
@@ -129,11 +144,15 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
 
   const handleSaveRecord = async () => {
     if (!canEditClinicalData) return;
-    let finalSurfaces = currentSurfaces
-    if (selectedStatus?.type === "tooth" || finalSurfaces.length === 0) finalSurfaces = ["TODA_LA_PIEZA"]
-    
     setIsSaving(true)
     try {
+      if (selectedStatus?.value === "DIENTE_SANO") {
+        await fetch(`/api/odontogram?patientId=${patientId}&toothNumber=${selectedTooth}`, { method: "DELETE" });
+      }
+
+      let finalSurfaces = currentSurfaces
+      if (selectedStatus?.type === "tooth" || finalSurfaces.length === 0) finalSurfaces = ["TODA_LA_PIEZA"]
+
       const res = await fetch(`/api/odontogram`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -143,33 +162,34 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
             status: selectedStatus.value, 
             isEvolution: view === "evolucion", 
             authorId: currentUser?.id,
-            comments: recordComment
+            notes: recordComment
         })
       })
       if (!res.ok) throw new Error()
-      toast({ title: "Registro guardado", variant: "success" })
-      handleCloseMenu(); fetchRecords();
-    } catch (error) { toast({ title: "Error", variant: "destructive" }) } finally { setIsSaving(false) }
+      
+      toast({ title: "Simbología registrada", variant: "success" })
+      handleCloseMenu(); 
+      fetchRecords();
+      router.refresh();
+    } catch (error) { toast({ title: "Error al guardar", variant: "destructive" }) } finally { setIsSaving(false) }
   }
 
-  const handleHealthyTooth = async () => {
-    if (!selectedTooth || !canEditClinicalData) return;
-    setIsSaving(true);
+  const confirmDeleteRecord = async () => {
+    if (!recordToDelete) return;
     try {
-      const res = await fetch(`/api/odontogram?patientId=${patientId}&toothNumber=${selectedTooth}`, { method: "DELETE" });
-      if (!res.ok) throw new Error();
-      toast({ title: "Pieza saneada", description: `Se han limpiado los registros de la pieza ${selectedTooth}`, variant: "success" });
-      handleCloseMenu(); fetchRecords();
-    } catch (e) { toast({ title: "Error al limpiar", variant: "destructive" }) } finally { setIsSaving(false) }
-  }
-
-  const handleDelete = async (id: string) => {
-    if (!canEditClinicalData) return;
-    try {
-        const response = await fetch(`/api/odontogram?id=${id}`, { method: "DELETE" })
+        const response = await fetch(`/api/odontogram?id=${recordToDelete.id}`, { method: "DELETE" })
         if (!response.ok) throw new Error()
-        toast({ title: "Registro anulado", variant: "success" }); fetchRecords()
-    } catch (error) { toast({ title: "Error", variant: "destructive" }) }
+        toast({ title: "Registro anulado correctamente", variant: "success" }); 
+        setRecordToDelete(null);
+        fetchRecords();
+        router.refresh();
+    } catch (error) { toast({ title: "Error al anular", variant: "destructive" }) }
+  }
+
+  const canUserDeleteRecord = (record: any) => {
+    if (!canEditClinicalData) return false;
+    if (currentUser?.role === "ADMIN") return true;
+    return record.authorId === currentUser?.id || record.author?.id === currentUser?.id;
   }
 
   const handleAddProcedure = async (procedure: any) => {
@@ -177,7 +197,8 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
     setIsSaving(true);
     try {
       const res = await fetch(`/api/treatments/${planId}/items`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", 
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           procedureId: procedure.id,
           name: procedure.name,
@@ -186,52 +207,78 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
           surfaces: currentSurfaces
         })
       });
+
       if (!res.ok) throw new Error();
-      toast({ title: "Prestación añadida", description: `${procedure.name} sumado al presupuesto.`, variant: "success" });
-      handleCloseMenu();
-      window.location.reload(); 
-    } catch (e) { toast({ title: "Error", variant: "destructive" }) } finally { setIsSaving(false) }
+
+      toast({ 
+        title: "Prestación añadida", 
+        description: `${procedure.name} (Pieza ${selectedTooth || 'General'}) sumado al presupuesto.`, 
+        variant: "success" 
+      });
+
+      setIsCatalogModalOpen(false);
+      setMenuStep("NONE"); 
+      setSelectedTooth(null);
+      setCurrentSurfaces([]);
+
+      if (onPlanUpdate) onPlanUpdate();
+      router.refresh(); 
+
+    } catch (e) { 
+      toast({ title: "Error al agregar prestación", variant: "destructive" }) 
+    } finally { 
+      setIsSaving(false); 
+    }
   }
 
   const getRecordsForTooth = (toothNum: number) => records.filter(r => r.toothNumber === toothNum && r.isEvolution === (view === "evolucion"))
 
+  const filteredHistoryRecords = records
+    .filter(r => r.isEvolution === (view === "evolucion"))
+    .filter(r => {
+      const query = historySearch.toLowerCase().trim()
+      const matchesSearch = !query || 
+        r.toothNumber?.toString().includes(query) ||
+        r.status?.toLowerCase().includes(query) ||
+        getStatusLabel(r.status).toLowerCase().includes(query) ||
+        r.notes?.toLowerCase().includes(query) ||
+        r.author?.name?.toLowerCase().includes(query)
+
+      const recordDate = new Date(r.createdAt)
+      const matchesFrom = !dateFrom || recordDate >= new Date(dateFrom)
+      const matchesTo = !dateTo || recordDate <= new Date(dateTo + "T23:59:59")
+
+      return matchesSearch && matchesFrom && matchesTo
+    })
+
   if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="w-10 h-10 animate-spin text-[#008bcd]" /></div>
 
   return (
-    <div 
-      className={cn("transition-all duration-300 ease-in-out bg-background", isFocusMode ? "fixed inset-0 z-[100] w-screen h-screen overflow-y-auto p-4 md:p-8 bg-card" 
-          : "relative w-full h-full animate-in fade-in"
-      )}
-    >
+    <div className={cn("transition-all duration-300 ease-in-out bg-background text-foreground", isFocusMode ? "fixed inset-0 z-[100] w-screen h-screen overflow-y-auto p-4 md:p-8 bg-background" : "relative w-full h-full animate-in fade-in")}>
       
       {/* HEADER DE HERRAMIENTAS */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-card p-4 rounded-xl border border-border shadow-sm sticky top-0 z-20 print-hidden">
-        
-        {/* Selector de Dentición */}
-        <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border">
-          <button onClick={() => setDentition("permanente")} className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all", dentition === "permanente" ? "bg-background text-[#008bcd] shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}>Permanente <span className="opacity-60 font-normal ml-1">32</span></button>
-          <button onClick={() => setDentition("temporal")} className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all", dentition === "temporal" ? "bg-background text-[#008bcd] shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}>Temporal <span className="opacity-60 font-normal ml-1">20</span></button>
+        <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
+          <button onClick={() => setDentition("permanente")} className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all", dentition === "permanente" ? "bg-background text-[#008bcd] shadow-sm" : "text-muted-foreground hover:text-foreground")}>Permanente <span className="opacity-60 font-normal ml-1">32</span></button>
+          <button onClick={() => setDentition("temporal")} className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all", dentition === "temporal" ? "bg-background text-[#008bcd] shadow-sm" : "text-muted-foreground hover:text-foreground")}>Temporal <span className="opacity-60 font-normal ml-1">20</span></button>
         </div>
-        
-        {/* Herramientas Derecha */}
         <div className="flex items-center gap-3">
           {!canEditClinicalData && (
-            <span className="text-[10px] font-bold tracking-widest bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-500 px-2 py-1.5 rounded-md">
+            <span className="text-[10px] font-bold tracking-widest bg-muted border border-border text-muted-foreground px-2 py-1.5 rounded-md">
               SÓLO LECTURA
             </span>
           )}
           
-          {/* Selector Elegante de Vista */}
-          <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-lg border border-border">
+          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border">
             <button 
               onClick={() => setView("diagnostico")} 
-              className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all", view === "diagnostico" ? "bg-[#008bcd] text-white shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+              className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all", view === "diagnostico" ? "bg-[#008bcd] text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}
             >
               Diagnóstico Inicial
             </button>
             <button 
               onClick={() => setView("evolucion")} 
-              className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all", view === "evolucion" ? "bg-[#008bcd] text-white shadow-sm" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+              className={cn("px-4 py-1.5 text-xs font-bold rounded-md transition-all", view === "evolucion" ? "bg-[#008bcd] text-white shadow-sm" : "text-muted-foreground hover:text-foreground")}
             >
               Evolución Clínica
             </button>
@@ -243,12 +290,11 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
             variant="ghost" 
             size="icon" 
             onClick={toggleFocus} 
-            className="rounded-lg shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors h-8 w-8"
+            className="rounded-lg shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors h-8 w-8"
             title={isFocusMode ? "Salir de pantalla completa" : "Pantalla completa"}
           >
             {isFocusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
           </Button>
-          
         </div>
       </div>
 
@@ -266,18 +312,18 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
         </div>
       </div>
 
-      {/* MENÚ INTERACTIVO FLOTANTE */}
+      {/* MENÚ INTERACTIVO FLOTANTE DE PIEZA */}
       {menuStep !== "NONE" && canEditClinicalData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-background w-[90%] max-w-[500px] rounded-[24px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="bg-slate-900 px-7 py-5 flex items-center justify-between text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-card text-card-foreground w-[90%] max-w-[500px] rounded-[24px] shadow-2xl border border-border overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-slate-900 dark:bg-slate-950 px-7 py-5 flex items-center justify-between text-white">
               <div className="flex items-center gap-4">
                 {menuStep !== "OPTIONS" && (
                    <Button variant="ghost" size="icon" onClick={() => setMenuStep("OPTIONS")} className="h-9 w-9 text-white hover:bg-white/20 rounded-full"><ChevronLeft className="w-5 h-5"/></Button>
                 )}
                 <div>
                   <h3 className="font-bold text-xl leading-tight">
-                    {menuStep === "OPTIONS" ? "Opciones de Pieza" : menuStep === "LESIONS" ? "Definir lesión" : menuStep === "PREEXISTENCES" ? "Agregar preexistencia" : menuStep === "PROCEDURES" ? "Seleccionar Prestación" : "Detalle"}
+                    {menuStep === "OPTIONS" ? "Opciones de Pieza" : menuStep === "LESIONS" ? "Definir lesión" : menuStep === "PREEXISTENCES" ? "Agregar preexistencia" : "Detalle"}
                   </h3>
                   <p className="text-xs opacity-80 font-medium tracking-wide uppercase mt-0.5">PIEZA {selectedTooth} {currentSurfaces.length > 0 && currentSurfaces[0] !== "TODA_LA_PIEZA" ? `• CARAS: ${currentSurfaces.join(", ")}` : ""}</p>
                 </div>
@@ -286,62 +332,68 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
             </div>
 
             {menuStep === "OPTIONS" && (
-              <div className="flex flex-col bg-background">
-               {!isPlanView && (
-                  <>
-                <button onClick={() => setMenuStep("PREEXISTENCES")} className="flex items-center gap-5 px-7 py-5 hover:bg-muted/50 transition-colors text-left border-b border-border">
-                  <div className="bg-blue-50 dark:bg-blue-900/20 text-[#008bcd] p-3 rounded-full"><History className="w-6 h-6" /></div>
+              <div className="flex flex-col bg-card">
+                {/* 1. PREEXISTENCIA */}
+                <button onClick={() => setMenuStep("PREEXISTENCES")} className="flex items-center gap-5 px-7 py-5 hover:bg-accent transition-colors text-left border-b border-border">
+                  <div className="bg-blue-50 dark:bg-blue-900/30 text-[#008bcd] p-3 rounded-full"><History className="w-6 h-6" /></div>
                   <div>
                     <p className="font-bold text-foreground text-base">Agregar preexistencia</p>
                     <p className="text-xs text-muted-foreground mt-1">Restauraciones o tratamientos previos</p>
                   </div>
                 </button>
                 
-                <button onClick={() => setMenuStep("LESIONS")} className="flex items-center gap-5 px-7 py-5 hover:bg-muted/50 transition-colors text-left border-b border-border">
-                  <div className="bg-red-50 dark:bg-red-900/20 text-red-500 p-3 rounded-full"><Stethoscope className="w-6 h-6" /></div>
+                {/* 2. LESIÓN */}
+                <button onClick={() => setMenuStep("LESIONS")} className="flex items-center gap-5 px-7 py-5 hover:bg-accent transition-colors text-left border-b border-border">
+                  <div className="bg-red-50 dark:bg-red-900/30 text-red-500 p-3 rounded-full"><Stethoscope className="w-6 h-6" /></div>
                   <div>
                     <p className="font-bold text-foreground text-base">Definir lesión</p>
                     <p className="text-xs text-muted-foreground mt-1">Caries, fracturas o patologías actuales</p>
                   </div>
                 </button>
-              </>
-              )}
 
-                {planId ? (
-                  <button onClick={() => setMenuStep("PROCEDURES")} className="flex items-center gap-5 px-7 py-5 hover:bg-muted/50 transition-colors text-left border-b border-border">
-                    <div className="bg-emerald-50 dark:bg-emerald-900/20 text-emerald-500 p-3 rounded-full"><PlusCircle className="w-6 h-6" /></div>
+                {/* 3. AGREGAR PRESTACIÓN (SOLO PLAN DE TRATAMIENTO) */}
+                {planId && (
+                  <button 
+                    onClick={() => {
+                      setMenuStep("NONE");
+                      setIsCatalogModalOpen(true); 
+                    }} 
+                    className="flex items-center gap-5 px-7 py-5 hover:bg-accent transition-colors text-left border-b border-border"
+                  >
+                    <div className="bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 p-3 rounded-full">
+                      <PlusCircle className="w-6 h-6" />
+                    </div>
                     <div>
                       <p className="font-bold text-foreground text-base">Agregar prestación</p>
                       <p className="text-xs text-muted-foreground mt-1">Agrega un tratamiento al presupuesto</p>
                     </div>
                   </button>
-                ) : (
-                  <div className="flex items-center gap-5 px-7 py-5 opacity-40 cursor-not-allowed border-b border-border">
-                    <div className="bg-slate-100 dark:bg-slate-800 text-slate-400 p-3 rounded-full"><PlusCircle className="w-6 h-6" /></div>
-                    <div>
-                      <p className="font-bold text-foreground text-base">Cobros deshabilitados</p>
-                      <p className="text-xs text-muted-foreground mt-1">Crea o abre un Plan para habilitar cobros.</p>
-                    </div>
-                  </div>
                 )}
-               {!isPlanView && (
-                <button onClick={handleHealthyTooth} disabled={isSaving} className="flex items-center gap-5 px-7 py-5 hover:bg-muted/50 transition-colors text-left">
-                  <div className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 p-3 rounded-full">
-                    {isSaving ? <Loader2 className="w-6 h-6 animate-spin"/> : <CheckCircle className="w-6 h-6" />}
+
+                {/* 4. DIENTE SANO */}
+                <button 
+                  onClick={() => {
+                    setSelectedStatus(HEALTHY_OPTION);
+                    setRecordComment("");
+                    setMenuStep("SAVE_FORM");
+                  }} 
+                  className="flex items-center gap-5 px-7 py-5 hover:bg-accent transition-colors text-left"
+                >
+                  <div className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 p-3 rounded-full">
+                    <CheckCircle className="w-6 h-6" />
                   </div>
                   <div>
                     <p className="font-bold text-foreground text-base">Diente sano</p>
-                    <p className="text-xs text-muted-foreground mt-1">Limpia marcas previas en la pieza</p>
+                    <p className="text-xs text-muted-foreground mt-1">Limpia marcas previas e ingresa comentarios</p>
                   </div>
                 </button>
-                )}
               </div>
             )}
 
             {(menuStep === "LESIONS" || menuStep === "PREEXISTENCES") && (
-              <div className="grid grid-cols-3 gap-4 p-7 bg-background">
+              <div className="grid grid-cols-3 gap-4 p-7 bg-card">
                 {(menuStep === "LESIONS" ? LESION_OPTIONS : PREEXISTENCE_OPTIONS).map((opt) => (
-                  <button key={opt.value} onClick={() => { setSelectedStatus(opt); setMenuStep("SAVE_FORM"); }} className="flex flex-col items-center justify-center gap-3 py-5 px-2 rounded-2xl hover:bg-muted/60 transition-colors text-center border border-transparent hover:border-border">
+                  <button key={opt.value} onClick={() => { setSelectedStatus(opt); setMenuStep("SAVE_FORM"); }} className="flex flex-col items-center justify-center gap-3 py-5 px-2 rounded-2xl hover:bg-accent transition-colors text-center border border-transparent hover:border-border">
                     <div className="text-4xl">{opt.icon}</div>
                     <span className="text-xs font-semibold text-muted-foreground leading-tight px-1">{opt.label}</span>
                   </button>
@@ -349,46 +401,31 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
               </div>
             )}
 
-            {menuStep === "PROCEDURES" && (
-              <div className="flex flex-col h-[450px] bg-background">
-                <div className="p-5 border-b border-border">
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
-                    <Input placeholder="Buscar procedimiento..." className="pl-11 h-12 bg-muted/30 border-border text-base rounded-xl" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} autoFocus />
-                  </div>
-                </div>
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
-                  {procedureSearch.length > 0 ? procedureSearch.map((proc) => (
-                    <button key={proc.id} onClick={() => handleAddProcedure(proc)} disabled={isSaving} className="w-full flex items-center justify-between p-5 border-b border-border/50 hover:bg-muted/50 transition-colors text-left group">
-                      <div>
-                        <p className="font-bold text-foreground text-base">{proc.name}</p>
-                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                          {proc.code ? `${proc.code} • ` : ""}{proc.category}
-                        </span>
-                      </div>
-                      <p className="font-bold text-emerald-600 text-base">${proc.basePrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                    </button>
-                  )) : (
-                    <div className="text-center py-12 text-base font-medium text-muted-foreground">No se encontraron resultados</div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {menuStep === "SAVE_FORM" && selectedStatus && (
-              <div className="p-7 space-y-6 bg-background">
+              <div className="p-7 space-y-6 bg-card">
                 <div className="flex items-center gap-4">
                   <div className="text-4xl">{selectedStatus.icon}</div>
-                  <h4 className="font-bold text-xl">{selectedStatus.label}</h4>
+                  <div>
+                    <h4 className="font-bold text-xl text-foreground">
+                      Agregar comentario a esta simbología: <span className="text-[#008bcd]">{selectedStatus.label}</span>
+                    </h4>
+                  </div>
                 </div>
                 <div className="space-y-3">
-                  <Label className="text-sm font-bold text-muted-foreground uppercase">Comentario (opcional)</Label>
-                  <Textarea value={recordComment} onChange={(e) => setRecordComment(e.target.value)} placeholder={`Detalles adicionales...`} className="bg-muted/30 border-border resize-none text-base p-4 rounded-xl" rows={3} />
+                  <Label className="text-xs font-bold text-muted-foreground uppercase">Ingrese un comentario (opcional):</Label>
+                  <Textarea 
+                    value={recordComment} 
+                    onChange={(e) => setRecordComment(e.target.value)} 
+                    placeholder="Detalles clínicos o notas opcionales..." 
+                    className="bg-background border-border resize-none text-base p-4 rounded-xl focus-visible:ring-[#008bcd]" 
+                    rows={4} 
+                    autoFocus
+                  />
                 </div>
-                <div className="flex justify-end gap-3 pt-4">
-                  <Button variant="outline" onClick={() => setMenuStep(LESION_OPTIONS.some(opt => opt.value === selectedStatus.value) ? "LESIONS" : "PREEXISTENCES")} className="font-bold h-11 px-6 rounded-xl border-border">Atrás</Button>
-                  <Button onClick={handleSaveRecord} disabled={isSaving} className="bg-[#008bcd] hover:bg-[#008bcd]/90 text-white font-bold h-11 px-6 rounded-xl shadow-sm">
-                    {isSaving ? <Loader2 className="w-5 h-5 mr-2 animate-spin"/> : null} Guardar hallazgo
+                <div className="flex justify-end gap-3 pt-2">
+                  <Button variant="outline" onClick={() => setMenuStep("OPTIONS")} className="font-bold h-11 px-6 rounded-xl border-border">Cerrar</Button>
+                  <Button onClick={handleSaveRecord} disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 px-6 rounded-xl shadow-sm">
+                    {isSaving ? <Loader2 className="w-5 h-5 mr-2 animate-spin"/> : null} Guardar simbología
                   </Button>
                 </div>
               </div>
@@ -398,56 +435,289 @@ export function OdontogramaTab({ patientId, planId, onToothClickCallback, isPlan
         </div>
       )}
 
-      {/* TABLA DE REGISTROS DE HISTORIAL */}
+      {/* --- MODAL DEL CATÁLOGO DE PRESTACIONES --- */}
+      <Dialog open={isCatalogModalOpen} onOpenChange={setIsCatalogModalOpen}>
+        <DialogContent className="sm:max-w-[600px] h-[80vh] flex flex-col p-0 z-[200] bg-card text-card-foreground border-border rounded-2xl overflow-hidden shadow-2xl">
+          <DialogHeader className="p-6 border-b border-border pb-4 bg-slate-900 text-white dark:bg-slate-950">
+            <DialogTitle className="text-xl font-bold">Catálogo de Prestaciones</DialogTitle>
+            <DialogDescription className="text-xs text-slate-300">
+              {selectedTooth ? `Seleccionando tratamiento para la Pieza ${selectedTooth}` : "Seleccionando tratamiento general"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 border-b border-border bg-muted/20">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+              <Input 
+                placeholder="Buscar por nombre o categoría..." 
+                value={searchTerm} 
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                className="pl-9 bg-background border-border" 
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2">
+            {procedureSearch.length > 0 ? procedureSearch.map((proc) => (
+              <button 
+                key={proc.id} 
+                onClick={() => handleAddProcedure(proc)} 
+                disabled={isSaving}
+                className="w-full text-left p-4 hover:bg-accent border-b border-border flex justify-between items-center transition-colors rounded-lg group"
+              >
+                <div>
+                  <p className="font-bold text-foreground text-sm group-hover:text-[#008bcd]">{proc.name}</p>
+                  <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">{proc.category}</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-black text-emerald-600 dark:text-emerald-400 text-base">${proc.basePrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}</p>
+                  {isSaving && <Loader2 className="w-4 h-4 animate-spin text-emerald-500 ml-auto mt-1" />}
+                </div>
+              </button>
+            )) : (
+              <div className="p-10 text-center text-muted-foreground">No se encontraron prestaciones activas.</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- TABLA DE HISTORIAL CLÍNICO Y AUDITORÍA --- */}
       {!planId && (
-      <div className="mt-8">
-        <h3 className="font-bold text-lg mb-4 text-foreground uppercase">Detalle de Hallazgos Clínicos</h3>
-        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-muted/50 border-b border-border">
-              <tr>
-                <th className="p-4 font-bold uppercase">Fecha</th>
-                <th className="p-4 font-bold uppercase text-center">Pieza</th>
-                <th className="p-4 font-bold uppercase">Caras</th>
-                <th className="p-4 font-bold uppercase">Hallazgo / Tratamiento</th>
-                {canEditClinicalData && <th className="p-4 font-bold text-center">Acción</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {records.filter(r => r.isEvolution === (view === "evolucion")).length === 0 ? (
-                <tr><td colSpan={canEditClinicalData ? 5 : 4} className="p-8 text-center text-muted-foreground font-medium">Sin registros.</td></tr>
-              ) : (
-                records.filter(r => r.isEvolution === (view === "evolucion")).map((record) => (
-                  <tr key={record.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="p-4 font-medium">{format(new Date(record.createdAt), "dd/MM/yyyy HH:mm")}</td>
-                    <td className="p-4 font-black text-center text-[#008bcd] text-base">{record.toothNumber}</td>
-                    <td className="p-4 capitalize font-medium">{record.surfaces.includes("TODA_LA_PIEZA") ? "Toda la pieza" : record.surfaces.join(", ")}</td>
-                    <td className="p-4">
-                      {(() => {
-                        const config = odontogramStatuses[record.status];
-                        if (!config) return <span className="font-bold text-slate-700">{getStatusLabel(record.status)}</span>;
-                        
-                        return (
-                          <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${config.bg} ${config.color}`}>
-                            <config.icon /> 
-                            <span>{config.label}</span>
-                          </div>
-                        );
-                      })()}
-                    </td>
-                    {canEditClinicalData && (
-                      <td className="p-4 text-center">
-                          <Button variant="ghost" size="sm" className="text-red-500 font-bold hover:bg-red-50" onClick={() => handleDelete(record.id)}>Anular</Button>
-                      </td>
-                    )}
+        <div className="mt-8 space-y-4">
+          <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+            
+            <div className="p-5 border-b border-border bg-muted/30 flex flex-col lg:flex-row gap-4 justify-between lg:items-center">
+              <div>
+                <h3 className="font-black text-foreground text-lg tracking-tight">
+                  DETALLE DE HALLAZGOS CLÍNICOS
+                </h3>
+                <p className="text-xs text-muted-foreground font-medium mt-0.5">Historial acumulado de registros e impresiones diagnósticas</p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 items-center">
+                <div className="relative w-full sm:w-60">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                  <Input 
+                    placeholder="Buscar pieza, hallazgo, doctor..." 
+                    value={historySearch} 
+                    onChange={(e) => setHistorySearch(e.target.value)}
+                    className="pl-9 h-10 text-xs bg-background border-border rounded-xl focus-visible:ring-[#008bcd]"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl p-1 w-full sm:w-auto">
+                  <Calendar className="w-4 h-4 text-muted-foreground ml-2 shrink-0" />
+                  <input 
+                    type="date" 
+                    value={dateFrom} 
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="bg-transparent text-xs font-semibold text-foreground outline-none p-1"
+                    title="Fecha desde"
+                  />
+                  <span className="text-muted-foreground font-bold">-</span>
+                  <input 
+                    type="date" 
+                    value={dateTo} 
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="bg-transparent text-xs font-semibold text-foreground outline-none p-1"
+                    title="Fecha hasta"
+                  />
+                </div>
+
+                {(historySearch || dateFrom || dateTo) && (
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => { setHistorySearch(""); setDateFrom(""); setDateTo(""); }}
+                    className="h-10 w-10 text-destructive hover:bg-destructive/10 rounded-xl shrink-0"
+                    title="Limpiar filtros"
+                  >
+                    <FilterX className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-muted/50 border-b border-border text-xs uppercase text-muted-foreground font-bold">
+                  <tr>
+                    <th className="p-4">Fecha</th>
+                    <th className="p-4 text-center">Pieza</th>
+                    <th className="p-4">Caras</th>
+                    <th className="p-4">Hallazgo / Tratamiento</th>
+                    <th className="p-4">Profesional</th>
+                    <th className="p-4 text-center">Observación</th>
+                    {canEditClinicalData && <th className="p-4 text-right">Acción</th>}
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredHistoryRecords.length === 0 ? (
+                    <tr>
+                      <td colSpan={canEditClinicalData ? 7 : 6} className="p-12 text-center text-muted-foreground font-medium">
+                        {historySearch || dateFrom || dateTo 
+                          ? "No se encontraron hallazgos con los filtros seleccionados." 
+                          : "Sin hallazgos clínicos registrados aún."}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredHistoryRecords.map((record) => {
+                      const canDeleteThis = canUserDeleteRecord(record);
+
+                      return (
+                        <tr key={record.id} className="hover:bg-accent/40 transition-colors">
+                          <td className="p-4 font-semibold text-foreground">
+                            {format(new Date(record.createdAt), "dd/MM/yyyy")}
+                            <span className="block text-[11px] text-muted-foreground font-normal">{format(new Date(record.createdAt), "HH:mm")}</span>
+                          </td>
+                          <td className="p-4 font-black text-center text-[#008bcd] text-lg">{record.toothNumber}</td>
+                          <td className="p-4 capitalize font-medium">
+                            {record.surfaces.includes("TODA_LA_PIEZA") ? (
+                              <span className="bg-muted text-foreground border border-border px-2.5 py-1 rounded-md text-xs font-semibold">Toda la pieza</span>
+                            ) : (
+                              <div className="flex gap-1 flex-wrap">
+                                {record.surfaces.map((s: string) => (
+                                  <span key={s} className="bg-muted text-foreground border border-border px-2 py-0.5 rounded-md text-xs font-semibold">{s}</span>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            {(() => {
+                              const config = odontogramStatuses[record.status];
+                              if (record.status === "DIENTE_SANO" || !config) {
+                                return (
+                                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold w-max bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                    <CheckCircle className="w-3.5 h-3.5" /> <span>Diente Sano</span>
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold w-max ${config.bg} ${config.color}`}>
+                                  <config.icon /> <span>{config.label}</span>
+                                </div>
+                              );
+                            })()}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2.5">
+                              <Avatar className="h-7 w-7 border border-border">
+                                <AvatarImage src={record.author?.image || ""} alt={record.author?.name || "Doctor"} />
+                                <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
+                                  {record.author?.name ? record.author.name.charAt(0).toUpperCase() : "D"}
+                                </AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs font-bold text-foreground">
+                                {record.author?.name || "Dr(a). Asignado"}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="p-4 text-center">
+                            {record.notes ? (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setSelectedRecordForDetail(record)}
+                                className="h-8 px-3 rounded-lg text-xs font-bold border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> Ver Nota
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">Sin notas</span>
+                            )}
+                          </td>
+                          {canEditClinicalData && (
+                            <td className="p-4 text-right">
+                              {canDeleteThis ? (
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="text-destructive font-bold hover:bg-destructive/10 rounded-lg h-8" 
+                                  onClick={() => setRecordToDelete(record)}
+                                >
+                                  Anular
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] font-semibold text-muted-foreground/60 italic px-2" title="Solo el doctor creador o un administrador puede anular este registro">
+                                  No permitido
+                                </span>
+                              )}
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+          </div>
         </div>
-      </div>
-       )}
+      )}
+
+      {/* --- MODAL DE DETALLE CLÍNICO / COMENTARIOS --- */}
+      <Dialog open={!!selectedRecordForDetail} onOpenChange={(open) => !open && setSelectedRecordForDetail(null)}>
+        <DialogContent className="sm:max-w-[450px] bg-card text-card-foreground border-border rounded-2xl shadow-xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+              <MessageSquare className="w-5 h-5 text-[#008bcd]" />
+              Observación Clínica - Pieza {selectedRecordForDetail?.toothNumber}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Registrado el {selectedRecordForDetail && format(new Date(selectedRecordForDetail.createdAt), "dd/MM/yyyy 'a las' HH:mm")}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            <div className="flex items-center gap-3 p-3 bg-muted/40 rounded-xl border border-border">
+              <Avatar className="h-9 w-9 border border-border">
+                <AvatarImage src={selectedRecordForDetail?.author?.image || ""} />
+                <AvatarFallback className="bg-primary/10 text-primary font-bold">D</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Profesional a cargo</p>
+                <p className="text-sm font-bold text-foreground">{selectedRecordForDetail?.author?.name || "Doctor Registrado"}</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-muted-foreground uppercase">Nota / Comentario Médico:</Label>
+              <div className="p-4 bg-background border border-border rounded-xl text-sm font-medium leading-relaxed text-foreground whitespace-pre-wrap">
+                {selectedRecordForDetail?.notes}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* --- MODAL DE CONFIRMACIÓN PARA ANULAR --- */}
+      <AlertDialog open={!!recordToDelete} onOpenChange={(open) => !open && setRecordToDelete(null)}>
+        <AlertDialogContent className="bg-card border-border rounded-[24px] shadow-2xl sm:max-w-[450px]">
+          <AlertDialogHeader className="flex flex-col items-center text-center space-y-3">
+            <div className="w-14 h-14 bg-destructive/10 text-destructive rounded-2xl flex items-center justify-center">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+            <AlertDialogTitle className="text-xl font-black text-foreground">
+              ¿Anular hallazgo de la pieza {recordToDelete?.toothNumber}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              Esta acción eliminará la simbología <b className="text-foreground">"{getStatusLabel(recordToDelete?.status || '')}"</b> del odontograma del paciente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="w-full flex sm:justify-center gap-3 mt-4">
+            <AlertDialogCancel className="border-border hover:bg-accent text-foreground font-bold rounded-xl h-11 px-5">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeleteRecord} 
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold rounded-xl h-11 px-6 shadow-sm"
+            >
+              Sí, Anular Registro
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   )
 }

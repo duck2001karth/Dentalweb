@@ -38,7 +38,6 @@ export default function FichaClinicaPage() {
   const patientId = params.id as string
   const tabFromUrl = searchParams.get("tab")
 
-  // Si la URL dice "ficha", forzamos a que abra "historial" por defecto para evitar el espacio en blanco
   const initialTab = tabFromUrl === "ficha" ? "historial" : (tabFromUrl || "datos")
   const [activeTab, setActiveTab] = useState(initialTab) 
   

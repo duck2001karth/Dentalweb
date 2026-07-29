@@ -1,11 +1,11 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearch"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  //directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -386,6 +386,10 @@ model TreatmentItem {
   id              String   @id @default(cuid())
   treatmentPlanId String
   plan            TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+
+  discount        Float         @default(0)
+  paidAmount      Float         @default(0)
+  isPaid          Boolean       @default(false)
   
   tooth           String?  // Pieza dental (Ej: "11", "45")
   procedureName   String   // Ej: "Corona de Porcelana"
@@ -393,6 +397,28 @@ model TreatmentItem {
   isCompleted     Boolean  @default(false) // Para calcular el progreso %
 }
 
+model EvolutionTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  text      String   @db.Text
+  category  String?  @default("General")
+  createdAt DateTime @default(now())
+}
+
+model Laboratory {
+  id            String   @id @default(cuid())
+  name          String
+  details       String?  @db.Text
+  balance       Float    @default(0)
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  notes         String?  @db.Text
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
 
 // ==========================================
 // 4. MÓDULOS DE GESTIÓN INTERNA 
@@ -464,15 +490,15 @@ model ProcedureCatalog {
 }
 
 // ==========================================
-// 6. MÓDULOS ADMINISTRATIVOS PREMIUM
+// 6. MÓDULOS ADMINISTRATIVOS PREMIUM (Carmo Dental)
 // ==========================================
 
 enum PaymentMethod {
   CASH          // Efectivo
   CREDIT_CARD   // Tarjeta de Crédito
   DEBIT_CARD    // Tarjeta de Débito
-  TRANSFER      // Transferencia / QR
-  INSURANCE     // Seguro Médico
+  TRANSFER      // Transferencia bancaria o QR
+  INSURANCE     // Seguro Médico / Convenios
   OTHER
 }
 
@@ -483,13 +509,24 @@ enum PaymentState {
   REFUNDED
 }
 
+enum LiquidationStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum MovementType {
+  INCOMING      
+  OUTGOING      
+}
+
 // -- FACTURACIÓN / PAGOS --
 model Payment {
   id              String        @id @default(uuid())
-  amount          Float         // Monto pagado
+  amount          Float         
   method          PaymentMethod @default(CASH)
   status          PaymentState  @default(COMPLETED)
-  receiptNumber   String?       @unique // Número de factura o recibo fiscal
+  receiptNumber   String?       @unique // Nro de factura o recibo interno fiscal
   notes           String?       @db.Text
 
   // Relaciones
@@ -497,7 +534,7 @@ model Payment {
   patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
   
   treatmentPlanId String?
-  treatmentPlan   TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id])
+  treatmentPlan   TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
 
   processedById   String?
   processedBy     User?         @relation("UserPayments", fields: [processedById], references: [id])
@@ -506,52 +543,79 @@ model Payment {
   updatedAt       DateTime      @updatedAt
 }
 
-// -- INVENTARIO --
-model InventoryItem {
-  id              String   @id @default(uuid())
-  name            String
-  sku             String?  @unique // Código de barras o identificador
-  category        String   // Ej: Insumos, Instrumental, Medicamentos
-  stock           Int      @default(0)
-  minStock        Int      @default(5) // Para alertas de escasez
-  unitCost        Float    @default(0) // Costo de compra
-  supplier        String?  // Proveedor principal
 
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+
+// -- HISTORIAL DE MOVIMIENTOS DE INVENTARIO (Premium para Auditoría) --
+model InventoryMovement {
+  id              String        @id @default(uuid())
+  itemId          String
+  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  
+  quantity        Int           
+  type            MovementType
+  reason          String?       
+  
+  createdAt       DateTime      @default(now())
 }
 
-// -- LIQUIDACIONES (Pagos a Doctores) --
+// -- LIQUIDACIONES (Cálculo de comisiones a Doctores) --
 model Liquidation {
-  id              String   @id @default(uuid())
+  id              String            @id @default(uuid())
   doctorId        String
-  doctor          User     @relation("DoctorLiquidations", fields: [doctorId], references: [id])
+  doctor          User              @relation("DoctorLiquidations", fields: [doctorId], references: [id], onDelete: Cascade)
   
-  amount          Float    // Total a pagar al doctor por sus tratamientos
-  periodStart     DateTime // Inicio del periodo de corte
-  periodEnd       DateTime // Fin del periodo de corte
-  status          String   @default("PENDING") // PENDING, PAID
+  amount          Float             
+  periodStart     DateTime          
+  periodEnd       DateTime          
+  status          LiquidationStatus @default(PENDING) 
+  notes           String?           @db.Text
   
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 }
 
-// -- CONFIGURACIÓN GENERAL --
 model ClinicSettings {
-  id              String   @id @default(uuid()) // Solo habrá 1 registro en esta tabla
+  id              String   @id // CORRECCIÓN: Quitamos el valor por defecto inválido
   clinicName      String   @default("Carmo Dental")
-  taxRate         Float    @default(0) // Impuestos (Ej: 13% o 18%)
+  taxRate         Float    @default(0) // Porcentaje impositivo regional
   currency        String   @default("USD")
   
-  logoUrl         String?  // Para la imagen corporativa
-  watermarkUrl    String?  // Para fondos de recetas/reportes
+  logoUrl         String?  
+  watermarkUrl    String?  
   
   address         String?
   phone           String?
   email           String?
   
-  footerText      String?  @db.Text // Texto legal para pie de página en facturas/recetas
+  footerText      String?  @db.Text // Texto de exención de responsabilidad para recetas/facturas
   
   updatedAt       DateTime @updatedAt
 }
+
+// -- INVENTARIO (Actualizado según requerimientos premium) --
+model InventoryItem {
+  id                String    @id @default(uuid())
+  name              String    // Producto / Nombre comercial
+  sku               String?   @unique // Cód. Interno
+  category          String?   // Tipo de producto (Insumo, Herramienta, etc.)
+  
+  registroSanitario String?
+  marca             String?
+  concentracion     String?
+  unidadMedida      String?
+  presentacion      String?   // Ej: Caja x 2293
+  lote              String?
+  fechaExpiracion   DateTime?
+  
+  stock             Int       @default(0)
+  minStock          Int       @default(5)
+  unitCost          Float     @default(0)
+  supplier          String?
+
+  isActive          Boolean   @default(true)
+  movements         InventoryMovement[]
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
