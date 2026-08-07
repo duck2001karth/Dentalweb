@@ -22,8 +22,6 @@ export function TreatmentActions({ planId, patientEmail, onClearPlan }: Treatmen
   const { toast } = useToast()
 
   const handlePrint = () => {
-    // Aquí puedes redirigir a una página de impresión específica
-    // Ej: window.open(`/imprimir/presupuesto/${planId}`, '_blank');
     window.print()
   }
 

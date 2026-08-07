@@ -1,9 +1,33 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const patientId = searchParams.get("patientId");
+    const search = searchParams.get("search");
+    const status = searchParams.get("status");
+
+    const where: any = {};
+
+    if (patientId) {
+      where.patientId = patientId;
+    }
+    if (status) {
+      where.status = status;
+    }
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { patient: { firstName: { contains: search, mode: "insensitive" } } },
+        { patient: { lastName: { contains: search, mode: "insensitive" } } },
+        { patient: { ci: { contains: search, mode: "insensitive" } } },
+      ];
+    }
+
     const plans = await prisma.treatmentPlan.findMany({
+      where,
       include: {
         patient: { 
           select: { 
@@ -16,12 +40,13 @@ export async function GET() {
           } 
         },
         doctor: { 
-          select: { name: true } 
+          select: { id: true, name: true, email: true } 
         },
         items: true 
       },
       orderBy: { createdAt: "desc" }
     });
+
     return NextResponse.json(plans);
   } catch (error) {
     console.error("Error GET treatments:", error);
@@ -29,7 +54,6 @@ export async function GET() {
   }
 }
 
-// 2. Crear un nuevo Plan 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -38,6 +62,7 @@ export async function POST(req: Request) {
     if (!input || !input.patientId || !input.name) {
       return NextResponse.json({ error: "Faltan datos obligatorios (Paciente o Nombre)" }, { status: 400 });
     }
+
     const newPlan = await prisma.treatmentPlan.create({
       data: {
         name: input.name,

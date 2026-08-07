@@ -3,13 +3,11 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 
-// OBTENER UN PACIENTE (GET)
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> } // <-- Actualizado a Promise
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Extraemos el id esperando la promesa (Requisito de Next.js 15)
     const { id } = await params;
 
     const patient = await prisma.patient.findUnique({
@@ -30,7 +28,7 @@ export async function GET(
 // ACTUALIZAR UN PACIENTE (PATCH)
 export async function PATCH(
   request: Request,
-  { params }: { params: Promise<{ id: string }> } // <-- Actualizado a Promise
+  { params }: { params: Promise<{ id: string }> } 
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -41,7 +39,6 @@ export async function PATCH(
     const body = await request.json()
     const { input } = body
 
-    // Extraemos el id esperando la promesa
     const { id } = await params;
 
     const updatedPatient = await prisma.patient.update({
@@ -59,18 +56,14 @@ export async function PATCH(
 // ELIMINAR UN PACIENTE (DELETE - Soft Delete)
 export async function DELETE(
   request: Request,
-  { params }: { params: Promise<{ id: string }> } // <-- Actualizado a Promise
+  { params }: { params: Promise<{ id: string }> } 
 ) {
   try {
     const session = await getServerSession(authOptions)
     if (!session || !session.user) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 })
     }
-
-    // Extraemos el id esperando la promesa
     const { id } = await params;
-
-    // Usamos Soft Delete (solo lo marcamos como eliminado para no romper historiales médicos)
     await prisma.patient.update({
       where: { id },
       data: { isDeleted: true }, 

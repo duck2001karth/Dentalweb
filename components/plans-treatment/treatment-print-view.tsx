@@ -24,9 +24,20 @@ export function TreatmentPrintView({
     <>
       <style>{`
         @media print {
-          body * { visibility: hidden; }
-          .print-container, .print-container * { visibility: visible; }
-          .print-container { 
+          /* Si se marca para imprimir un consentimiento, ocultamos el presupuesto */
+          body.printing-consent .treatment-print-view {
+            display: none !important;
+          }
+
+          /* Modo normal de impresión del plan de tratamiento */
+          body:not(.printing-consent) * { 
+            visibility: hidden; 
+          }
+          body:not(.printing-consent) .treatment-print-view, 
+          body:not(.printing-consent) .treatment-print-view * { 
+            visibility: visible; 
+          }
+          body:not(.printing-consent) .treatment-print-view { 
             position: absolute; left: 0; top: 0; width: 100%; 
             padding: 1.5cm; background: white; color: black; 
             font-family: system-ui, -apple-system, sans-serif; 
@@ -41,10 +52,10 @@ export function TreatmentPrintView({
         }
       `}</style>
 
-      <div className="hidden print:block print-container">
+      <div className="hidden print:block print-container treatment-print-view">
         <img src="/logosn.png" alt="Marca de Agua" className="watermark" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
         
-        {/* ENCABEZADO INSTITUCIONAL CON RUC RESTAURADO */}
+        {/* ENCABEZADO INSTITUCIONAL CON RUC */}
         <div className="flex justify-between items-end border-b-2 border-[#00b0e9] pb-4 mb-6">
           <div>
             <h1 className="text-3xl font-black text-[#00b0e9] tracking-tighter">CARMO DENTAL</h1>
@@ -59,7 +70,7 @@ export function TreatmentPrintView({
           </div>
         </div>
 
-        {/* DATOS DEL PACIENTE CON EDAD DINÁMICA */}
+        {/* DATOS DEL PACIENTE */}
         <div className="flex justify-between text-xs mb-3">
           <p>Fecha de emisión: <b>{format(new Date(), "dd/MM/yyyy")}</b></p>
           <p>Documento de Identidad: <b>{patient?.ci || "Sin registrar"}</b></p>

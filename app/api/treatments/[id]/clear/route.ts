@@ -7,18 +7,25 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+
     await prisma.treatmentItem.deleteMany({
-      where: { treatmentPlanId: id }
+      where: { treatmentPlanId: id },
     });
 
     await prisma.treatmentPlan.update({
       where: { id },
-      data: { totalCost: 0 }
+      data: { totalCost: 0 },
     });
 
-    return NextResponse.json({ success: true, message: "Presupuesto vaciado correctamente" });
+    return NextResponse.json({
+      success: true,
+      message: "Presupuesto vaciado correctamente",
+    });
   } catch (error) {
     console.error("Error al vaciar presupuesto:", error);
-    return NextResponse.json({ error: "Error al vaciar el presupuesto" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Error al vaciar el presupuesto" },
+      { status: 500 }
+    );
   }
 }

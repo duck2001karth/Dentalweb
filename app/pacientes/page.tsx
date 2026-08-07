@@ -17,17 +17,14 @@ export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 7 
-  const { patients, isLoading } = useGetPatients({ search: searchTerm })
+  const { patients, isLoading, refetch } = useGetPatients({ search: searchTerm })
+
   const totalItems = patients?.length || 0
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1
   
   const startIndex = (currentPage - 1) * itemsPerPage
   const endIndex = startIndex + itemsPerPage
-  
-  // Extraemos solo los pacientes que corresponden a la página actual
   const currentPatients = patients?.slice(startIndex, endIndex) || []
-
-  // Manejador de búsqueda (reinicia a la página 1 cuando buscas algo nuevo)
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value)
     setCurrentPage(1)
@@ -35,27 +32,24 @@ export default function PatientsPage() {
 
   return (
     <AppLayout>
-      {/* CORRECCIÓN: Contenedor principal sin forzar bg-slate-50 */}
       <div className="flex flex-col w-full max-w-[1400px] mx-auto p-4 md:p-6 lg:p-8 h-[calc(100vh-4rem)]">
         
         {/* --- ENCABEZADO --- */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 shrink-0">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-foreground flex items-center gap-3">
-              {/* Icono con opacidad para el modo oscuro */}
-              <div className="p-2.5 bg-blue-500/10 text-[#008bcd] dark:text-blue-400 rounded-xl shadow-sm border border-blue-500/20">
+              <div className="p-2.5 bg-blue-500/10 text-[#008bcd] dark:text-blue-400 rounded-xl shadow-xs border border-blue-500/20">
                 <User size={24} />
               </div>
               Directorio de Pacientes
             </h1>
             <p className="text-muted-foreground mt-2">Busca, gestiona y accede a las fichas clínicas de tus pacientes.</p>
           </div>
-          
-          <NewPatientModal />
+          <NewPatientModal onSuccess={() => refetch?.()} />
         </div>
 
         {/* --- BARRA DE BÚSQUEDA --- */}
-        <div className="bg-card p-4 rounded-xl border border-border shadow-sm mb-6 flex items-center shrink-0 transition-all focus-within:border-blue-400/50 focus-within:ring-4 focus-within:ring-blue-500/10 text-card-foreground">
+        <div className="bg-card p-4 rounded-xl border border-border shadow-xs mb-6 flex items-center shrink-0 transition-all focus-within:border-blue-400/50 focus-within:ring-4 focus-within:ring-blue-500/10 text-card-foreground">
           <div className="relative w-full max-w-lg">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
             <input 
@@ -75,11 +69,11 @@ export default function PatientsPage() {
           </div>
         </div>
 
-        {/* --- TABLA DE PACIENTES REALES CON PAGINACIÓN --- */}
-        <div className="bg-card rounded-xl border border-border shadow-sm flex-1 overflow-hidden flex flex-col text-card-foreground">
+        {/* --- TABLA DE PACIENTES --- */}
+        <div className="bg-card rounded-xl border border-border shadow-xs flex-1 overflow-hidden flex flex-col text-card-foreground">
           <div className="overflow-x-auto custom-scrollbar flex-1">
             <table className="w-full text-left border-collapse min-w-[800px]">
-              <thead className="sticky top-0 bg-muted/80 backdrop-blur-sm border-b border-border z-10">
+              <thead className="sticky top-0 bg-muted/80 backdrop-blur-xs border-b border-border z-10">
                 <tr className="text-muted-foreground text-xs font-bold uppercase tracking-wider">
                   <th className="px-6 py-4">Paciente</th>
                   <th className="px-6 py-4">CI / Identificación</th>
@@ -90,7 +84,6 @@ export default function PatientsPage() {
               <tbody className="divide-y divide-border">
                 
                 {isLoading ? (
-                  /* ESTADO DE CARGA */
                   <tr>
                     <td colSpan={4} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center justify-center gap-3 text-[#008bcd] dark:text-blue-400">
@@ -103,10 +96,9 @@ export default function PatientsPage() {
                   currentPatients.map((patient: any) => (
                     <tr key={patient.id} className="hover:bg-muted/30 transition-colors group cursor-default">
                       
-                      {/* Columna Paciente */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-full bg-blue-500/10 text-[#008bcd] dark:text-blue-400 flex items-center justify-center font-bold text-lg border border-blue-500/20 shadow-sm shrink-0">
+                          <div className="w-12 h-12 rounded-full bg-blue-500/10 text-[#008bcd] dark:text-blue-400 flex items-center justify-center font-bold text-lg border border-blue-500/20 shadow-xs shrink-0">
                             {patient.firstName?.charAt(0) || ""}{patient.lastName?.charAt(0) || ""}
                           </div>
                           <div>
@@ -124,14 +116,12 @@ export default function PatientsPage() {
                         </div>
                       </td>
                       
-                      {/* Columna CI */}
                       <td className="px-6 py-4">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-md bg-muted text-foreground text-sm font-semibold tracking-wide border border-border">
                           {patient.ci || "Sin CI"}
                         </span>
                       </td>
                       
-                      {/* Columna Contacto */}
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1.5 text-sm text-muted-foreground">
                           <span className="flex items-center gap-2">
@@ -143,10 +133,8 @@ export default function PatientsPage() {
                         </div>
                       </td>
                       
-                      {/* Columna Acciones */}
                       <td className="px-6 py-4 text-center">
                         <Link href={`/paciente/${patient.id}`}>
-                          {/* CORRECCIÓN: Botón secundario fluido */}
                           <button className="inline-flex items-center justify-center gap-2 text-[#008bcd] dark:text-blue-400 bg-blue-500/10 hover:bg-[#008bcd] hover:text-white dark:hover:bg-blue-600 transition-all font-semibold px-4 py-2 rounded-lg text-sm border border-transparent hover:shadow-md focus:ring-2 focus:ring-blue-400/50 outline-none">
                             <FileText className="w-4 h-4" /> Ficha Clínica <ChevronRight className="w-4 h-4 opacity-50" />
                           </button>
@@ -156,11 +144,10 @@ export default function PatientsPage() {
                     </tr>
                   ))
                 ) : (
-                  /* ESTADO VACÍO / SIN RESULTADOS */
                   <tr>
                     <td colSpan={4} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center justify-center">
-                        <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4 border border-border shadow-sm">
+                        <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mb-4 border border-border shadow-xs">
                           <Search className="w-8 h-8 text-muted-foreground opacity-50" />
                         </div>
                         <p className="text-foreground font-semibold text-lg">No se encontraron pacientes</p>
@@ -189,10 +176,9 @@ export default function PatientsPage() {
             </table>
           </div>
 
-          {/* --- FOOTER DE PAGINACIÓN --- */}
+          {/* --- PAGINACIÓN --- */}
           {!isLoading && totalItems > 0 && (
             <div className="border-t border-border bg-card px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
-              
               <div className="text-sm text-muted-foreground font-medium">
                 Mostrando del {startIndex + 1} al {Math.min(endIndex, totalItems)} de {totalItems} paciente(s)
               </div>
@@ -241,7 +227,6 @@ export default function PatientsPage() {
                   </Button>
                 </div>
               </div>
-
             </div>
           )}
 

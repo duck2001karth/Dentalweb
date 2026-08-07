@@ -65,11 +65,11 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
   const { patients, isLoading: isLoadingPatients } = useGetPatients()
   const { createAppointment, isLoading: isSaving } = useCreateAppointment()
 
-  // --- 2. FILTRAR ESTADOS INICIALES PERMITIDOS ---
+  // FILTRAR ESTADOS INICIALES CON ESTILOS SUAVES Y ELEGANTES
   const validInitialStatuses = [
-    appointmentStatuses.SCHEDULED,
-    appointmentStatuses.IN_WAITING_ROOM,
-    appointmentStatuses.IN_PROGRESS
+    { ...appointmentStatuses.SCHEDULED, badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" },
+    { ...appointmentStatuses.IN_WAITING_ROOM, badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" },
+    { ...appointmentStatuses.IN_PROGRESS, badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" }
   ]
 
   useEffect(() => {
@@ -162,41 +162,47 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {customTrigger ? customTrigger : (
-          <Button size="sm" className="bg-[#008bcd] hover:bg-[#0070a8] text-white shadow-sm font-semibold rounded-xl h-9">
-            <Plus className="h-4 w-4 mr-1.5" /> Dar cita
+          <Button 
+            variant="ghost" 
+            className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 hover:border-[#008bcd]/30 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
+          >
+            <Plus className="h-5 w-5 mr-1.5 text-muted-foreground group-hover:text-[#008bcd] transition-colors stroke-[2.5]" />
+            <span>Dar cita</span>
           </Button>
         )}
       </DialogTrigger>
       
-      <DialogContent className="sm:max-w-[850px] p-0 bg-background border-border overflow-hidden rounded-2xl shadow-2xl">
+      <DialogContent className="sm:max-w-[850px] p-0 bg-card border-border/80 overflow-hidden rounded-2xl shadow-2xl">
         
-        <div className="bg-gradient-to-r from-blue-500/10 via-transparent to-transparent px-6 py-5 border-b border-border">
+        {/* CABECERA DEL MODAL */}
+        <div className="bg-gradient-to-r from-[#008bcd]/10 via-transparent to-transparent px-6 py-5 border-b border-border/80">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black text-foreground flex items-center gap-3">
-              <div className="p-2.5 bg-[#008bcd] text-white shadow-md rounded-xl shrink-0">
+              <div className="p-2.5 bg-[#008bcd]/15 border border-[#008bcd]/30 text-[#008bcd] shadow-xs rounded-xl shrink-0">
                 <CalendarIcon className="w-6 h-6" />
               </div>
               Agendar Nueva Cita
             </DialogTitle>
-            <DialogDescription className="text-muted-foreground mt-1 ml-14 font-medium">
-              Registre los datos del paciente y situación clínica para la reserva.
+            <DialogDescription className="text-muted-foreground text-xs font-semibold mt-1 ml-14">
+              Registre los datos del paciente y la situación clínica para la reserva.
             </DialogDescription>
           </DialogHeader>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-5">
+        {/* FORMULARIO */}
+        <form onSubmit={handleSubmit} className="px-6 py-5 space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             
-            <div className="space-y-5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#008bcd] border-b border-border pb-2">
+            {/* SECCIÓN 1: DATOS DEL PACIENTE */}
+            <div className="space-y-4">
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-[#008bcd] border-b border-border/80 pb-2">
                 1. Información del Paciente
               </h3>
               
-              <div className="space-y-2.5">
-                <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-foreground font-bold text-xs">
                   <User className="w-4 h-4 text-muted-foreground" /> Paciente
                 </Label>
-                {/* 3. USO DEL COMPONENTE AISLADO */}
                 <PatientSelector 
                   patientId={patientId} 
                   setPatientId={setPatientId} 
@@ -205,50 +211,54 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                 />
               </div>
 
-              <div className="space-y-2.5">
-                <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-foreground font-bold text-xs">
                   <Stethoscope className="w-4 h-4 text-muted-foreground" /> Especialista Asignado
                 </Label>
                 <Select value={doctorId} onValueChange={setDoctorId} disabled={isLoadingDoctors}>
-                  <SelectTrigger className="bg-muted/30 border-border h-11 focus:ring-[#008bcd] font-medium text-sm text-foreground">
+                  <SelectTrigger className="bg-background border-border/80 h-11 focus:ring-[#008bcd] font-semibold text-xs text-foreground rounded-xl">
                     <SelectValue placeholder={isLoadingDoctors ? "Cargando especialistas..." : "Seleccione el especialista"} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl border-border/80 shadow-xl">
                     {isAdminOrStaff ? (
                       doctorsList.length > 0 ? (
                         doctorsList.map(doc => (
-                          <SelectItem key={doc.id} value={doc.id} className="font-medium text-sm">
+                          <SelectItem key={doc.id} value={doc.id} className="font-semibold text-xs">
                             👨‍⚕️ {doc.name} {doc.specialty ? `(${doc.specialty})` : ""}
                           </SelectItem>
                         ))
                       ) : (
-                        <SelectItem value="empty" disabled>No hay médicos registrados</SelectItem>
+                        <SelectItem value="empty" disabled className="text-xs">No hay médicos registrados</SelectItem>
                       )
                     ) : (
-                      <SelectItem value={currentUser?.id || "doctor_default"} className="font-medium text-sm">
+                      <SelectItem value={currentUser?.id || "doctor_default"} className="font-semibold text-xs">
                         👨‍⚕️ {currentUser?.name || "Dr. Asignado"} (Tú)
                       </SelectItem>
                     )}
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2.5">
-                  <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
+
+              <div className="grid grid-cols-2 gap-3.5">
+                {/* ESTADO INICIAL REFORMADO CON COLORES SUAVES */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-foreground font-bold text-xs">
                     <Activity className="w-4 h-4 text-muted-foreground" /> Estado Inicial
                   </Label>
                   <Select value={status} onValueChange={setStatus}>
-                    <SelectTrigger className="bg-muted/30 border-border h-11 focus:ring-[#008bcd] font-medium text-sm text-foreground">
+                    <SelectTrigger className="bg-background border-border/80 h-11 focus:ring-[#008bcd] font-semibold text-xs text-foreground rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl border-border/80 shadow-xl p-1">
                       {validInitialStatuses.map((s) => {
                         const Icon = s.icon;
                         return (
-                          <SelectItem key={s.value} value={s.value}>
-                            <div className="flex items-center gap-2">
-                              <Icon className={`w-4 h-4 ${s.color}`} />
-                              <span className={`${s.color} font-bold text-sm`}>{s.label}</span>
+                          <SelectItem key={s.value} value={s.value} className="rounded-lg my-0.5 cursor-pointer">
+                            <div className="flex items-center gap-2 py-0.5">
+                              <Icon className="w-4 h-4 text-[#008bcd]" />
+                              <span className={cn("px-2 py-0.5 rounded-md text-[11px] font-extrabold uppercase tracking-wider border", s.badgeClass)}>
+                                {s.label}
+                              </span>
                             </div>
                           </SelectItem>
                         )
@@ -256,39 +266,43 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2.5">
-                  <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-foreground font-bold text-xs">
                     <Tags className="w-4 h-4 text-muted-foreground" /> Situación
                   </Label>
                   <Select value={situation} onValueChange={setSituation}>
-                    <SelectTrigger className="bg-muted/30 border-border h-11 focus:ring-[#008bcd] font-medium text-sm text-foreground">
+                    <SelectTrigger className="bg-background border-border/80 h-11 focus:ring-[#008bcd] font-semibold text-xs text-foreground rounded-xl">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Primera Consulta" className="text-sm font-medium">Primera Consulta</SelectItem>
-                      <SelectItem value="Control Regular" className="text-sm font-medium">Control Regular</SelectItem>
-                      <SelectItem value="Emergencia" className="text-sm font-medium">Emergencia</SelectItem>
-                      <SelectItem value="Tratamiento" className="text-sm font-medium">Tratamiento</SelectItem>
+                    <SelectContent className="rounded-xl border-border/80 shadow-xl">
+                      <SelectItem value="Primera Consulta" className="text-xs font-semibold">Primera Consulta</SelectItem>
+                      <SelectItem value="Control Regular" className="text-xs font-semibold">Control Regular</SelectItem>
+                      <SelectItem value="Emergencia" className="text-xs font-semibold">Emergencia</SelectItem>
+                      <SelectItem value="Tratamiento" className="text-xs font-semibold">Tratamiento</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
             </div>
-            <div className="space-y-5">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-[#008bcd] border-b border-border pb-2">
+
+            {/* SECCIÓN 2: HORARIO Y UBICACIÓN */}
+            <div className="space-y-4">
+              <h3 className="text-[11px] font-black uppercase tracking-widest text-[#008bcd] border-b border-border/80 pb-2">
                 2. Horario y Ubicación
               </h3>
-              <div className="space-y-2.5">
-                <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-foreground font-bold text-xs">
                   <CalendarIcon className="w-4 h-4 text-muted-foreground" /> Fecha de la Cita
                 </Label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("w-full justify-start text-left font-bold bg-muted/30 border-border hover:bg-muted h-11 rounded-xl text-sm text-foreground", !date && "text-muted-foreground")}>
+                    <Button variant="outline" className={cn("w-full justify-start text-left font-bold bg-background border-border/80 hover:bg-muted/50 h-11 rounded-xl text-xs text-foreground shadow-xs", !date && "text-muted-foreground")}>
                       {date ? format(date, "EEEE, d 'de' MMMM yyyy", { locale: es }) : <span>Elegir fecha</span>}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 z-[120]" align="start">
+                  <PopoverContent className="w-auto p-0 z-[120] rounded-2xl shadow-xl border-border/80" align="start">
                     <Calendar 
                       mode="single" 
                       selected={date} 
@@ -298,9 +312,10 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="grid grid-cols-2 gap-4 bg-muted/20 p-4 rounded-xl border border-border">
-                <div className="space-y-2.5">
-                  <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
+
+              <div className="grid grid-cols-2 gap-3.5 bg-muted/20 p-3.5 rounded-xl border border-border/80">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-foreground font-bold text-xs">
                     <Clock className="w-4 h-4 text-[#008bcd]" /> Hora Inicio
                   </Label>
                   <Input 
@@ -308,12 +323,12 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                     value={startTime} 
                     onChange={handleStartTimeChange} 
                     min={date && isToday(date) ? format(new Date(), "HH:mm") : undefined} 
-                    className="bg-background border-border h-11 text-foreground font-bold shadow-sm rounded-xl text-sm" 
+                    className="bg-background border-border/80 h-10 text-foreground font-bold rounded-lg text-xs shadow-xs" 
                     required 
                   />
                 </div>
-                <div className="space-y-2.5">
-                  <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-foreground font-bold text-xs">
                     <Clock className="w-4 h-4 text-muted-foreground" /> Hora Fin
                   </Label>
                   <Input 
@@ -321,56 +336,62 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
                     value={endTime} 
                     onChange={(e) => setEndTime(e.target.value)} 
                     min={startTime} 
-                    className="bg-background border-border h-11 text-foreground font-bold shadow-sm rounded-xl text-sm" 
+                    className="bg-background border-border/80 h-10 text-foreground font-bold rounded-lg text-xs shadow-xs" 
                     required 
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2.5">
-                  <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
+
+              <div className="grid grid-cols-2 gap-3.5">
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-foreground font-bold text-xs">
                     <MapPin className="w-4 h-4 text-muted-foreground" /> Box Dental
                   </Label>
                   <Select value={box} onValueChange={setBox}>
-                    <SelectTrigger className="bg-muted/30 border-border h-11 font-medium text-sm text-foreground">
+                    <SelectTrigger className="bg-background border-border/80 h-11 font-semibold text-xs text-foreground rounded-xl">
                       <SelectValue placeholder="Seleccionar Box..." />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Box 1" className="text-sm font-medium">Box 1 (General)</SelectItem>
-                      <SelectItem value="Box 2" className="text-sm font-medium">Box 2 (Ortodoncia)</SelectItem>
-                      <SelectItem value="Box 3" className="text-sm font-medium">Box 3 (Cirugía)</SelectItem>
-                      <SelectItem value="Pabellon" className="text-sm font-medium">Pabellón Principal</SelectItem>
+                    <SelectContent className="rounded-xl border-border/80 shadow-xl">
+                      <SelectItem value="Box 1" className="text-xs font-semibold">Box 1 (General)</SelectItem>
+                      <SelectItem value="Box 2" className="text-xs font-semibold">Box 2 (Ortodoncia)</SelectItem>
+                      <SelectItem value="Box 3" className="text-xs font-semibold">Box 3 (Cirugía)</SelectItem>
+                      <SelectItem value="Pabellon" className="text-xs font-semibold">Pabellón Principal</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2.5">
-                  <Label className="flex items-center gap-2 text-foreground font-semibold text-xs">
+
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-foreground font-bold text-xs">
                     <AlignLeft className="w-4 h-4 text-muted-foreground" /> Detalle Corto
                   </Label>
                   <Input 
                     value={reason} 
                     onChange={(e) => setReason(e.target.value)} 
                     placeholder="Ej: Limpieza..." 
-                    className="bg-muted/30 border-border h-11 text-foreground font-medium rounded-xl text-sm" 
+                    className="bg-background border-border/80 h-11 text-foreground font-semibold rounded-xl text-xs shadow-xs" 
                     required 
                   />
                 </div>
               </div>
+
             </div>
           </div>
-          <div className="mt-8 pt-5 border-t border-border flex justify-end gap-3">
+
+          {/* BOTONES DE ACCIÓN DEL MODAL */}
+          <div className="pt-4 border-t border-border/80 flex justify-end items-center gap-3">
             <Button 
               type="button" 
               variant="ghost" 
-              className="hover:bg-muted text-muted-foreground font-bold rounded-xl h-10 px-5 text-sm" 
+              className="hover:bg-muted text-muted-foreground font-bold rounded-xl h-10 px-5 text-xs transition-colors" 
               onClick={() => setOpen(false)}
             >
               Cancelar Operación
             </Button>
+
             <Button 
               type="submit" 
               disabled={isSaving} 
-              className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold h-10 px-6 shadow-md rounded-xl text-sm transition-all"
+              className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold h-10 px-6 shadow-md shadow-[#008bcd]/20 rounded-xl text-xs transition-all duration-200 cursor-pointer active:scale-95"
             >
               {isSaving ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando en sistema...</>
@@ -379,6 +400,7 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
               )}
             </Button>
           </div>
+
         </form>
       </DialogContent>
     </Dialog>

@@ -4,9 +4,12 @@ import React, { useState } from "react"
 import { useToast } from "@/hooks/use-toast"
 import { AlertTriangle } from "lucide-react"
 
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
-import { CreatePlanModal } from "@/components/plans-treatment/create-plan-modal"
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
+} from "@/components/ui/alert-dialog"
 
+import { CreatePlanModal } from "@/components/plans-treatment/create-plan-modal"
 import { TreatmentPlanList } from "@/components/plans-treatment/treatment-list"
 import { TreatmentPlanDetail } from "@/components/plans-treatment/treatment-detail"
 
@@ -20,7 +23,7 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [planToDelete, setPlanToDelete] = useState<string | null>(null)
 
-  const { plans = [], isLoading } = useGetTreatmentPlans({ patientId })
+  const { plans = [], isLoading, refetch } = useGetTreatmentPlans({ patientId })
   const { patient } = useGetPatient(patientId)
   const { deleteTreatmentPlan, isLoading: isDeleting } = useDeleteTreatmentPlan()
   const { updateTreatmentPlan, isLoading: isSavingComment } = useUpdateTreatmentPlan()
@@ -28,45 +31,71 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
   const selectedPlan = plans.find((p: any) => p.id === selectedPlanId)
 
   const handleSaveComment = (text: string) => {
-    if (!selectedPlanId) return;
-    updateTreatmentPlan({ id: selectedPlanId, input: { commentsToPatient: text } }, {
-      onSuccess: () => toast({ title: "Comentario Guardado", variant: "success" })
-    })
+    if (!selectedPlanId) return
+    updateTreatmentPlan(
+      { id: selectedPlanId, input: { commentsToPatient: text } }, 
+      {
+        onSuccess: () => toast({ title: "Comentario Guardado", variant: "success" })
+      }
+    )
   }
 
   const confirmDeletePlan = () => {
-    if (!planToDelete) return;
+    if (!planToDelete) return
     deleteTreatmentPlan(planToDelete, {
       onSuccess: () => {
-        toast({ title: "Plan Eliminado", description: "Enviado a la papelera.", variant: "success" })
+        toast({ title: "Plan enviado a la papelera", variant: "success" })
         setPlanToDelete(null)
         if (selectedPlanId === planToDelete) setSelectedPlanId(null)
+        refetch()
+      },
+      onError: () => {
+        toast({ title: "Error al eliminar", variant: "destructive" })
       }
     })
   }
 
   return (
     <div className="w-full animate-in fade-in duration-500">
+      
+      {/* MODAL NUEVO PLAN */}
       <CreatePlanModal 
         isOpen={isCreateModalOpen} 
         onClose={() => setIsCreateModalOpen(false)} 
         patientId={patientId} 
-        onSuccessCallback={(id) => setSelectedPlanId(id)} 
+        onSuccessCallback={(id: string) => {
+          setSelectedPlanId(id)
+          refetch()
+        }} 
       />
 
-      {/* Alerta de Eliminación */}
+      {/* MODAL DE CONFIRMACIÓN DE ELIMINACIÓN */}
       <AlertDialog open={!!planToDelete} onOpenChange={(open) => !open && setPlanToDelete(null)}>
-        <AlertDialogContent className="bg-background border-border">
+        <AlertDialogContent className="bg-card border-border rounded-2xl shadow-2xl sm:max-w-[420px]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-red-600"><AlertTriangle className="w-5 h-5" /> Confirmar Eliminación</AlertDialogTitle>
-            <AlertDialogDescription className="text-foreground mt-2">¿Estás seguro de que deseas eliminar este plan?</AlertDialogDescription>
+            <AlertDialogTitle className="flex items-center gap-2 text-red-600 font-extrabold text-lg">
+              <AlertTriangle className="w-5 h-5" /> ¿Mover a la papelera?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-muted-foreground text-xs font-medium mt-1">
+              El plan pasará al estado anulado. Podrás restaurarlo o destruirlo desde la pestaña Papelera.
+            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="font-bold">Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDeletePlan} disabled={isDeleting} className="bg-red-600 hover:bg-red-700 text-white font-bold">Sí, eliminar</AlertDialogAction>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel className="font-bold border-border rounded-xl text-xs h-10">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeletePlan} 
+              disabled={isDeleting} 
+              className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs h-10 shadow-sm"
+            >
+              Sí, mover a papelera
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* DETALLE O LISTADO */}
       {selectedPlanId && selectedPlan ? (
         <TreatmentPlanDetail 
           plan={selectedPlan} 
@@ -79,10 +108,11 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
         <TreatmentPlanList 
           plans={plans} 
           isLoading={isLoading} 
-          patientName={patient?.firstName || ""} 
+          patientName={patient ? `${patient.firstName} ${patient.lastName}` : ""} 
           onNewPlan={() => setIsCreateModalOpen(true)}
-          onSelectPlan={(id) => setSelectedPlanId(id)}
-          onDeletePlan={(id) => setPlanToDelete(id)}
+          onSelectPlan={(id: string) => setSelectedPlanId(id)}
+          onDeletePlan={(id: string) => setPlanToDelete(id)}
+          refetchPlans={refetch}
         />
       )}
 

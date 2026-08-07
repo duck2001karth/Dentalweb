@@ -21,7 +21,7 @@ export async function DELETE(req: Request, props: { params: Promise<{ id: string
     const params = await props.params;
     await prisma.clinicalDocument.update({
       where: { id: params.id },
-      data: { isVoided: true } // Solo lo marcamos como anulado
+      data: { isVoided: true } 
     });
     return NextResponse.json({ success: true });
   } catch (error) {

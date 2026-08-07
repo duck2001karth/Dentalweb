@@ -218,7 +218,11 @@ model Appointment {
   status      AppointmentStatus @default(SCHEDULED)
   payment     PaymentStatus     @default(UP_TO_DATE)
   box         String?           
-  reason      String?           
+  reason      String?  
+
+  isRescheduled Boolean   @default(false)
+  rescheduleReason String? 
+  previousDate  DateTime?         
   
   patientId   String
   patient     Patient           @relation(fields: [patientId], references: [id])
@@ -326,6 +330,7 @@ model Prescription {
   
   medications  String   @db.Text
   indications  String   @db.Text
+  observations    String?  @db.Text
   
   authorId     String?
   author       User?    @relation(fields: [authorId], references: [id])

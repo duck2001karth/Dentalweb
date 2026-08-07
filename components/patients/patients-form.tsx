@@ -82,7 +82,6 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
     const patientDataToSave = {
       ...formData,
       birthDate: formData.birthDate ? new Date(formData.birthDate).toISOString() : undefined,
-      // Si está vacío, lo enviamos como nulo para mayor limpieza en la BD
       medicalAlerts: formData.medicalAlerts.trim() === "" ? null : formData.medicalAlerts,
     }
 

@@ -50,7 +50,7 @@ export const patientSchema = z.object({
 export type Patient = z.infer<typeof patientSchema>
 
 
-// --- 2. INPUTS PARA CREAR/EDITAR (Omitimos campos autogenerados por Prisma) ---
+// --- 2. INPUTS PARA CREAR/EDITAR PACIENTE ---
 
 export const patientInputSchema = patientSchema.omit({
   id: true,
@@ -60,6 +60,41 @@ export const patientInputSchema = patientSchema.omit({
 })
 export type PatientInput = z.infer<typeof patientInputSchema>
 
-
 export const updatePatientInputSchema = patientInputSchema.partial()
 export type UpdatePatientInput = z.infer<typeof updatePatientInputSchema>
+
+
+// --- 3. ESQUEMA DE PRESCRIPCIÓN / RECETA MÉDICA (NUEVO) ---
+
+export const prescriptionSchema = z.object({
+  id: z.string(),
+  patientId: z.string(),
+  medications: z.string(),
+  indications: z.string(),
+  observations: z.string().nullable().optional(), // <-- CAMPO OBSERVACIONES AGREGADO
+  authorId: z.string().nullable().optional(),
+  author: z
+    .object({
+      id: z.string(),
+      name: z.string().nullable().optional(),
+      specialty: z.string().nullable().optional(),
+    })
+    .optional(),
+  doctorSignature: z.string().nullable().optional(),
+  createdAt: z.string().or(z.date()).optional(),
+  updatedAt: z.string().or(z.date()).optional(),
+})
+
+export type Prescription = z.infer<typeof prescriptionSchema>
+
+export const prescriptionInputSchema = prescriptionSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+})
+export type PrescriptionInput = z.infer<typeof prescriptionInputSchema>
+
+export const updatePrescriptionInputSchema = prescriptionInputSchema.partial().extend({
+  id: z.string(),
+})
+export type UpdatePrescriptionInput = z.infer<typeof updatePrescriptionInputSchema>

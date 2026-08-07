@@ -29,6 +29,9 @@ export function useGetTreatmentPlans(params?: UseGetTreatmentsParams) {
       return (json.plans || json || []) as TreatmentPlan[]
     },
     enabled: !params?.skip,
+
+    // 💡 DESACTIVA EL RE-FETCH SOLO AL CAMBIAR DE PESTAÑA DEL NAVEGADOR
+    refetchOnWindowFocus: false,
   })
 
   return {
@@ -51,6 +54,9 @@ export function useGetTreatmentPlan(id: string) {
       return json.plan || json
     },
     enabled: !!id,
+
+    // 💡 DESACTIVA EL RE-FETCH SOLO AL CAMBIAR DE PESTAÑA DEL NAVEGADOR
+    refetchOnWindowFocus: false,
   })
 
   return {
@@ -83,7 +89,6 @@ export function useCreateTreatmentPlan() {
       return response.json()
     },
     onSuccess: () => {
-      // Invalidamos el caché para que la lista se actualice automáticamente
       queryClient.invalidateQueries({ queryKey: ["treatments"] })
     },
   })
@@ -95,7 +100,7 @@ export function useCreateTreatmentPlan() {
   }
 }
 
-// 4. ACTUALIZAR PLAN DE TRATAMIENTO (Para sumar pagos, cambiar progreso, etc)
+// 4. ACTUALIZAR PLAN DE TRATAMIENTO
 export function useUpdateTreatmentPlan() {
   const queryClient = useQueryClient()
 
@@ -115,7 +120,6 @@ export function useUpdateTreatmentPlan() {
       return response.json()
     },
     onMutate: async (updated) => {
-      // Cancelamos queries pendientes y aplicamos actualización optimista
       await queryClient.cancelQueries({ queryKey: ["treatment", updated.id] })
       const previousPlan = queryClient.getQueryData(["treatment", updated.id])
       
@@ -130,7 +134,6 @@ export function useUpdateTreatmentPlan() {
       return { previousPlan, updated }
     },
     onError: (err, variables, context: any) => {
-      // Si falla, regresamos a los datos anteriores
       queryClient.setQueryData(["treatment", context?.updated.id], context?.previousPlan)
     },
     onSettled: (data, error, variables) => {

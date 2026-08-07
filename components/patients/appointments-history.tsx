@@ -24,12 +24,9 @@ export function AppointmentsHistory({ appointments, isLoading }: { appointments:
   const { toast } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // --- REGLA CLÍNICA DE SEGURIDAD ---
-  // La gestión de la agenda es administrativa. Los doctores NO eliminan citas.
   const currentUser = session?.user as any
   const canDelete = currentUser?.role === "ADMIN" || currentUser?.role === "RECEPTIONIST"
 
-  // ORDENAR CITAS: De la más reciente a la más antigua
   const sortedAppointments = [...(appointments || [])].sort((a, b) => {
     const dateA = new Date(`${a.date.split('T')[0]}T${a.startTime || '00:00'}`).getTime();
     const dateB = new Date(`${b.date.split('T')[0]}T${b.startTime || '00:00'}`).getTime();
@@ -69,7 +66,6 @@ export function AppointmentsHistory({ appointments, isLoading }: { appointments:
         </div>
       </div>
 
-      {/* Tabla de Citas */}
       <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse min-w-[900px]">
@@ -94,7 +90,6 @@ export function AppointmentsHistory({ appointments, isLoading }: { appointments:
                 </tr>
               ) : sortedAppointments.length > 0 ? (
                 sortedAppointments.map((cita: any, index: number) => {
-                  // Verificamos si la cita fue atendida por el usuario logueado
                   const isMyAppointment = cita.doctorId === currentUser?.id;
 
                   return (

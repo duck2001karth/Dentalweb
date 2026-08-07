@@ -51,7 +51,6 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
           </div>
         </aside>
         
-        {/* ÁREA PRINCIPAL */}
         <main className="w-full flex flex-col min-h-screen overflow-x-hidden">
           <Header />
           <div className="flex-1 flex flex-col">
@@ -80,11 +79,12 @@ const Header = () => {
   }, [])
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 h-[70px] flex items-center px-4 md:px-6 gap-4 print:hidden transition-all">  
+    <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 h-[70px] flex items-center px-4 md:px-6 gap-3 print:hidden transition-all">  
+      
       <div className="md:hidden flex items-center">
         <Sheet>
-          <SheetTrigger className="p-2 -ml-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors">
-            <Menu className="h-6 w-6 text-foreground" />
+          <SheetTrigger className="p-2 -ml-2 rounded-xl hover:bg-accent transition-colors">
+            <Menu className="h-5 w-5 text-foreground" />
           </SheetTrigger>
           <SheetContent position="left" className="p-0 w-[260px]"> 
             <Nav />
@@ -92,72 +92,64 @@ const Header = () => {
         </Sheet>
       </div>
 
-      {/* 2. ACCIONES RÁPIDAS Y MIGAS DE PAN (Izquierda) */}
       <div className="hidden md:flex items-center gap-3 shrink-0 mr-2">
         <QuickActions />
         <DynamicBreadcrumbs />
       </div>
 
-      {/* 3. OMNIBAR / BUSCADOR SPOTLIGHT (Centro) */}
       <div className="flex-1 flex justify-center lg:justify-start"> 
         <div className="w-full max-w-2xl">
           <AppCommand />
         </div>
       </div>
       
-      {/* 4. HERRAMIENTAS, ESTADO Y PERFIL (Derecha) */}
-      <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-        
-        {/* Indicador Online/Offline */}
+      <div className="flex items-center gap-1.5 shrink-0">
+
         <div 
           className={cn(
-            "hidden xl:flex items-center gap-1.5 mr-1 px-2.5 py-1.5 rounded-full border transition-colors",
+            "hidden xl:flex items-center gap-1.5 mr-1 px-3 py-1.5 rounded-full border text-xs font-bold tracking-wider uppercase transition-colors shadow-xs",
             isOnline 
-              ? "bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30 text-emerald-600 dark:text-emerald-400" 
-              : "bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30 text-red-600 dark:text-red-400"
+              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400" 
+              : "bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400"
           )}
           title={isOnline ? "Conexión estable a la nube" : "Sin conexión a internet"}
         >
           <div className={cn("w-2 h-2 rounded-full", isOnline ? "bg-emerald-500 animate-pulse" : "bg-red-500")} />
-          <span className="text-[10px] font-bold uppercase tracking-widest">
-            {isOnline ? "Online" : "Offline"}
-          </span>
+          <span>{isOnline ? "Online" : "Offline"}</span>
         </div>
 
-        {/* Menú de Ayuda */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            {/* 1. Agregamos h-12 w-12 al Button para que el "círculo" invisible sea igual de grande */}
-            <Button variant="ghost" size="icon" className="hidden sm:flex h-12 w-12 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
-              {/* 2. Cambiamos w-5 h-5 por w-7 h-7 para que el ícono sea igual al sol */}
-              <HelpCircle className="w-7 h-7" />
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="hidden sm:flex h-10 w-10 rounded-xl text-muted-foreground hover:text-[#008bcd] hover:bg-accent/60 transition-all cursor-pointer"
+            >
+              <HelpCircle className="w-5 h-5" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 rounded-xl bg-card border-border shadow-xl">
-            <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Centro de Ayuda</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="cursor-pointer font-medium py-2.5 gap-2">
-              <BookOpen className="w-4 h-4 text-blue-500" /> Tutoriales
+          <DropdownMenuContent align="end" className="w-56 rounded-2xl bg-card border border-border shadow-2xl p-1.5">
+            <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider font-extrabold px-2.5 py-1.5">Centro de Ayuda</DropdownMenuLabel>
+            <DropdownMenuSeparator className="my-1" />
+            <DropdownMenuItem className="cursor-pointer font-semibold text-xs py-2 px-2.5 rounded-xl gap-2 hover:bg-accent">
+              <BookOpen className="w-4 h-4 text-[#008bcd]" /> Tutoriales y Guías
             </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer font-medium py-2.5 gap-2">
+            <DropdownMenuItem className="cursor-pointer font-semibold text-xs py-2 px-2.5 rounded-xl gap-2 hover:bg-accent">
               <MessageCircle className="w-4 h-4 text-emerald-500" /> Soporte Técnico
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        
-        {/* Notificaciones por Próximo Paciente */}
-        <NextPatientDropdown />
-        {/* Notificaciones*/}
-        <NotificationsDropdown />
-        {/* Divisor vertical */}
-        <div className="hidden sm:block w-px h-6 bg-border mx-1"></div>
-
-        {/* Modo Claro/Oscuro */}
-        <ThemeToggle />
-        
-        {/* Menú de Perfil de Usuario */}
-        <div className="pl-1">
+        <div className="flex items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:hover:bg-accent/60 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:text-muted-foreground [&_button:hover_svg]:text-[#008bcd] [&_svg]:transition-colors">
+          <NextPatientDropdown />
+        </div>
+        <div className="flex items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:hover:bg-accent/60 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:text-muted-foreground [&_button:hover_svg]:text-[#008bcd] [&_svg]:transition-colors">
+          <NotificationsDropdown />
+        </div>
+        <div className="hidden sm:block w-[1px] h-6 bg-border/60 mx-1" />
+        <div className="flex items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:hover:bg-accent/60 [&_svg]:w-5 [&_svg]:h-5">
+          <ThemeToggle />
+        </div>
+        <div className="pl-1 flex items-center justify-center">
           <ProfilePicture />
         </div>
         

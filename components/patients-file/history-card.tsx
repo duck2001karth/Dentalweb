@@ -30,12 +30,9 @@ const StatusIcon = statusConfig.icon;
 
   return (
     <div className="relative flex flex-col md:flex-row items-start mb-10 group">
-      {/* Fecha Izquierda */}
       <div className="md:w-[100px] text-left md:text-right pr-6 pt-2 pb-2 pl-8 md:pl-0 font-bold text-muted-foreground text-sm capitalize">
         {format(new Date(note.createdAt), "MMM. dd, yyyy", { locale: es })}
       </div>
-      
-      {/* Punto de la línea de tiempo */}
       <div className="absolute left-0 md:left-[116px] top-3 w-5 h-5 rounded-full bg-slate-300 dark:bg-slate-700 border-4 border-background z-10 group-hover:bg-[#008bcd] transition-colors"></div>
       
       {/* Tarjeta de Contenido */}

@@ -1,34 +1,20 @@
 import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth/next" 
 import { prisma } from "@/lib/db"
 
-// Obtener un plan por ID (GET)
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  try {
-    const { id } = await params 
-    
-    const plan = await prisma.treatmentPlan.findUnique({
-      where: { id },
-      include: {
-        doctor: true,
-        patient: true,
-        items: true
-      }
-    })
-
-    if (!plan) return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 })
-
-    return NextResponse.json({ plan })
-  } catch (error) {
-    return NextResponse.json({ error: "Error al obtener el plan" }, { status: 500 })
-  }
-}
-
-// Actualizar un plan (PATCH)
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
-    const { input } = body
+    const { action, input } = body
+
+    if (action === "RESTORE") {
+      const restoredPlan = await prisma.treatmentPlan.update({
+        where: { id },
+        data: { status: "DRAFT" } 
+      })
+      return NextResponse.json({ plan: restoredPlan, message: "Plan restaurado con éxito" })
+    }
 
     const updatedPlan = await prisma.treatmentPlan.update({
       where: { id },
@@ -41,20 +27,28 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 }
 
-// Enviar a papelera (DELETE) - En vez de eliminar, actualizamos el status a "CANCELLED"
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+    const { searchParams } = new URL(request.url)
+    const forceDelete = searchParams.get("force") === "true"
+
+    // SI ES FORCE DELETE (Borrado Físico Definitivo)
+    if (forceDelete) {
+      await prisma.treatmentItem.deleteMany({ where: { treatmentPlanId: id } })
+      await prisma.odontogramRecord.deleteMany({ where: { planId: id } })
+      await prisma.treatmentPlan.delete({ where: { id } })
+
+      return NextResponse.json({ success: true, message: "Plan destruido permanentemente de la base de datos" })
+    }
     await prisma.treatmentPlan.update({
       where: { id },
-      data: { 
-        status: "CANCELLED" 
-      }
+      data: { status: "CANCELLED" }
     })
 
-    return NextResponse.json({ success: true, message: "Plan enviado a la papelera (Anulado)" })
+    return NextResponse.json({ success: true, message: "Plan movido a la papelera (Anulado)" })
   } catch (error) {
-    console.error("Error al enviar a la papelera:", error)
-    return NextResponse.json({ error: "Error al anular el plan" }, { status: 500 })
+    console.error("Error en DELETE:", error)
+    return NextResponse.json({ error: "Error al procesar la eliminación" }, { status: 500 })
   }
 }

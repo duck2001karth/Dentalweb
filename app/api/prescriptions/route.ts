@@ -1,34 +1,64 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-export async function GET(req: Request) {
+// GET: Obtener recetas del paciente
+export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(req.url);
+    const { searchParams } = new URL(request.url);
     const patientId = searchParams.get("patientId");
 
-    if (!patientId) return NextResponse.json({ error: "Falta ID" }, { status: 400 });
+    if (!patientId) {
+      return NextResponse.json({ error: "Falta patientId" }, { status: 400 });
+    }
 
-    const records = await prisma.prescription.findMany({
+    const prescriptions = await prisma.prescription.findMany({
       where: { patientId },
-      include: { author: { select: { name: true } } },
-      orderBy: { createdAt: "desc" },
+      include: {
+        author: {
+          select: { id: true, name: true, specialty: true }
+        }
+      },
+      orderBy: { createdAt: "desc" }
     });
-    return NextResponse.json(records);
+
+    return NextResponse.json(prescriptions);
   } catch (error) {
-    return NextResponse.json({ error: "Error" }, { status: 500 });
+    console.error("Error GET prescriptions:", error);
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }
 
-export async function POST(req: Request) {
+// POST: Crear receta (Guarda observations explícitamente)
+export async function POST(request: Request) {
   try {
-    const body = await req.json();
-    const { patientId, medications, indications, authorId } = body;
+    const body = await request.json();
+    
+    // Soporta tanto body directo como body.input
+    const data = body.input || body;
+    const { patientId, medications, indications, observations, authorId } = data;
 
-    const record = await prisma.prescription.create({
-      data: { patientId, medications, indications, authorId },
+    if (!patientId) {
+      return NextResponse.json({ error: "patientId es requerido" }, { status: 400 });
+    }
+
+    const newPrescription = await prisma.prescription.create({
+      data: {
+        patientId,
+        medications: medications || "",
+        indications: indications || "",
+        observations: observations || null, // GUARDA LAS OBSERVACIONES
+        authorId: authorId || null
+      },
+      include: {
+        author: {
+          select: { id: true, name: true, specialty: true }
+        }
+      }
     });
-    return NextResponse.json(record);
+
+    return NextResponse.json(newPrescription, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: "Error" }, { status: 500 });
+    console.error("Error POST prescription:", error);
+    return NextResponse.json({ error: "Error al guardar receta" }, { status: 500 });
   }
 }

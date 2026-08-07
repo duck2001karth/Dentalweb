@@ -10,7 +10,7 @@ export async function GET(req: Request) {
 
     const docs = await prisma.patientDocument.findMany({
       where: { patientId },
-      include: { author: { select: { name: true } } }, // Traemos el nombre del doctor
+      include: { author: { select: { name: true } } }, 
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json(docs);

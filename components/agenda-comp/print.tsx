@@ -13,7 +13,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 
-
 interface PrintAgendaModalProps {
   date: Date | undefined
   citas: any[] 
@@ -42,8 +41,12 @@ export function PrintAgendaModal({ date, citas }: PrintAgendaModalProps) {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="outline" className="bg-background border-border text-foreground hover:bg-accent font-semibold shadow-sm">
-          <Printer className="h-4 w-4 mr-2 text-muted-foreground"/> Imprimir
+        <Button 
+          variant="ghost" 
+          className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 hover:border-[#008bcd]/30 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
+        >
+          <Printer className="h-5 w-5 mr-2 text-muted-foreground group-hover:text-[#008bcd] transition-colors" />
+          <span>Imprimir</span>
         </Button>
       </DialogTrigger>
       
@@ -59,21 +62,20 @@ export function PrintAgendaModal({ date, citas }: PrintAgendaModalProps) {
           </div>
           
           <Button 
-            className="bg-[#008bcd] hover:bg-[#0070a8] text-white shadow-sm font-bold w-full sm:w-auto mr-8" 
+            className="bg-[#008bcd] hover:bg-[#0070a8] text-white shadow-sm font-bold w-full sm:w-auto mr-8 rounded-xl h-10 px-4" 
             onClick={handlePrint}
           >
             <Printer className="w-4 h-4 mr-2" /> Mandar a Impresora
           </Button>
         </div>
 
-        {/* --- ESTILOS MÁGICOS PARA IMPRESIÓN (CORREGIDOS) --- */}
+        {/* --- ESTILOS MÁGICOS PARA IMPRESIÓN --- */}
         <style dangerouslySetInnerHTML={{__html: `
           @media print {
             @page { margin: 1cm; size: portrait; }
             body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             body * { visibility: hidden; }
             
-            /* CORRECCIÓN 2: Reseteamos el modal para que no se empuje hacia abajo */
             div[role="dialog"] {
               position: absolute !important;
               top: 0 !important;
@@ -208,7 +210,7 @@ export function PrintAgendaModal({ date, citas }: PrintAgendaModalProps) {
               </div>
             )}
 
-            {/* Pie de página de la hoja */}
+            {/* Pie de página */}
             <div className="mt-16 pt-6 border-t border-slate-200 text-center flex flex-col items-center">
               <div className="w-48 border-t border-slate-800 pt-2 mb-4">
                 <p className="text-xs font-bold text-slate-800 uppercase">Firma del Encargado</p>

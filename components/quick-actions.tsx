@@ -1,10 +1,17 @@
 "use client"
 
-import { Plus, CalendarPlus, UserPlus, CreditCard } from "lucide-react"
+import { Plus, CalendarPlus, UserPlus, CreditCard, Sparkles } from "lucide-react"
 import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuLabel, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu"
 
 export function QuickActions() {
   const router = useRouter()
@@ -12,46 +19,77 @@ export function QuickActions() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button className="bg-[#008bcd] hover:bg-[#0070a8] text-white rounded-full h-9 px-4 font-bold shadow-sm hidden lg:flex transition-transform active:scale-95">
-          <Plus size={16} className="mr-1.5" /> Nuevo
+        <Button 
+          variant="ghost" 
+          className="bg-transparent border-none text-foreground hover:text-[#008bcd] hover:bg-accent/60 font-bold text-sm h-10 px-3.5 rounded-xl shadow-none hidden lg:flex items-center gap-2 transition-colors duration-200 cursor-pointer outline-none group"
+        >
+          <Plus className="w-[18px] h-[18px] stroke-[2.5] text-muted-foreground group-hover:text-[#008bcd] transition-colors" />
+          <span className="tracking-tight font-medium">Nuevo</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-56 rounded-xl bg-card border-border shadow-xl mt-2">
-        <DropdownMenuLabel className="text-xs text-muted-foreground uppercase tracking-wider font-bold">Acciones Rápidas</DropdownMenuLabel>
-        <DropdownMenuSeparator />
+
+      <DropdownMenuContent 
+        align="start" 
+        className="w-60 rounded-2xl bg-card border border-border shadow-2xl p-1.5 mt-2 z-50"
+      >
+        <DropdownMenuLabel className="px-3 py-1.5 text-[10px] font-black text-muted-foreground uppercase tracking-widest flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-[#008bcd]" />
+          Acciones Rápidas
+        </DropdownMenuLabel>
         
+        <DropdownMenuSeparator className="my-1 bg-border/60" />
+
         <DropdownMenuItem 
           onClick={() => router.push("/agendavand")} 
-          className="cursor-pointer font-medium py-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+          className="cursor-pointer font-semibold text-xs p-2.5 rounded-xl flex items-center gap-3 hover:bg-blue-500/10 focus:bg-blue-500/10 transition-colors group"
         >
-          <CalendarPlus className="w-4 h-4 mr-2 text-blue-500" /> 
-          <div className="flex flex-col">
-            <span>Agendar Cita</span>
-            <span className="text-[10px] text-muted-foreground">Ir al calendario global</span>
+          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-[#008bcd] flex items-center justify-center shrink-0 border border-blue-500/20 group-hover:scale-105 transition-transform">
+            <CalendarPlus className="w-4 h-4" /> 
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="font-bold text-foreground group-hover:text-[#008bcd] transition-colors text-xs">
+              Agendar Cita
+            </span>
+            <span className="text-[10px] text-muted-foreground font-normal">
+              Ir al calendario global
+            </span>
           </div>
         </DropdownMenuItem>
 
         <DropdownMenuItem 
           onClick={() => router.push("/pacientes?new=true")}
-          className="cursor-pointer font-medium py-2.5 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+          className="cursor-pointer font-semibold text-xs p-2.5 rounded-xl flex items-center gap-3 hover:bg-emerald-500/10 focus:bg-emerald-500/10 transition-colors group"
         >
-          <UserPlus className="w-4 h-4 mr-2 text-emerald-500" /> 
-          <div className="flex flex-col">
-            <span>Registrar Paciente</span>
-            <span className="text-[10px] text-muted-foreground">Añadir al directorio</span>
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center shrink-0 border border-emerald-500/20 group-hover:scale-105 transition-transform">
+            <UserPlus className="w-4 h-4" /> 
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="font-bold text-foreground group-hover:text-emerald-500 transition-colors text-xs">
+              Registrar Paciente
+            </span>
+            <span className="text-[10px] text-muted-foreground font-normal">
+              Añadir al directorio
+            </span>
           </div>
         </DropdownMenuItem>
 
         <DropdownMenuItem 
           onClick={() => router.push("/finanzas")} 
-          className="cursor-pointer font-medium py-2.5 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+          className="cursor-pointer font-semibold text-xs p-2.5 rounded-xl flex items-center gap-3 hover:bg-amber-500/10 focus:bg-amber-500/10 transition-colors group"
         >
-          <CreditCard className="w-4 h-4 mr-2 text-amber-500" /> 
-          <div className="flex flex-col">
-            <span>Registrar Cobro</span>
-            <span className="text-[10px] text-muted-foreground">Añadir pago o factura</span>
+          <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 border border-amber-500/20 group-hover:scale-105 transition-transform">
+            <CreditCard className="w-4 h-4" /> 
+          </div>
+          <div className="flex flex-col leading-tight">
+            <span className="font-bold text-foreground group-hover:text-amber-500 transition-colors text-xs">
+              Registrar Cobro
+            </span>
+            <span className="text-[10px] text-muted-foreground font-normal">
+              Añadir pago o factura
+            </span>
           </div>
         </DropdownMenuItem>
+
       </DropdownMenuContent>
     </DropdownMenu>
   )

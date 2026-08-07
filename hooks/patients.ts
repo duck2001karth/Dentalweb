@@ -7,7 +7,9 @@ import {
 
 import { Patient, PatientInput, UpdatePatientInput } from "@/types/patients"
 
-// --- HOOKS ---
+// ==========================================
+// HOOKS PARA PACIENTES
+// ==========================================
 
 export function useGetPatients(params?: {
   search?: string
@@ -213,7 +215,6 @@ export function useDeletePatient() {
       return request.json()
     },
     onSuccess: () => {
-      // Invalida la lista para que desaparezca automáticamente de la tabla
       queryClient.invalidateQueries({ queryKey: ["patients"] })
     },
   })
@@ -225,6 +226,7 @@ export function useDeletePatient() {
     reset,
   }
 }
+
 // ==========================================
 // HOOKS PARA COMENTARIOS DEL PACIENTE
 // ==========================================
@@ -257,7 +259,6 @@ export function useCreatePatientComment() {
       return res.json()
     },
     onSuccess: (newComment, variables) => {
-      // Invalida la caché para refrescar instantáneamente
       queryClient.invalidateQueries({ queryKey: ["patient-comments", variables.patientId] })
     },
   })
@@ -337,4 +338,84 @@ export function useUpdateTaskStatus() {
   })
 
   return { toggleTask }
+}
+
+// ==========================================
+// HOOKS PARA RECETAS / PRESCRIPCIONES 
+// ==========================================
+
+export function useGetPrescriptions(patientId: string) {
+  const { isLoading, data, refetch } = useQuery({
+    queryKey: ["prescriptions", patientId],
+    queryFn: async () => {
+      const res = await fetch(`/api/prescriptions?patientId=${patientId}`)
+      if (!res.ok) throw new Error("Error al obtener recetas")
+      return res.json()
+    },
+    enabled: !!patientId,
+  })
+
+  return { isLoading, prescriptions: data || [], refetch }
+}
+
+export function useCreatePrescription() {
+  const queryClient = useQueryClient()
+
+  const { mutate: createPrescription, isPending: isLoading } = useMutation({
+    mutationFn: async (payload: { patientId: string; medications: string; indications: string; observations?: string; authorId?: string }) => {
+      const res = await fetch(`/api/prescriptions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error("Error al crear la receta")
+      return res.json()
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["prescriptions", variables.patientId] })
+    },
+  })
+
+  return { createPrescription, isLoading }
+}
+
+export function useUpdatePrescription() {
+  const queryClient = useQueryClient()
+
+  const { mutate: updatePrescription, isPending: isLoading } = useMutation({
+    mutationFn: async (payload: { id: string; patientId: string; medications?: string; indications?: string; observations?: string; doctorSignature?: string }) => {
+      const { id, patientId, ...data } = payload
+      const res = await fetch(`/api/prescriptions/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      if (!res.ok) throw new Error("Error al actualizar la receta")
+      return res.json()
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["prescriptions", variables.patientId] })
+    },
+  })
+
+  return { updatePrescription, isLoading }
+}
+
+export function useDeletePrescription() {
+  const queryClient = useQueryClient()
+
+  const { mutate: deletePrescription, isPending: isLoading } = useMutation({
+    mutationFn: async ({ id }: { id: string; patientId: string }) => {
+      const res = await fetch(`/api/prescriptions/${id}`, {
+        method: "DELETE",
+      })
+      if (!res.ok) throw new Error("Error al eliminar la receta")
+      return res.json()
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["prescriptions", variables.patientId] })
+    },
+  })
+
+  return { deletePrescription, isLoading }
 }

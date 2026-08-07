@@ -62,12 +62,10 @@ export default function AgendaAvanzadaPage() {
     }
   }, [isGlobalStaff])
 
-  // Determinar qué columnas mostrar
   const DOCTORES = useMemo(() => {
     if (isGlobalStaff && doctoresDeLaClinica.length > 0) {
       return doctoresDeLaClinica;
     }
-    // Fallback o vista para el Doctor (Solo él mismo)
     return [
       { 
         id: currentUser?.id || "doctor_default", 
@@ -91,8 +89,7 @@ export default function AgendaAvanzadaPage() {
 
     appointments.forEach(cita => {
        const docId = cita.doctorId || currentUser?.id || "doctor_default";
-       
-       // Si la cita es de un doctor que no está en la vista actual (ej: un bug o vista restringida), la ignoramos
+      
        if (!DOCTORES.some(d => d.id === docId)) return;
 
        const start = cita.startTime; 

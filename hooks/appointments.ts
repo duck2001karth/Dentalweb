@@ -197,3 +197,54 @@ export function useDeleteAppointment() {
     isSuccess
   }
 }
+export interface RescheduleAppointmentInput {
+  appointmentId: string
+  newDate: string  
+  newTime: string
+  endTime?: string  
+  reason?: string
+  sendWhatsapp?: boolean
+}
+
+export function useRescheduleAppointment() {
+  const queryClient = useQueryClient()
+
+  const {
+    mutate: rescheduleAppointment,
+    isPending: isLoading,
+    isSuccess,
+  } = useMutation({
+    mutationFn: async ({
+      appointmentId,
+      newDate,
+      newTime,
+      endTime, 
+      reason,
+      sendWhatsapp,
+    }: RescheduleAppointmentInput) => {
+      const response = await fetch(`/api/citas/${appointmentId}/reschedule`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newDate, newTime, endTime, reason, sendWhatsapp }), // <-- Y enviarlo al body
+      })
+
+      if (!response.ok) {
+        const err = await response.json()
+        throw new Error(err.error || "Error al reprogramar la cita")
+      }
+
+      return response.json()
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["appointment", variables.appointmentId] })
+      queryClient.invalidateQueries({ queryKey: ["appointments"] })
+      queryClient.invalidateQueries({ queryKey: ["citas"] })
+    },
+  })
+
+  return {
+    rescheduleAppointment,
+    isLoading,
+    isSuccess,
+  }
+}
