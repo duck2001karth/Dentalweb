@@ -7,11 +7,9 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-
     await prisma.treatmentItem.deleteMany({
       where: { treatmentPlanId: id },
     });
-
     await prisma.treatmentPlan.update({
       where: { id },
       data: { totalCost: 0 },

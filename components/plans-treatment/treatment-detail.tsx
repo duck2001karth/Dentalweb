@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { ChevronLeft, AlertTriangle } from "lucide-react"
 
@@ -70,7 +70,11 @@ export function TreatmentPlanDetail({
 
   const [isDiagnosisModalOpen, setIsDiagnosisModalOpen] = useState(false)
   const [selectedDiagnosis, setSelectedDiagnosis] = useState("")
-  const [isConfirmClearOpen, setIsConfirmClearOpen] = useState(false)
+
+  // 📍 ESTADOS PARA EL MODAL ROJO DE BORRADO UNIFICADO
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
+  const [deleteMode, setDeleteMode] = useState<"ALL" | "SELECTED">("ALL")
+  const [itemsToDelete, setItemsToDelete] = useState<string[]>([])
 
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState(false)
   const [collaborators, setCollaborators] = useState<string[]>([])
@@ -90,7 +94,6 @@ export function TreatmentPlanDetail({
     setPlanItems(plan.items || []) 
   }, [plan.items])
 
-  // REFRESH LOCAL SIN RERENDERIZAR RUTA ENTERA (Evita refrescar citas)
   const refreshPlanData = useCallback(async () => {
     try {
       const res = await fetch(`/api/treatments?patientId=${patient?.id}`)
@@ -104,16 +107,26 @@ export function TreatmentPlanDetail({
     }
   }, [patient?.id, plan.id])
 
-  const baseTotal = planItems.reduce((acc, item) => {
-    const itemDscto = item.discount || 0
-    const itemCost = item.cost || 0
-    return acc + (itemCost - (itemCost * (itemDscto / 100)))
-  }, 0)
+  const { baseTotal, discountAmount, finalTotalCost, totalPaid, debt } = useMemo(() => {
+    const calculatedBaseTotal = planItems.reduce((acc, item) => {
+      const itemDscto = item.discount || 0
+      const itemCost = item.cost || 0
+      return acc + (itemCost - (itemCost * (itemDscto / 100)))
+    }, 0)
 
-  const discountAmount = baseTotal * (discountPercent / 100)
-  const finalTotalCost = baseTotal - discountAmount
-  const totalPaid = planItems.reduce((acc, item) => acc + (item.paidAmount || 0), 0)
-  const debt = Math.max(0, finalTotalCost - totalPaid)
+    const calculatedDiscountAmount = calculatedBaseTotal * (discountPercent / 100)
+    const calculatedFinalTotalCost = calculatedBaseTotal - calculatedDiscountAmount
+    const calculatedTotalPaid = planItems.reduce((acc, item) => acc + (item.paidAmount || 0), 0)
+    const calculatedDebt = Math.max(0, calculatedFinalTotalCost - calculatedTotalPaid)
+
+    return {
+      baseTotal: calculatedBaseTotal,
+      discountAmount: calculatedDiscountAmount,
+      finalTotalCost: calculatedFinalTotalCost,
+      totalPaid: calculatedTotalPaid,
+      debt: calculatedDebt
+    }
+  }, [planItems, discountPercent])
 
   const docList = patient?.clinicalDocument || (plan as any)?.patient?.clinicalDocument || []
   const signedConsents = docList.filter((doc: any) => doc.patientSignature)
@@ -147,7 +160,7 @@ export function TreatmentPlanDetail({
       const res = await fetch('/api/admin/catalog')
       if (res.ok) setCatalogItems((await res.json()).filter((item: any) => item.isActive))
     } catch (error) { 
-      toast({ title: "Error catálogo", variant: "destructive" }) 
+      toast({ title: "Error al obtener catálogo", variant: "destructive" }) 
     }
   }
 
@@ -166,14 +179,47 @@ export function TreatmentPlanDetail({
         })
       })
       if (!res.ok) throw new Error()
-      toast({ title: "Prestación agregada", variant: "success" })
+      toast({ title: "Prestación agregada exitosamente", variant: "success" })
       setIsCatalogModalOpen(false)
       await refreshPlanData()
-        toast({ title: "Error", variant: "destructive" }) 
     } catch (e) { 
-      toast({ title: "Error", variant: "destructive" }) 
+      toast({ title: "Error al agregar la prestación", variant: "destructive" }) 
     } finally { 
       setIsAddingProcedure(false) 
+    }
+  }
+
+  const confirmDeleteSelectedItems = (itemIds: string[]) => {
+    if (!itemIds || itemIds.length === 0) return
+    setItemsToDelete(itemIds)
+    setDeleteMode("SELECTED")
+    setIsDeleteModalOpen(true)
+  }
+  const executeDeleteSelected = async () => {
+    try {
+      const res = await fetch(`/api/treatments/${plan.id}/items`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds: itemsToDelete })
+      })
+
+      if (!res.ok) throw new Error()
+
+      toast({ 
+        title: "Prestaciones eliminadas", 
+        description: `Se eliminaron ${itemsToDelete.length} ítem(s).`, 
+        variant: "success" 
+      })
+      
+      setIsDeleteModalOpen(false)
+      setItemsToDelete([])
+      await refreshPlanData()
+    } catch (error) {
+      toast({ 
+        title: "Error al eliminar", 
+        description: "No se pudieron borrar los ítems seleccionados.", 
+        variant: "destructive" 
+      })
     }
   }
 
@@ -181,11 +227,19 @@ export function TreatmentPlanDetail({
     try {
       const res = await fetch(`/api/treatments/${plan.id}/clear`, { method: "DELETE" })
       if (!res.ok) throw new Error()
-      toast({ title: "Presupuesto vaciado", variant: "success" })
-      setIsConfirmClearOpen(false)
+      toast({ title: "Presupuesto vaciado correctamente", variant: "success" })
+      setIsDeleteModalOpen(false)
       await refreshPlanData()
     } catch (e) { 
-      toast({ title: "Error al vaciar", variant: "destructive" }) 
+      toast({ title: "Error al vaciar el presupuesto", variant: "destructive" }) 
+    }
+  }
+  const handleSetIsConfirmClearOpen = (open: boolean) => {
+    if (open) {
+      setDeleteMode("ALL")
+      setIsDeleteModalOpen(true)
+    } else {
+      setIsDeleteModalOpen(false)
     }
   }
 
@@ -219,7 +273,7 @@ export function TreatmentPlanDetail({
       setIsEvolutionModalOpen(false) 
       refreshPlanData()
     } catch (e) {
-      toast({ title: "Error al registrar evolución", variant: "destructive" })
+      toast({ title: "Error al registrar la evolución", variant: "destructive" })
     }
   }
 
@@ -233,9 +287,9 @@ export function TreatmentPlanDetail({
       if (!res.ok) throw new Error()
 
       setPlanItems(prev => prev.map(item => item.id === itemId ? { ...item, discount } : item))
-      toast({ title: "Descuento aplicado", variant: "success" })
+      toast({ title: "Descuento aplicado correctamente", variant: "success" })
     } catch (e) {
-      toast({ title: "Error al guardar descuento", variant: "destructive" })
+      toast({ title: "Error al guardar el descuento", variant: "destructive" })
     }
   }
 
@@ -273,10 +327,10 @@ export function TreatmentPlanDetail({
       ))
 
       setIsPaymentModalOpen(false)
-      toast({ title: "Abono registrado", variant: "success" })
+      toast({ title: "Abono registrado correctamente", variant: "success" })
       refreshPlanData()
     } catch (e) {
-      toast({ title: "Error al registrar pago", variant: "destructive" })
+      toast({ title: "Error al registrar el pago", variant: "destructive" })
     }
   }
 
@@ -298,96 +352,74 @@ export function TreatmentPlanDetail({
   const getSignatureSrc = (base64String: string) => base64String.includes('data:image') ? base64String : `data:image/png;base64,${base64String}`
 
   return (
-    <div className="w-full animate-in fade-in duration-500 pb-20 relative">
+    <div className="w-full animate-in fade-in duration-300 pb-20 relative font-sans antialiased">
       
-      {/* VISTA DE IMPRESIÓN OCULTA */}
       <TreatmentPrintView 
-        plan={{ ...plan, items: planItems }} 
-        patient={patient} 
-        patientAge={realPatientAge} 
-        baseTotal={baseTotal} 
-        discountPercent={discountPercent} 
-        discountAmount={discountAmount} 
-        finalTotalCost={finalTotalCost} 
-        commentText={commentText} 
-        autoRecoveredSignature={autoRecoveredSignature} 
-        getSignatureSrc={getSignatureSrc} 
-        printMode={printMode}
+        plan={{ ...plan, items: planItems }} patient={patient} patientAge={realPatientAge} 
+        baseTotal={baseTotal} discountPercent={discountPercent} discountAmount={discountAmount} 
+        finalTotalCost={finalTotalCost} commentText={commentText} autoRecoveredSignature={autoRecoveredSignature} 
+        getSignatureSrc={getSignatureSrc} printMode={printMode}
       />
 
       <div className="print-hidden">
-        {/* CABECERA */}
-        <div className="flex items-center gap-4 mb-6 pb-4 border-b border-border">
-          <Button variant="outline" size="icon" onClick={onBack} className="h-9 w-9 rounded-xl border-border bg-background hover:bg-muted">
-            <ChevronLeft className="h-4 w-4" />
+        <div className="flex items-center gap-4 mb-6 pb-4 border-b border-border/80">
+          <Button 
+            variant="outline" size="icon" onClick={onBack} 
+            className="h-10 w-10 rounded-xl border-border/80 bg-background hover:bg-muted text-foreground transition-all duration-200 cursor-pointer shadow-xs active:scale-95"
+          >
+            <ChevronLeft className="h-5 w-5 stroke-[2.2]" />
           </Button>
           <div>
-            <h2 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-              Plan de tratamiento <span className="text-[#008bcd] font-medium">#{plan.id?.slice(-6)?.toUpperCase()}</span>
+            <h2 className="text-2xl md:text-3xl font-extrabold text-foreground tracking-normal flex items-center gap-2.5">
+              Plan de tratamiento <span className="text-[#008bcd] font-bold">#{plan.id?.slice(-6)?.toUpperCase()}</span>
             </h2>
-            <p className="text-sm text-muted-foreground font-medium">Paciente: {patient?.firstName} {patient?.lastName}</p>
+            <p className="text-sm font-semibold text-muted-foreground mt-0.5">
+              Paciente: <span className="text-foreground font-bold">{patient?.firstName} {patient?.lastName}</span>
+            </p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* SIDEBAR DE CITAS Y MÉTRICAS */}
           <TreatmentSidebar 
-            plan={plan} 
-            patient={patient} 
-            finalTotalCost={finalTotalCost}
-            discountPercent={discountPercent} 
-            setTempDiscount={setTempDiscount}
-            setIsDiscountModalOpen={setIsDiscountModalOpen} 
-            totalPaid={totalPaid}
-            debt={debt} 
-            handleCotizarConvenio={() => setIsMultiConvenioOpen(true)}
-            setIsCollaboratorsOpen={setIsCollaboratorsOpen} 
-            collaborators={collaborators}
-            appointmentList={patient?.appointments || patient?.citas || []} 
-            planItems={planItems}
+            plan={plan} patient={patient} finalTotalCost={finalTotalCost} discountPercent={discountPercent} 
+            setTempDiscount={setTempDiscount} setIsDiscountModalOpen={setIsDiscountModalOpen} 
+            totalPaid={totalPaid} debt={debt} handleCotizarConvenio={() => setIsMultiConvenioOpen(true)}
+            setIsCollaboratorsOpen={setIsCollaboratorsOpen} collaborators={collaborators}
+            appointmentList={patient?.appointments || patient?.citas || []} planItems={planItems}
           />
 
-          {/* PANEL PRINCIPAL */}
           <div className="lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
-            <div className="bg-card rounded-xl border border-border shadow-xs overflow-hidden">
-              <div className="p-4 bg-slate-50 dark:bg-muted/20 border-b border-border">
+            <div className="bg-card rounded-2xl border border-border/80 shadow-xs overflow-hidden">
+              <div className="p-4 bg-muted/20 border-b border-border/80">
                 <OdontogramaTab patientId={patient?.id} planId={plan.id} isPlanView={true} onPlanUpdate={refreshPlanData} />
               </div>
             </div>
 
-            {/* TABLA DE PRESTACIONES */}
             <TreatmentTable 
               planItems={planItems}
               setIsSectionModalOpen={setIsSectionModalOpen}
               openCatalogModal={openCatalogModal}
               setIsDiagnosisModalOpen={setIsDiagnosisModalOpen}
-              setIsConfirmClearOpen={setIsConfirmClearOpen}
+              setIsConfirmClearOpen={handleSetIsConfirmClearOpen} 
+              onDeleteSelectedItems={confirmDeleteSelectedItems} 
               openEvolutionModal={openEvolutionModal}
               onUpdateItemDiscount={handleUpdateItemDiscount}
               onSelectPrintMode={(mode: string) => setPrintMode(mode)}
               onOpenPaymentModal={handleOpenPaymentModal}
             />
 
-            {/* COMPONENTE EXTRA EXTRAÍDO */}
             <TreatmentExtraSection 
-              patient={patient}
-              autoRecoveredSignature={autoRecoveredSignature}
-              isSignaturePending={isSignaturePending}
-              getSignatureSrc={getSignatureSrc}
-              setIsSignatureModalOpen={setIsSignatureModalOpen}
-              signedConsents={signedConsents}
-              commentText={commentText}
-              setCommentText={setCommentText}
-              isEditingComments={isEditingComments}
-              setIsEditingComments={setIsEditingComments}
-              handleSaveComments={handleSaveComments}
-              isSavingComment={isSavingComment}
+              patient={patient} autoRecoveredSignature={autoRecoveredSignature}
+              isSignaturePending={isSignaturePending} getSignatureSrc={getSignatureSrc}
+              setIsSignatureModalOpen={setIsSignatureModalOpen} signedConsents={signedConsents}
+              commentText={commentText} setCommentText={setCommentText}
+              isEditingComments={isEditingComments} setIsEditingComments={setIsEditingComments}
+              handleSaveComments={handleSaveComments} isSavingComment={isSavingComment}
             />
           </div>
         </div>
       </div>
 
-      {/* MODALES DEL PLAN */}
       <TreatmentPlanModals 
         plan={{ ...plan, items: planItems }} patient={patient} currentUser={currentUser}
         isSectionModalOpen={isSectionModalOpen} setIsSectionModalOpen={setIsSectionModalOpen} sectionName={sectionName} setSectionName={setSectionName} handleAddSection={() => setIsSectionModalOpen(false)}
@@ -399,22 +431,35 @@ export function TreatmentPlanDetail({
         isPaymentModalOpen={isPaymentModalOpen} setIsPaymentModalOpen={setIsPaymentModalOpen} selectedItemToPay={selectedItemToPay} paymentAmount={paymentAmount} setPaymentAmount={setPaymentAmount} paymentMethod={paymentMethod} setPaymentMethod={setPaymentMethod} handleSavePayment={handleSavePayment}
       />
 
-      {/* FIRMA Y VACIAR */}
       <SignaturePadModal isOpen={isSignatureModalOpen} setIsOpen={setIsSignatureModalOpen} onSaveSignature={handleSaveSignature} patientName={`${patient?.firstName || ''} ${patient?.lastName || ''}`} />
       <AssignCollaboratorsModal isOpen={isCollaboratorsOpen} setIsOpen={setIsCollaboratorsOpen} doctorsList={[]} currentCollaborators={collaborators} onSaveCollaborators={(sel) => setCollaborators(sel)} />
 
-      <AlertDialog open={isConfirmClearOpen} onOpenChange={setIsConfirmClearOpen}>
-        <AlertDialogContent className="bg-card border-border rounded-[24px] shadow-2xl sm:max-w-[420px]">
+      {/* 💡 MODAL ROJO UNIFICADO (Sirve para vaciar TODO o para BORRAR SELECCIÓN) */}
+      <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
+        <AlertDialogContent className="bg-card border border-border/80 rounded-2xl shadow-2xl sm:max-w-[420px] p-6">
           <AlertDialogHeader className="flex flex-col items-center text-center space-y-3">
-            <div className="w-14 h-14 bg-destructive/10 text-destructive rounded-2xl flex items-center justify-center">
-              <AlertTriangle className="w-7 h-7" />
+            <div className="w-14 h-14 bg-destructive/10 text-destructive rounded-2xl flex items-center justify-center border border-destructive/20">
+              <AlertTriangle className="w-7 h-7 stroke-[2.2]" />
             </div>
-            <AlertDialogTitle className="text-xl font-black text-foreground">¿Vaciar todo el presupuesto?</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm text-muted-foreground">Esta acción eliminará de forma permanente todas las prestaciones cargadas a este plan de tratamiento.</AlertDialogDescription>
+            <AlertDialogTitle className="text-xl font-bold text-foreground">
+              {deleteMode === "ALL" ? "¿Vaciar todo el presupuesto?" : "¿Eliminar prestaciones?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs font-semibold text-muted-foreground leading-relaxed">
+              {deleteMode === "ALL" 
+                ? "Esta acción eliminará de forma permanente todas las prestaciones cargadas a este plan de tratamiento."
+                : `¿Estás seguro de que deseas eliminar las ${itemsToDelete.length} prestación(es) seleccionada(s)? Esta acción es irreversible.`}
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="w-full flex sm:justify-center gap-3 mt-4">
-            <AlertDialogCancel className="border-border hover:bg-accent text-foreground font-bold rounded-xl h-11 px-5">Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClearPlan} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground font-bold rounded-xl h-11 px-6 shadow-xs">Sí, Vaciar Presupuesto</AlertDialogAction>
+            <AlertDialogCancel className="border-border/80 hover:bg-muted text-foreground font-bold rounded-xl h-10 px-5 text-xs cursor-pointer">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={deleteMode === "ALL" ? handleClearPlan : executeDeleteSelected} 
+              className="bg-destructive hover:bg-destructive/90 text-white font-bold rounded-xl h-10 px-6 shadow-md text-xs transition-all active:scale-95 cursor-pointer"
+            >
+              {deleteMode === "ALL" ? "Sí, Vaciar Presupuesto" : "Sí, Eliminar"}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

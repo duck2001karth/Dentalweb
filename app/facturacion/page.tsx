@@ -4,7 +4,7 @@ import React, { useState } from "react"
 import { Search, CreditCard } from "lucide-react"
 import { AppLayout } from "@/components/layouts/app-layout"
 import { Input } from "@/components/ui/input"
-import BillingTab from "@/components/patients-billing/billing-tab"
+import BillingTab from "@/components/patients-filepayments/billing-tab"
 
 export default function FacturacionPage() {
   const [searchTerm, setSearchTerm] = useState("")

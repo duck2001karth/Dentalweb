@@ -33,7 +33,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const { searchParams } = new URL(request.url)
     const forceDelete = searchParams.get("force") === "true"
 
-    // SI ES FORCE DELETE (Borrado Físico Definitivo)
     if (forceDelete) {
       await prisma.treatmentItem.deleteMany({ where: { treatmentPlanId: id } })
       await prisma.odontogramRecord.deleteMany({ where: { planId: id } })

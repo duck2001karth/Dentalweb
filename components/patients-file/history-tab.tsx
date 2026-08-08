@@ -46,14 +46,11 @@ export function HistorialTab({ patientId }: { patientId: string }) {
 
   const [noteType, setNoteType] = useState<"EVOLUTION" | "PRESCRIPTION" | "GENERAL">("EVOLUTION")
   const [noteContent, setNoteContent] = useState("")
-  // ESTADO NUEVO PARA EL ESTATUS
   const [noteStatus, setNoteStatus] = useState<string>(treatmentStatuses.IN_PROGRESS.value)
   const [fileBase64, setFileBase64] = useState<string | null>(null)
   const [fileName, setFileName] = useState<string | null>(null)
   const [profSignature, setProfSignature] = useState<string | null>(null)
   const [patientSignature, setPatientSignature] = useState<string | null>(null)
-
-  // FILTRADO
   const filteredNotes = clinicalNotes?.filter((note: any) => {
     if (monthFilter === "actual" && !isThisMonth(new Date(note.createdAt))) return false
     if (typeFilter === "evoluciones" && note.type !== "EVOLUTION") return false
@@ -94,7 +91,6 @@ export function HistorialTab({ patientId }: { patientId: string }) {
       try {
         const res = await fetch(`/api/clinical-notes/${editingId}`, {
           method: "PATCH", headers: { "Content-Type": "application/json" },
-          // INCLUIMOS EL STATUS EN EL PATCH
           body: JSON.stringify({ content: noteContent, status: noteStatus, fileUrl: fileBase64 || null, professionalSignature: profSignature || null, patientSignature: patientSignature || null })
         });
         if (!res.ok) throw new Error()
@@ -103,7 +99,6 @@ export function HistorialTab({ patientId }: { patientId: string }) {
       } catch (error) { toast({ title: "Error al actualizar", variant: "destructive" }) } finally { setIsSavingEdit(false) }
     } else {
       createClinicalNote(
-        // INCLUIMOS EL STATUS EN EL POST
         { type: noteType, content: noteContent, status: noteStatus, authorId: currentUser?.id, patientId, fileUrl: fileBase64 || undefined, professionalSignature: profSignature || undefined, patientSignature: patientSignature || undefined } as any, 
         { onSuccess: () => { toast({ title: "Registro guardado", variant: "success" }); setIsNoteModalOpen(false); resetForm(); refetch() },
           onError: () => toast({ title: "Error al guardar", variant: "destructive" }) }
@@ -134,7 +129,6 @@ export function HistorialTab({ patientId }: { patientId: string }) {
     if (!canEditClinicalData) return;
     resetForm(); 
     setNoteType(type); 
-    // ESTABLECEMOS EL ESTADO POR DEFECTO DEPENDIENDO DEL TIPO
     setNoteStatus(type === "EVOLUTION" ? treatmentStatuses.IN_PROGRESS.value : documentStatuses.COMPLETED.value);
     setIsNoteModalOpen(true)
   }

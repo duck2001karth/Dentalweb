@@ -12,40 +12,41 @@ export async function PATCH(
 
     if (!newDate || !newTime) {
       return NextResponse.json(
-        { error: "La nueva fecha y hora de inicio son obligatorias" },
+        { error: "La fecha y hora son obligatorias" },
         { status: 400 }
       );
     }
-    const currentAppointment = await prisma.appointment.findUnique({
-      where: { id },
-      include: { patient: true, doctor: true },
-    });
 
-    if (!currentAppointment) {
+    const cleanDateStr = newDate.includes("T") 
+      ? newDate.split("T")[0] 
+      : newDate;
+    const combinedDateTime = new Date(`${cleanDateStr}T${newTime}:00`);
+
+    if (isNaN(combinedDateTime.getTime())) {
       return NextResponse.json(
-        { error: "La cita seleccionada no existe" },
-        { status: 404 }
+        { error: "La fecha enviada es inválida" },
+        { status: 400 }
       );
     }
 
-    const combinedDateTime = new Date(`${newDate}T${newTime}:00`);
     const updatedAppointment = await prisma.appointment.update({
       where: { id },
       data: {
         date: combinedDateTime,
         startTime: newTime,
-        ...(endTime && { endTime }), 
+        endTime: endTime || newTime,
+        reason: reason || "Reprogramación de turno",
         status: "SCHEDULED",
-        ...(reason && { reason }),
       },
     });
 
     return NextResponse.json({
-      message: "Cita reprogramada exitosamente",
-      appointment: updatedAppointment,
+      success: true,
+      message: "Cita reprogramada correctamente",
+      cita: updatedAppointment,
     });
-  } catch (error) {
-    console.error("Error al reprogramar la cita:", error);
+  } catch (error: any) {
+    console.error("Error en reschedule API:", error);
     return NextResponse.json(
       { error: "Error al procesar la reprogramación" },
       { status: 500 }

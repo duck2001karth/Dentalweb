@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation" 
-import { Loader2, User, Calendar as CalendarIcon, CreditCard, ShieldAlert, Pill, Trash2 } from "lucide-react"
+import { 
+  Loader2, User, CreditCard, ShieldAlert, Pill, Trash2, 
+  Calendar as CalendarIcon, Banknote 
+} from "lucide-react"
 
 import { AppLayout } from "@/components/layouts/app-layout"
 import { Button } from "@/components/ui/button"
@@ -15,6 +18,8 @@ import { useGetPatient, useDeletePatient } from "@/hooks/patients"
 import { DatosPersonalesTab } from "@/components/patients/perfil-patient"
 import { FichaClinicaLayout } from "@/components/patients/file-clinic"
 import { PatientTreatmentPlans } from "@/components/plans-treatment/patient-treatment"
+import { PayBillingLayout } from "@/components/patients/file-paymentsbilling"
+import { PaymentReceiptModal } from "@/components/patients-receivepay/payment-tab"
 
 const FICHA_CLINICA_TABS = [
   "ficha",
@@ -29,6 +34,15 @@ const FICHA_CLINICA_TABS = [
   "evoluciones"
 ]
 
+const FACTURACION_PAGOS_TABS = [
+  "facturacion",
+  "pagos",
+  "documentos_emitidos",
+  "devoluciones",
+  "eliminados",
+  "balance"
+]
+
 export default function FichaClinicaPage() {
   const params = useParams()
   const router = useRouter()
@@ -41,9 +55,14 @@ export default function FichaClinicaPage() {
   const initialTab = tabFromUrl === "ficha" ? "historial" : (tabFromUrl || "datos")
   const [activeTab, setActiveTab] = useState(initialTab) 
   
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false) 
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false) 
 
-  const { patient, isLoading: isLoadingPatient } = useGetPatient(patientId)
+  const patientHook = useGetPatient(patientId) as any
+  const patient = patientHook?.patient
+  const isLoadingPatient = patientHook?.isLoading
+  const refetchPatient = patientHook?.refetch || patientHook?.mutate || (() => {})
+
   const { deletePatient, isLoading: isDeleting } = useDeletePatient() 
 
   useEffect(() => {
@@ -77,6 +96,13 @@ export default function FichaClinicaPage() {
     router.replace(`/paciente/${patientId}?tab=${newTab}`, { scroll: false })
   }
 
+  const patientPlans = (patient as any)?.treatmentPlans || (patient as any)?.plans || []
+  const totalPatientDebt = patientPlans.reduce((acc: number, p: any) => {
+    const cost = p.totalCost || 0
+    const paid = p.totalPaid || 0
+    return acc + Math.max(0, cost - paid)
+  }, 0)
+
   if (isLoadingPatient) {
     return (
       <AppLayout>
@@ -106,8 +132,9 @@ export default function FichaClinicaPage() {
 
   return (
     <AppLayout>
-      <div className="flex-1 flex flex-col w-full bg-background min-h-screen relative pb-12">
+      <div className="flex-1 flex flex-col w-full bg-background min-h-screen relative pb-12 font-sans antialiased">
         
+        {/* MODAL ELIMINAR PACIENTE */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent className="sm:max-w-[425px] bg-background border-border">
             <DialogHeader>
@@ -127,7 +154,16 @@ export default function FichaClinicaPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-        
+        <PaymentReceiptModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        patient={patient}
+        plans={patientPlans} 
+        debt={totalPatientDebt}
+        onPaymentSuccess={() => {
+          if (refetchPatient) refetchPatient()
+        }}
+      />
         <div className="bg-card w-full shadow-sm z-10 relative overflow-hidden border-b border-border print:hidden">
           
           <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
@@ -148,23 +184,23 @@ export default function FichaClinicaPage() {
               </div>
 
               <div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-tight">
+                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-normal">
                   {patient.firstName} {patient.lastName}
                 </h1>
                 
                 <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-muted text-muted-foreground border border-border">
+                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-muted text-muted-foreground border border-border">
                     ID: {patient.id.split("-")[0].toUpperCase()}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-500/10 text-[#008bcd] dark:text-blue-400 border border-blue-500/20">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-500/10 text-[#008bcd] dark:text-blue-400 border border-blue-500/20">
                     <CreditCard size={13}/> CI: {patient.ci}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                     <User size={13}/> {calculateAge(patient.birthDate)} años
                   </span>
                 </div>
                 
-                <div className="flex items-center gap-2 mt-3 text-sm font-medium text-muted-foreground">
+                <div className="flex items-center gap-2 mt-3 text-sm font-semibold text-muted-foreground">
                   <span className="relative flex h-2.5 w-2.5">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
@@ -208,48 +244,71 @@ export default function FichaClinicaPage() {
           </div>
         </div>
 
-        {/* --- BARRA DE PESTAÑAS --- */}
+        {/* BARRA PRINCIPAL DE PESTAÑAS */}
         <div className="bg-card border-b border-border w-full shadow-sm z-0 sticky top-0 print:hidden">
-          <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex overflow-x-auto custom-scrollbar">
-            <button 
-              onClick={() => handleMainMenuClick("datos")}
-              className={cn("px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px]", activeTab === "datos" ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50")}
-            >
-              Datos personales
-            </button>
-            <button 
-              onClick={() => handleMainMenuClick("historial")} 
-              className={cn(
-                "px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px]", 
-                FICHA_CLINICA_TABS.includes(activeTab) 
-                  ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" 
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
-              )}
-            >
-              Ficha clínica
-            </button>
-            <button 
-              onClick={() => handleMainMenuClick("planes")}
-              className={cn("px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px]", activeTab === "planes" ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50")}
-            >
-              Planes de tratamiento
-            </button>
-
-            <button className="px-6 py-4 text-muted-foreground/50 font-semibold text-sm whitespace-nowrap cursor-not-allowed border-b-[3px] border-transparent">
-              Facturación y pagos
-            </button>
+          <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex overflow-x-auto custom-scrollbar items-center justify-between">
             
-            <div className="ml-auto flex items-center">
+            <div className="flex items-center">
               <button 
-                onClick={() => router.push(`/agendavand?patientId=${patientId}`)} 
-                className="px-6 h-full text-[#008bcd] dark:text-blue-400 hover:bg-blue-500/10 font-bold text-sm whitespace-nowrap flex items-center gap-2 transition-colors border-l border-border"
+                onClick={() => handleMainMenuClick("datos")}
+                className={cn("px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px] cursor-pointer", activeTab === "datos" ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50")}
               >
-                <CalendarIcon size={16} /> Agendar Cita
+                Datos personales
+              </button>
+              
+              <button 
+                onClick={() => handleMainMenuClick("historial")} 
+                className={cn(
+                  "px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px] cursor-pointer", 
+                  FICHA_CLINICA_TABS.includes(activeTab) 
+                    ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" 
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                Ficha clínica
+              </button>
+              
+              <button 
+                onClick={() => handleMainMenuClick("planes")}
+                className={cn("px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px] cursor-pointer", activeTab === "planes" ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+              >
+                Planes de tratamiento
+              </button>
+
+              <button 
+                onClick={() => handleMainMenuClick("facturacion")}
+                className={cn(
+                  "px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px] cursor-pointer", 
+                  FACTURACION_PAGOS_TABS.includes(activeTab) 
+                    ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" 
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                )}
+              >
+                Facturación y pagos
               </button>
             </div>
+
+            {/* BOTONES EXTREMO DERECHO */}
+            <div className="flex items-center gap-2 py-2 shrink-0">
+              <button 
+                onClick={() => router.push(`/agendavand?patientId=${patientId}`)} 
+                className="px-4 h-10 text-[#008bcd] dark:text-blue-400 hover:bg-blue-500/10 font-bold text-xs whitespace-nowrap flex items-center gap-2 transition-colors rounded-xl border border-transparent cursor-pointer"
+              >
+                <CalendarIcon size={15} /> Agendar Cita
+              </button>
+
+              <Button
+                onClick={() => setIsPaymentModalOpen(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs h-10 px-4 rounded-xl shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+              >
+                <Banknote size={16} className="stroke-[2.5]" /> Recibir pago
+              </Button>
+            </div>
+
           </div>
         </div>
 
+        {/* CONTENIDO PRINCIPAL */}
         <div className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-8">
           
           {activeTab === "datos" && (
@@ -259,12 +318,22 @@ export default function FichaClinicaPage() {
               onDeleteRequest={() => setIsDeleteDialogOpen(true)} 
             />
           )}
+
           {FICHA_CLINICA_TABS.includes(activeTab) && (
             <FichaClinicaLayout patientId={patientId} />
           )}
 
           {activeTab === "planes" && (
             <PatientTreatmentPlans patientId={patientId} />
+          )}
+
+          {FACTURACION_PAGOS_TABS.includes(activeTab) && (
+            <PayBillingLayout 
+              patientId={patientId}
+              patient={patient}
+              plans={patientPlans}
+              onRefreshData={refetchPatient}
+            />
           )}
 
         </div>

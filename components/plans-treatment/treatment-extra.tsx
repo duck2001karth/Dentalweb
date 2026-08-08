@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { ConsentPrintView } from "./consent-print-view"
 
 interface TreatmentExtraProps {
   patient: any
@@ -76,19 +75,7 @@ export function TreatmentExtraSection({
 
   return (
     <div className="space-y-6">
-      
-      {/* VISTA PREVIA IMPRESA OCULTA */}
-      <ConsentPrintView 
-        patient={patient}
-        consent={selectedConsent}
-        signatureBase64={autoRecoveredSignature}
-        getSignatureSrc={getSignatureSrc}
-      />
-
-      {/* CONTENEDOR PRINCIPAL */}
       <div className="bg-card rounded-2xl border border-border shadow-sm p-6 space-y-6">
-        
-        {/* ENCABEZADO DE FIRMA */}
         <div className="border-b border-border pb-4 flex justify-between items-center">
           <div>
             <h4 className="text-lg font-bold flex items-center gap-2 text-foreground">
@@ -97,8 +84,6 @@ export function TreatmentExtraSection({
             <p className="text-xs text-muted-foreground">(Se incluirán en la impresión de evoluciones)</p>
           </div>
         </div>
-
-        {/* ESTADO DE FIRMA */}
         {autoRecoveredSignature ? (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-5 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl">
             <div className="flex items-center gap-4">
@@ -174,24 +159,6 @@ export function TreatmentExtraSection({
                     <span className="text-[10px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 px-2.5 py-1 rounded-md mr-1">
                       ✓ Firmado
                     </span>
-
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => handleOpenPdf(doc)}
-                      className="h-8 text-xs font-semibold text-foreground border-border hover:bg-accent rounded-lg"
-                    >
-                      <Eye className="w-3.5 h-3.5 mr-1 text-[#008bcd]" /> Ver PDF
-                    </Button>
-
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => toast({ title: "Documento vinculado", description: "Documento asociado al presupuesto activo.", variant: "success" })}
-                      className="h-8 text-xs font-semibold text-foreground border-border hover:bg-accent rounded-lg"
-                    >
-                      <Link2 className="w-3.5 h-3.5 mr-1 text-emerald-500" /> Vincular
-                    </Button>
                   </div>
 
                 </div>

@@ -4,7 +4,7 @@ import React, { useState } from "react"
 import { Search, Package } from "lucide-react"
 import { AppLayout } from "@/components/layouts/app-layout"
 import { Input } from "@/components/ui/input"
-import InventoryTab from "@/components/patients-billing/inventory-tab"
+import InventoryTab from "@/components/patients-filepayments/inventory-tab"
 
 export default function InventarioPage() {
   const [searchTerm, setSearchTerm] = useState("")

@@ -1,8 +1,10 @@
-/* 1. IMPORTACIÓN OBLIGATORIA PARA TAILWIND V4 */
+
 @import "tailwindcss";
 
-/* 2. DECLARACIÓN DE VARIABLES PARA EL TEMA DE V4 */
 @theme {
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-muted: hsl(var(--muted));
@@ -27,7 +29,7 @@
   --radius-lg: var(--radius);
 }
 
-/* 3. TUS VARIABLES ORIGINALES (Modo Claro y Oscuro) */
+/* 3. VARIABLES ORIGINALES (Modo Claro y Oscuro) */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -74,9 +76,8 @@
     --ring: 216 34% 17%;
     --radius: 0.5rem;
   }
-} /* <-- Esta es la llave que te faltaba */
+}
 
-/* 4. ESTILOS BASE */
 @layer base {
   * {
     border-color: var(--color-border);
@@ -84,11 +85,13 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "rlig" 1, "calt" 1;
   }
 }
 
-/* 5. TUS CLASES Y ESTILOS DE COMPONENTES */
 .PopoverContent {
   width: var(--radix-popover-trigger-width);
   max-height: var(--radix-popover-content-available-height);
@@ -154,5 +157,3 @@
   0% { opacity: 0; transform: translateY(15px); }
   100% { opacity: 1; transform: translateY(0%); }
 }
-
-

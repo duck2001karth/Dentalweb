@@ -42,7 +42,7 @@ export default function PlansTreatmentHubPage() {
   const [plans, setPlans] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedStatus, setSelectedStatus] = useState<string>("ALL") // ALL, ACTIVE, DRAFT, COMPLETED
+  const [selectedStatus, setSelectedStatus] = useState<string>("ALL") 
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -61,7 +61,6 @@ export default function PlansTreatmentHubPage() {
     fetchPlans()
   }, [])
 
-  // Procesamiento de avance y métricas individuales
   const processedPlans = useMemo(() => {
     return plans.map(plan => {
       const totalItems = plan.items?.length || 0
@@ -75,7 +74,6 @@ export default function PlansTreatmentHubPage() {
     })
   }, [plans])
 
-  // Filtrado reactivo por término de búsqueda y estado
   const filteredPlans = useMemo(() => {
     return processedPlans.filter(plan => {
       const matchesSearch = 
@@ -91,7 +89,6 @@ export default function PlansTreatmentHubPage() {
     })
   }, [processedPlans, searchTerm, selectedStatus])
 
-  // Métricas globales reactivas
   const globalPresupuesto = processedPlans.reduce((acc, plan) => acc + (plan.totalCost || 0), 0)
   const globalAbonado = processedPlans.reduce((acc, plan) => acc + (plan.totalPaid || 0), 0)
   const globalSaldo = Math.max(0, globalPresupuesto - globalAbonado)
@@ -99,8 +96,6 @@ export default function PlansTreatmentHubPage() {
   return (
     <AppLayout>
       <div className="w-full px-4 md:px-6 py-6 lg:py-8 animate-in fade-in duration-500 flex flex-col min-h-[calc(100vh-70px)]">
-
-        {/* CABECERA CON BÚSQUEDA Y ACCIONES */}
         <div className="flex flex-col md:flex-row items-center justify-between bg-card px-6 py-6 md:py-8 rounded-2xl shadow-xs border border-border mb-8 gap-6 shrink-0 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-80 h-80 bg-[#008bcd]/5 rounded-full blur-3xl pointer-events-none"></div>
 

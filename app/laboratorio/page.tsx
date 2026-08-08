@@ -4,7 +4,7 @@ import React, { useState } from "react"
 import { Search, FlaskConical } from "lucide-react"
 import { AppLayout } from "@/components/layouts/app-layout"
 import { Input } from "@/components/ui/input"
-import LaboratoryTab from "@/components/patients-billing/laboratory-tab"
+import LaboratoryTab from "@/components/patients-filepayments/laboratory-tab"
 
 export default function LaboratoriosPage() {
   const [searchTerm, setSearchTerm] = useState("")
