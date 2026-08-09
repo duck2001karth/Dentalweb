@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  //directUrl = env("DIRECT_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -541,10 +541,11 @@ model Payment {
   amount          Float         
   method          PaymentMethod @default(CASH)
   status          PaymentState  @default(COMPLETED)
+  reference       String?
   receiptNumber   String?       @unique // Nro de factura o recibo interno fiscal
+  receiptImage    String?
   notes           String?       @db.Text
 
-  // Relaciones
   patientId       String
   patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
   

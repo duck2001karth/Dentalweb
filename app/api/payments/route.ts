@@ -87,13 +87,11 @@ export async function POST(request: Request) {
         where: { id: planId },
         data: {
           totalPaid: totalPaidForPlan,
-          // Opcional: si todo está saldado, podemos marcar el estado como COMPLETED
           status: allItemsPaid ? "COMPLETED" : undefined,
         },
       });
     }
 
-    // 📍 5. Registramos la transacción de cobro en el historial financiero
     const newPaymentRecord = await prisma.payment.create({
       data: {
         patientId,
