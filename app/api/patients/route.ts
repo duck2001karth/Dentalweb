@@ -50,7 +50,6 @@ export async function POST(request: Request) {
       gestante: input.gestante === true, 
       observaciones: input.observaciones || undefined,
       
-      // SOLUCIÓN: Agregamos explícitamente las alertas médicas para que Prisma las guarde
       medicalAlerts: input.medicalAlerts || undefined,
     }
 
@@ -58,7 +57,6 @@ export async function POST(request: Request) {
        return NextResponse.json({ error: "El campo Cédula de Identidad (CI) es obligatorio." }, { status: 400 })
     }
 
-    // 2. Guardamos en PostgreSQL
     const newPatient = await prisma.patient.create({
       data: patientDataToSave,
     })
@@ -75,7 +73,6 @@ export async function POST(request: Request) {
       )
     }
 
-    // Retornamos el mensaje real del error por si hay fallas de esquema
     return NextResponse.json(
       { error: error.message || "Error interno del servidor al crear el paciente" }, 
       { status: 500 }
@@ -83,7 +80,7 @@ export async function POST(request: Request) {
   }
 }
 
-// GET: Para obtener la lista de pacientes (Directorio y Buscador)
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)

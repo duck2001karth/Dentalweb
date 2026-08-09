@@ -2,11 +2,35 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next" 
 import { prisma } from "@/lib/db"
 
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+
+    const plan = await prisma.treatmentPlan.findUnique({
+      where: { id },
+      include: {
+        doctor: true,
+        patient: true,
+        items: true,
+      }
+    })
+
+    if (!plan) {
+      return NextResponse.json({ error: "Plan de tratamiento no encontrado" }, { status: 404 })
+    }
+
+    return NextResponse.json({ plan })
+  } catch (error) {
+    console.error("Error en GET /api/treatments/[id]:", error)
+    return NextResponse.json({ error: "Error al obtener el plan" }, { status: 500 })
+  }
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await request.json()
-    const { action, input } = body
+    const { action, input, collaborators, ...restBody } = body
 
     if (action === "RESTORE") {
       const restoredPlan = await prisma.treatmentPlan.update({
@@ -16,13 +40,46 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ plan: restoredPlan, message: "Plan restaurado con éxito" })
     }
 
+    if (collaborators !== undefined) {
+      let collaboratorNames: string[] = []
+
+      if (Array.isArray(collaborators) && collaborators.length > 0) {
+        const users = await prisma.user.findMany({
+          where: { id: { in: collaborators } },
+          select: { id: true, name: true, specialty: true }
+        })
+
+        collaboratorNames = users.map(u => u.name || "Dr. Especialista")
+      }
+
+      const updatedPlan = await prisma.treatmentPlan.update({
+        where: { id },
+        data: {
+          collaborators: collaboratorNames 
+        },
+        include: {
+          doctor: true,
+          items: true
+        }
+      })
+
+      return NextResponse.json({ plan: updatedPlan, message: "Colaboradores actualizados con éxito" })
+    }
+
+    const updateData = input ? { ...input } : { ...restBody }
+
     const updatedPlan = await prisma.treatmentPlan.update({
       where: { id },
-      data: { ...input }
+      data: updateData,
+      include: {
+        doctor: true,
+        items: true
+      }
     })
 
     return NextResponse.json({ plan: updatedPlan })
   } catch (error) {
+    console.error("Error en PATCH /api/treatments/[id]:", error)
     return NextResponse.json({ error: "Error al actualizar el plan" }, { status: 500 })
   }
 }
@@ -40,6 +97,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
       return NextResponse.json({ success: true, message: "Plan destruido permanentemente de la base de datos" })
     }
+
     await prisma.treatmentPlan.update({
       where: { id },
       data: { status: "CANCELLED" }
@@ -47,7 +105,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
     return NextResponse.json({ success: true, message: "Plan movido a la papelera (Anulado)" })
   } catch (error) {
-    console.error("Error en DELETE:", error)
+    console.error("Error en DELETE /api/treatments/[id]:", error)
     return NextResponse.json({ error: "Error al procesar la eliminación" }, { status: 500 })
   }
 }

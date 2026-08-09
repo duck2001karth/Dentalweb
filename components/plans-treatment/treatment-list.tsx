@@ -291,9 +291,18 @@ export function TreatmentPlanList({
                   </div>
 
                   <div>
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Colaboradores</p>
-                    <p className="font-semibold text-muted-foreground text-sm flex items-center gap-2">
-                      <Users className="w-4 h-4 opacity-40 shrink-0" /> Sin colaboradores
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+                      Colaboradores
+                    </p>
+                    <p className="font-semibold text-foreground text-sm flex items-center gap-2">
+                      <Users className="w-4 h-4 text-[#008bcd] shrink-0" />
+                      {Array.isArray(plan.collaborators) && plan.collaborators.length > 0 ? (
+                        <span className="font-bold text-[#008bcd]">
+                          {plan.collaborators.join(", ")}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground font-medium">Sin colaboradores</span>
+                      )}
                     </p>
                   </div>
 

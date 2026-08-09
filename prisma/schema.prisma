@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  //directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -371,6 +371,8 @@ model TreatmentPlan {
   doctorId    String?
   doctor      User?    @relation(fields: [doctorId], references: [id])
   
+  collaborators String[] @default([])
+
   name        String   // Ej: "Ortodoncia Invisible", "Rehabilitación Superior"
   status      String   @default("DRAFT") // DRAFT (Diagnóstico), ACTIVE (En Curso), COMPLETED (Finalizado)
   

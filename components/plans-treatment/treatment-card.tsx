@@ -70,12 +70,20 @@ export function TreatmentPlanCard({ plan, onClick, onDelete }: { plan: any, onCl
             </div>
           </div>
         </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest mb-1.5">Colaboradores</p>
-          <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-muted-foreground shrink-0 stroke-[2]" />
-            <p className="text-xs font-semibold text-foreground tracking-normal">{plan.collaborators || "Sin colaboradores"}</p>
-          </div>
+          <div>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">
+            Colaboradores
+          </p>
+          <p className="font-semibold text-foreground text-sm flex items-center gap-2">
+            <Users className="w-4 h-4 text-[#008bcd] shrink-0" />
+            {Array.isArray(plan.collaborators) && plan.collaborators.length > 0 ? (
+              <span className="font-bold text-[#008bcd]">
+                {plan.collaborators.join(", ")}
+              </span>
+            ) : (
+              <span className="text-muted-foreground font-medium">Sin colaboradores</span>
+            )}
+          </p>
         </div>
         <div>
           <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest mb-1.5">Última Cita</p>

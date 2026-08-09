@@ -106,7 +106,6 @@ export function TreatmentDetailDialogs({
 }: TreatmentDetailDialogsProps) {
   return (
     <>
-      {/* MODALES SECUNDARIOS DE SECCIÓN, DESCUENTO Y EVOLUCIÓN */}
       <TreatmentPlanModals 
         plan={{ ...plan, items: planItems }} 
         patient={patient} 
@@ -142,7 +141,6 @@ export function TreatmentDetailDialogs({
         handleSaveDiagnosis={() => setIsDiagnosisModalOpen(false)}
       />
 
-      {/* PAD DE FIRMA DIGITAL */}
       <SignaturePadModal 
         isOpen={isSignatureModalOpen} 
         setIsOpen={setIsSignatureModalOpen} 
@@ -150,16 +148,15 @@ export function TreatmentDetailDialogs({
         patientName={`${patient?.firstName || ''} ${patient?.lastName || ''}`} 
       />
 
-      {/* COLABORADORES */}
-      <AssignCollaboratorsModal 
-        isOpen={isCollaboratorsOpen} 
-        setIsOpen={setIsCollaboratorsOpen} 
-        doctorsList={[]} 
-        currentCollaborators={collaborators} 
-        onSaveCollaborators={(sel: string[]) => setCollaborators(sel)} 
-      />
-
-      {/* CONFIRMACIÓN DE ELIMINACIÓN */}
+    <AssignCollaboratorsModal 
+      isOpen={isCollaboratorsOpen} 
+      setIsOpen={setIsCollaboratorsOpen} 
+      planId={plan?.id}
+      mainDoctorId={plan?.doctorId || plan?.doctor?.id}
+      currentUser={currentUser}
+      currentCollaborators={collaborators} 
+      onSaveCollaborators={(selected: string[]) => setCollaborators(selected)} 
+    />
       <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <AlertDialogContent className="bg-card border border-border/80 rounded-2xl shadow-2xl sm:max-w-[420px] p-6 font-sans antialiased">
           <AlertDialogHeader className="flex flex-col items-center text-center space-y-3">

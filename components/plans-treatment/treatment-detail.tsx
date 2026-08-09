@@ -63,7 +63,7 @@ export function TreatmentPlanDetail({
   const [itemsToDelete, setItemsToDelete] = useState<string[]>([])
 
   const [isCollaboratorsOpen, setIsCollaboratorsOpen] = useState(false)
-  const [collaborators, setCollaborators] = useState<string[]>([])
+ 
   const [printMode, setPrintMode] = useState<string>("COMPLETO")
 
   const [isSignatureModalOpen, setIsSignatureModalOpen] = useState(false)
@@ -75,6 +75,30 @@ export function TreatmentPlanDetail({
     setPlanItems(plan.items || []) 
   }, [plan.items])
 
+  const [collaborators, setCollaborators] = useState<string[]>(() => {
+    if (Array.isArray(plan?.collaborators)) return plan.collaborators
+    if (typeof plan?.collaborators === "string") {
+      try {
+        return JSON.parse(plan.collaborators)
+      } catch {
+        return [plan.collaborators]
+      }
+    }
+    return []
+  })
+  useEffect(() => {
+  if (plan?.collaborators) {
+    if (Array.isArray(plan.collaborators)) {
+      setCollaborators(plan.collaborators)
+    } else if (typeof plan.collaborators === "string") {
+      try {
+        setCollaborators(JSON.parse(plan.collaborators))
+      } catch {
+        setCollaborators([plan.collaborators])
+      }
+    }
+  }
+}, [plan?.collaborators])
   const refreshPlanData = useCallback(async () => {
     try {
       const res = await fetch(`/api/treatments?patientId=${patient?.id}`)

@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react"
 import { Loader2, Stethoscope, Sparkles, Check } from "lucide-react"
 import { useSession } from "next-auth/react"
-import { useQuery } from "@tanstack/react-query" 
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -37,23 +36,11 @@ export function CreatePlanModal({ isOpen, onClose, patientId, onSuccessCallback 
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>("")
 
   const { createTreatmentPlan, isLoading: isCreating } = useCreateTreatmentPlan()
-
   useEffect(() => {
-    if (session?.user?.id && !selectedDoctorId) {
+    if (session?.user?.id) {
       setSelectedDoctorId(session.user.id)
     }
-  }, [session, selectedDoctorId])
-  const { data: usersData, isLoading: isLoadingDoctors } = useQuery({
-    queryKey: ["doctorsList"],
-    queryFn: async () => {
-      const res = await fetch('/api/admin/users')
-      if (!res.ok) throw new Error('Error al obtener la lista de doctores')
-      return res.json()
-    },
-    enabled: isOpen,
-  })
-  
-  const doctors = Array.isArray(usersData) ? usersData.filter((u: any) => u.role === "DOCTOR") : []
+  }, [session])
 
   const handleClose = () => {
     setNewPlanName("")
@@ -110,7 +97,7 @@ export function CreatePlanModal({ isOpen, onClose, patientId, onSuccessCallback 
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="sm:max-w-[480px] bg-card border-border shadow-2xl rounded-2xl p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[480px] bg-card border-border shadow-2xl rounded-2xl p-0 overflow-hidden font-sans antialiased">
         <DialogHeader className="px-6 py-5 border-b border-border bg-slate-50 dark:bg-muted/30">
           <DialogTitle className="text-xl font-extrabold text-foreground flex items-center gap-2.5">
             <div className="p-2 bg-[#008bcd]/10 text-[#008bcd] rounded-xl shrink-0">
@@ -122,7 +109,9 @@ export function CreatePlanModal({ isOpen, onClose, patientId, onSuccessCallback 
             Defina la denominación clínica y asigne al profesional responsable de la atención.
           </DialogDescription>
         </DialogHeader>
+
         <div className="p-6 space-y-5">
+          {/* NOMBRE DEL TRATAMIENTO */}
           <div className="space-y-2">
             <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
               Nombre del Tratamiento *
@@ -158,43 +147,38 @@ export function CreatePlanModal({ isOpen, onClose, patientId, onSuccessCallback 
               </div>
             </div>
           </div>
+
+          {/* PROFESIONAL A CARGO (SÓLO EL DOCTOR DE LA SESIÓN ACTUAL) */}
           <div className="space-y-2 pt-1 border-t border-border/60">
             <Label className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
               Profesional a cargo
             </Label>
             <Select 
-              value={selectedDoctorId} 
+              value={selectedDoctorId || session?.user?.id || ""} 
               onValueChange={setSelectedDoctorId}
-              disabled={isLoadingDoctors}
+              disabled
             >
-              <SelectTrigger className="bg-background border-border h-11 font-semibold focus:ring-[#008bcd] shadow-xs rounded-xl text-sm">
-                <SelectValue placeholder={isLoadingDoctors ? "Cargando lista de profesionales..." : "Seleccione un profesional"} />
+              <SelectTrigger className="bg-background border-border h-11 font-semibold focus:ring-[#008bcd] shadow-xs rounded-xl text-sm opacity-100 cursor-not-allowed">
+                <SelectValue placeholder="Doctor Asignado" />
               </SelectTrigger>
               <SelectContent className="rounded-xl border-border shadow-2xl bg-card">
                 {session?.user?.id && (
                   <SelectItem value={session.user.id} className="font-semibold text-xs py-2.5">
-                    {session.user.name || "Tu Usuario"} <span className="text-muted-foreground font-normal">(Doctor Asignado)</span>
+                    👨‍⚕️ {session.user.name || "Tu Usuario"} <span className="text-muted-foreground font-normal">(Doctor Asignado)</span>
                   </SelectItem>
                 )}
-                {doctors
-                  .filter((doc: any) => doc.id !== session?.user?.id)
-                  .map((doctor: any) => (
-                    <SelectItem key={doctor.id} value={doctor.id} className="font-medium text-xs py-2.5">
-                      {doctor.name || doctor.email} {doctor.specialty ? `— ${doctor.specialty}` : ""}
-                    </SelectItem>
-                  ))}
               </SelectContent>
             </Select>
           </div>
-
         </div>
+
         <DialogFooter className="px-6 py-4 border-t border-border bg-slate-50/50 dark:bg-muted/20 flex flex-row items-center justify-end gap-2">
           <Button 
             type="button"
             variant="outline" 
             onClick={handleClose} 
             disabled={isCreating}
-            className="font-bold rounded-xl border-border text-xs h-10 px-4"
+            className="font-bold rounded-xl border-border text-xs h-10 px-4 cursor-pointer"
           >
             Cancelar
           </Button>
@@ -202,7 +186,7 @@ export function CreatePlanModal({ isOpen, onClose, patientId, onSuccessCallback 
             type="button"
             onClick={handleCreatePlan} 
             disabled={isCreating} 
-            className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold px-6 shadow-md rounded-xl text-xs h-10 transition-all"
+            className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold px-6 shadow-md rounded-xl text-xs h-10 transition-all cursor-pointer"
           >
             {isCreating ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null} 
             Crear Plan de Tratamiento

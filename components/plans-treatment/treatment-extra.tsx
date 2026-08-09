@@ -137,15 +137,17 @@ export function TreatmentExtraSection({
           </div>
         ) : savedPatientSignature ? (
           /* 2. PLAN SIN FIRMAR, PERO EXISTE FIRMA PREVIA REGISTRADA EN FICHA */
-          <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <div className="bg-background p-2 rounded-xl border border-border/80 shadow-xs flex items-center justify-center h-16 w-32 shrink-0 overflow-hidden opacity-90">
-                <img 
-                  src={getSignatureSrc(savedPatientSignature)} 
-                  alt="Firma Paciente Guardada" 
-                  className="max-h-full max-w-full object-contain" 
-                />
-              </div>
+              {savedPatientSignature && (
+                <div className="bg-white p-2 rounded-xl border border-border/80 shadow-xs flex items-center justify-center h-16 w-36 shrink-0 overflow-hidden">
+                  <img 
+                    src={getSignatureSrc(savedPatientSignature)} 
+                    alt="Firma Paciente Guardada" 
+                    className="max-h-full max-w-full object-contain" 
+                  />
+                </div>
+              )}
               <div className="text-xs">
                 <p className="font-extrabold text-[#008bcd] dark:text-blue-400">
                   Firma disponible en Ficha Clínica

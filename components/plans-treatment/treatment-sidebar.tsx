@@ -53,6 +53,20 @@ export function TreatmentSidebar({
 }: any) {
   const [fetchedAppointments, setFetchedAppointments] = useState<any[]>([])
   const [isLoadingAppointments, setIsLoadingAppointments] = useState<boolean>(false)
+  const activeCollaborators = useMemo(() => {
+    const raw = collaborators || plan?.collaborators
+    if (!raw) return []
+    if (Array.isArray(raw)) return raw
+    if (typeof raw === "string") {
+      try {
+        const parsed = JSON.parse(raw)
+        return Array.isArray(parsed) ? parsed : [raw]
+      } catch {
+        return [raw]
+      }
+    }
+    return []
+  }, [collaborators, plan?.collaborators])
 
   const completedValue = useMemo(() => {
     return planItems.reduce((acc: number, item: any) => {
@@ -177,6 +191,7 @@ export function TreatmentSidebar({
           </Button>
         </div>
       </div>
+
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3.5 shadow-xs">
         <div className="p-2 bg-amber-500/15 rounded-xl shrink-0">
           <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
@@ -199,13 +214,36 @@ export function TreatmentSidebar({
           </div>
         </div>
 
-        <div className="flex gap-3 items-center">
-          <Users className="w-4 h-4 text-[#008bcd] shrink-0" />
-          <div>
+        <div className="flex gap-3 items-start">
+          <Users className="w-4 h-4 text-[#008bcd] shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Colaboradores</p>
-            <button onClick={() => setIsCollaboratorsOpen(true)} className="font-bold text-[#008bcd] hover:underline text-xs mt-0.5 cursor-pointer">
-              {collaborators?.length > 0 ? `${collaborators.length} Colaboradores` : "Asignar colaboradores"}
+            
+            <button 
+              onClick={() => setIsCollaboratorsOpen(true)} 
+              className="font-bold text-[#008bcd] hover:underline text-xs block cursor-pointer"
+            >
+              {activeCollaborators.length > 0 ? "Editar colaboradores" : "Asignar colaboradores"}
             </button>
+            {activeCollaborators.length > 0 ? (
+              <div className="pt-1 flex flex-wrap gap-1">
+                {activeCollaborators.map((colabName: string, idx: number) => {
+                  const isUuid = colabName.length > 25 && colabName.includes("-")
+                  const displayName = isUuid ? "Dr. Colaborador" : colabName
+
+                  return (
+                    <span 
+                      key={idx} 
+                      className="inline-flex items-center text-[10px] font-bold bg-[#008bcd]/15 text-[#008bcd] dark:text-sky-300 px-2 py-0.5 rounded-md border border-[#008bcd]/30"
+                    >
+                      👨‍⚕️ {displayName}
+                    </span>
+                  )
+                })}
+              </div>
+            ) : (
+              <p className="text-[11px] text-muted-foreground font-medium">Sin colaboradores</p>
+            )}
           </div>
         </div>
 
@@ -217,6 +255,7 @@ export function TreatmentSidebar({
           </div>
         </div>
       </div>
+
       <div className="bg-card border border-border/80 shadow-xs rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between border-b border-border/60 pb-2">
           <div className="flex items-center gap-2 text-xs font-bold text-foreground">
