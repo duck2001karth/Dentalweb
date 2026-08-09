@@ -195,14 +195,25 @@ export function TreatmentPlanList({
       ) : (
         <div className="space-y-4">
           {filteredPlans.map((plan: any) => {
-            const totalItems = plan.items?.length || 0
-            const completedItems = plan.items?.filter((i: any) => i.isCompleted || i.progress === 100).length || 0
-            const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
+            const items = plan.items || []
+            const totalItems = items.length
+            const totalProgressSum = items.reduce((sum: number, item: any) => {
+              const itemProg = item.isCompleted ? 100 : (item.progress || 0)
+              return sum + itemProg
+            }, 0)
 
-            const baseTotal = plan.totalCost || 0
-            const paid = plan.totalPaid || 0
+            const progressPercent = totalItems > 0 ? Math.round(totalProgressSum / totalItems) : 0
+
+            const baseTotal = plan.totalCost || items.reduce((acc: number, item: any) => {
+              const cost = item.cost || 0
+              const dscto = item.discount || 0
+              return acc + (cost - (cost * (dscto / 100)))
+            }, 0)
+
+            const paid = plan.totalPaid || items.reduce((acc: number, item: any) => acc + (item.paidAmount || 0), 0)
             const debt = Math.max(0, baseTotal - paid)
             const isCancelled = plan.status === "CANCELLED"
+            const isFullyPaid = plan.status === "COMPLETED" || (debt <= 0.01 && baseTotal > 0)
 
             return (
               <div 
@@ -270,7 +281,7 @@ export function TreatmentPlanList({
                   </div>
                 </div>
 
-                {/* COLUMNAS DE INFORMACIÓN TAMAÑO ESTÁNDAR ESCRITORIO */}
+                {/* COLUMNAS DE INFORMACIÓN */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 pt-3 border-t border-border/60 text-sm items-center">
                   <div>
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Profesional</p>
@@ -286,7 +297,7 @@ export function TreatmentPlanList({
                     </p>
                   </div>
 
-                  {/* PROGRESO CON CÍRCULO Y TEXTO ESTÁNDAR */}
+                  {/* PROGRESO */}
                   <div className="flex flex-col items-start">
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Progreso</p>
                     <div className="flex items-center gap-2.5">
@@ -300,21 +311,22 @@ export function TreatmentPlanList({
                     </div>
                   </div>
 
+                  {/* ESTADO FINANCIERO CORREGIDO */}
                   <div className="text-right">
                     <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">Estado Financiero</p>
                     {isCancelled ? (
                       <p className="font-bold text-red-500 text-sm">Anulado</p>
-                    ) : plan.status === "DRAFT" ? (
+                    ) : plan.status === "DRAFT" && debt <= 0 ? (
                       <p className="font-bold text-emerald-500 text-sm flex items-center justify-end gap-1">
                         ✓ Diagnóstico
                       </p>
-                    ) : debt > 0 ? (
-                      <p className="font-bold text-amber-500 text-sm">
-                        ${debt.toLocaleString("en-US", { minimumFractionDigits: 2 })} Deuda
-                      </p>
-                    ) : (
+                    ) : isFullyPaid ? (
                       <p className="font-bold text-emerald-500 text-sm">
                         Pagado
+                      </p>
+                    ) : (
+                      <p className="font-bold text-amber-500 text-sm">
+                        ${debt.toLocaleString("en-US", { minimumFractionDigits: 2 })} Deuda
                       </p>
                     )}
                   </div>

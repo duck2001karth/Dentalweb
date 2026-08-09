@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { 
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, 
-  DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel 
+  DropdownMenuTrigger, DropdownMenuLabel 
 } from "@/components/ui/dropdown-menu"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
@@ -22,14 +22,13 @@ export function TreatmentTable({
   onDeleteSelectedItems,
   openEvolutionModal,
   onUpdateItemDiscount,
-  onSelectPrintMode,
-  onSelectRegion
+  onUpdateItemRegion,
+  onSelectPrintMode
 }: any) {
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [tempItemDiscount, setTempItemDiscount] = useState<string>("0")
 
-  // Control de selección de ítems
   const toggleSelectItem = (id: string) => {
     setSelectedItemIds(prev => 
       prev.includes(id) ? prev.filter(itemId => itemId !== id) : [...prev, id]
@@ -44,19 +43,23 @@ export function TreatmentTable({
     }
   }
 
-  // Lógica de borrado: si hay ítems marcados, borra los seleccionados. Si no hay ninguno, abre la alerta general.
   const handleTrashClick = () => {
     if (selectedItemIds.length > 0) {
-      if (onDeleteSelectedItems) {
-        onDeleteSelectedItems(selectedItemIds)
-      } else if (setIsConfirmClearOpen) {
-        setIsConfirmClearOpen(true)
-      }
+      if (onDeleteSelectedItems) onDeleteSelectedItems(selectedItemIds)
       setSelectedItemIds([])
     } else {
-      if (setIsConfirmClearOpen) {
-        setIsConfirmClearOpen(true)
-      }
+      if (setIsConfirmClearOpen) setIsConfirmClearOpen(true)
+    }
+  }
+
+  const handleAssignRegion = (regionName: string) => {
+    if (selectedItemIds.length > 0 && onUpdateItemRegion) {
+      selectedItemIds.forEach(id => {
+        onUpdateItemRegion(id, regionName)
+      })
+      setSelectedItemIds([])
+    } else if (openCatalogModal) {
+      openCatalogModal(regionName)
     }
   }
 
@@ -114,7 +117,6 @@ export function TreatmentTable({
 
         <div className="flex items-center gap-2">
           
-          {/* OPCIONES DE IMPRESIÓN */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" title="Opciones de Impresión" className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl cursor-pointer">
@@ -137,7 +139,6 @@ export function TreatmentTable({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* BOTÓN DE ELIMINAR (FUNCIONAL PARA ÍTEMS MARCADOS O PRESUPUESTO COMPLETO) */}
           <Button 
             variant="ghost" 
             size="icon" 
@@ -148,7 +149,6 @@ export function TreatmentTable({
             <Trash2 className="w-4 h-4" />
           </Button>
 
-          {/* ARCADAS Y SEXTANTES */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="text-xs font-bold text-[#008bcd] hover:underline flex items-center gap-1.5 ml-2 focus:outline-none cursor-pointer">
@@ -157,12 +157,20 @@ export function TreatmentTable({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 bg-card border-border/80 shadow-xl rounded-xl text-xs font-semibold">
               <DropdownMenuLabel className="text-[10px] uppercase font-bold text-muted-foreground">Arcadas Dentales</DropdownMenuLabel>
-              <DropdownMenuItem onClick={() => onSelectRegion && onSelectRegion("Arcada Superior")} className="font-bold cursor-pointer">
+              <DropdownMenuItem onClick={() => handleAssignRegion("Arcada Superior")} className="font-bold cursor-pointer">
                 Arcada Superior
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onSelectRegion && onSelectRegion("Arcada Inferior")} className="font-bold cursor-pointer">
+              <DropdownMenuItem onClick={() => handleAssignRegion("Arcada Inferior")} className="font-bold cursor-pointer">
                 Arcada Inferior
               </DropdownMenuItem>
+              
+              <DropdownMenuLabel className="text-[10px] uppercase font-bold text-muted-foreground border-t border-border/60 mt-1 pt-2">Sextantes</DropdownMenuLabel>
+              <DropdownMenuItem onClick={() => handleAssignRegion("Sextante 1 (18-14)")} className="cursor-pointer">Sextante 1 (18 a 14)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAssignRegion("Sextante 2 (13-23)")} className="cursor-pointer">Sextante 2 (13 a 23)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAssignRegion("Sextante 3 (24-28)")} className="cursor-pointer">Sextante 3 (24 a 28)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAssignRegion("Sextante 4 (38-34)")} className="cursor-pointer">Sextante 4 (38 a 34)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAssignRegion("Sextante 5 (33-43)")} className="cursor-pointer">Sextante 5 (33 a 43)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleAssignRegion("Sextante 6 (44-48)")} className="cursor-pointer">Sextante 6 (44 a 48)</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -184,7 +192,7 @@ export function TreatmentTable({
               </th>
               <th className="px-4 py-3 w-12 text-center"></th>
               <th className="px-4 py-3 font-bold text-foreground">PRESTACIÓN</th>
-              <th className="px-4 py-3 text-center">PIEZA</th>
+              <th className="px-4 py-3 text-center">PIEZA / REGIÓN</th>
               <th className="px-4 py-3 text-center">DESCUENTO</th>
               <th className="px-4 py-3 text-right">PRECIO</th>
               <th className="px-4 py-3 text-center">ESTADO PAGO</th>
@@ -197,12 +205,15 @@ export function TreatmentTable({
                 const itemDiscount = item.discount || 0
                 const basePrice = item.cost || item.price || 0
                 const finalItemPrice = basePrice - (basePrice * (itemDiscount / 100))
+                const paidAmount = item.paidAmount || 0
                 const isSelected = selectedItemIds.includes(item.id)
+
+                const isPaidFull = item.isPaid || paidAmount >= finalItemPrice
+                const isPaidPartial = paidAmount > 0 && paidAmount < finalItemPrice
 
                 return (
                   <tr key={item.id} className={`transition-colors ${isSelected ? "bg-[#008bcd]/5" : "hover:bg-muted/20"}`}>
                     
-                    {/* CHECKBOX DE SELECCIÓN */}
                     <td className="px-4 py-3 text-center">
                       <input 
                         type="checkbox" 
@@ -212,7 +223,7 @@ export function TreatmentTable({
                       />
                     </td>
 
-                    {/* BOTÓN CÍRCULO CON MENÚ DESPLEGABLE DE EVOLUCIÓN POR PORCENTAJES */}
+                    {/* INDICADOR VISUAL PREMIUM DEL PORCENTAJE */}
                     <td className="px-4 py-3 text-center">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -220,12 +231,11 @@ export function TreatmentTable({
                             {currentProg === 100 ? (
                               <CheckCircle2 className="w-6 h-6 text-emerald-500 fill-emerald-100 dark:fill-emerald-950/50" />
                             ) : currentProg > 0 ? (
-                              <div className="w-6 h-6 rounded-full border-2 border-emerald-500 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 flex items-center justify-center bg-emerald-50 dark:bg-emerald-950/30">
+                              <div className="w-7 h-7 rounded-full bg-[#008bcd]/10 border border-[#008bcd]/30 text-[10px] font-black text-[#008bcd] dark:text-blue-400 flex items-center justify-center shadow-2xs">
                                 {currentProg}%
                               </div>
                             ) : (
-                              /* Círculo 0% resaltado */
-                              <div className="w-6 h-6 rounded-full border-2 border-slate-400 dark:border-slate-600 bg-muted/40 hover:border-[#008bcd] hover:bg-[#008bcd]/10 transition-colors"></div>
+                              <div className="w-6 h-6 rounded-full border-2 border-slate-300 dark:border-slate-700 bg-muted/20 hover:border-[#008bcd] hover:bg-[#008bcd]/10 transition-colors"></div>
                             )}
                           </button>
                         </DropdownMenuTrigger>
@@ -249,23 +259,20 @@ export function TreatmentTable({
                       </DropdownMenu>
                     </td>
 
-                    {/* NOMBRE DE PRESTACIÓN */}
                     <td className="px-4 py-3 font-bold text-foreground text-sm">
                       {item.procedureName || item.name}
                     </td>
 
-                    {/* PIEZA DENTAL */}
                     <td className="px-4 py-3 text-center">
-                      {item.tooth || item.toothNumber ? (
-                        <span className="border border-border/80 rounded-lg px-2.5 py-1 text-xs font-bold text-[#008bcd] bg-muted/30">
-                          {item.tooth || item.toothNumber}
+                      {item.tooth || item.toothNumber || item.region ? (
+                        <span className="inline-flex items-center gap-1 font-extrabold text-xs text-[#008bcd] dark:text-blue-400 bg-[#008bcd]/10 dark:bg-blue-500/15 border border-[#008bcd]/20 px-2.5 py-1 rounded-lg">
+                          {item.tooth || item.toothNumber || item.region}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground font-medium text-xs">-</span>
+                        <span className="text-muted-foreground font-semibold text-xs opacity-50">-</span>
                       )}
                     </td>
 
-                    {/* DESCUENTO INDIVIDUAL EDITABLE */}
                     <td className="px-4 py-3 text-center font-medium">
                       <Popover open={editingItemId === item.id} onOpenChange={(open) => !open && setEditingItemId(null)}>
                         <PopoverTrigger asChild>
@@ -298,17 +305,25 @@ export function TreatmentTable({
                       </Popover>
                     </td>
 
-                    {/* PRECIO CALCULADO */}
                     <td className="px-4 py-3 text-right font-bold text-foreground text-sm">
                       ${finalItemPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                     </td>
 
-                    {/* ESTADO DE PAGO */}
-                    <td className="px-4 py-3 text-center">
-                      <span className="text-xs font-bold text-muted-foreground bg-muted/40 border border-border/60 px-2.5 py-1 rounded-lg">
+                    <td className="py-3 px-4 text-center">
+                    {item.isPaid || (item.paidAmount && item.paidAmount >= (item.cost - (item.cost * ((item.discount || 0) / 100)))) ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                        Pagado
+                      </span>
+                    ) : item.paidAmount && item.paidAmount > 0 ? (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
+                        Abonado (${item.paidAmount.toFixed(2)})
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-muted text-muted-foreground border border-border">
                         Pendiente
                       </span>
-                    </td>
+                    )}
+                  </td>
 
                   </tr>
                 )

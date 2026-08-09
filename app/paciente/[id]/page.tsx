@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
 import { useGetPatient, useDeletePatient } from "@/hooks/patients"
+import { useGetTreatmentPlans } from "@/hooks/treatments"
 
 import { DatosPersonalesTab } from "@/components/patients/perfil-patient"
 import { FichaClinicaLayout } from "@/components/patients/file-clinic"
@@ -57,11 +58,12 @@ export default function FichaClinicaPage() {
   
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false) 
-
   const patientHook = useGetPatient(patientId) as any
   const patient = patientHook?.patient
   const isLoadingPatient = patientHook?.isLoading
   const refetchPatient = patientHook?.refetch || patientHook?.mutate || (() => {})
+
+  const { plans: treatmentPlans = [], refetch: refetchPlans } = useGetTreatmentPlans({ patientId })
 
   const { deletePatient, isLoading: isDeleting } = useDeletePatient() 
 
@@ -95,8 +97,10 @@ export default function FichaClinicaPage() {
     setActiveTab(newTab)
     router.replace(`/paciente/${patientId}?tab=${newTab}`, { scroll: false })
   }
+  const patientPlans = (treatmentPlans && treatmentPlans.length > 0) 
+    ? treatmentPlans 
+    : ((patient as any)?.treatmentPlans || (patient as any)?.plans || [])
 
-  const patientPlans = (patient as any)?.treatmentPlans || (patient as any)?.plans || []
   const totalPatientDebt = patientPlans.reduce((acc: number, p: any) => {
     const cost = p.totalCost || 0
     const paid = p.totalPaid || 0
@@ -154,16 +158,20 @@ export default function FichaClinicaPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* 📍 MODAL DE PAGOS CENTRALIZADO Y SINCRONIZADO */}
         <PaymentReceiptModal
-        isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
-        patient={patient}
-        plans={patientPlans} 
-        debt={totalPatientDebt}
-        onPaymentSuccess={() => {
-          if (refetchPatient) refetchPatient()
-        }}
-      />
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          patient={patient}
+          plans={patientPlans} 
+          debt={totalPatientDebt}
+          onPaymentSuccess={() => {
+            if (refetchPatient) refetchPatient()
+            if (refetchPlans) refetchPlans()
+          }}
+        />
+
         <div className="bg-card w-full shadow-sm z-10 relative overflow-hidden border-b border-border print:hidden">
           
           <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
@@ -332,7 +340,10 @@ export default function FichaClinicaPage() {
               patientId={patientId}
               patient={patient}
               plans={patientPlans}
-              onRefreshData={refetchPatient}
+              onRefreshData={() => {
+                if (refetchPatient) refetchPatient()
+                if (refetchPlans) refetchPlans()
+              }}
             />
           )}
 

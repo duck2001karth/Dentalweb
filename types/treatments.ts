@@ -9,10 +9,19 @@ export interface TreatmentItem {
   tooth?: string | null;
   surfaces?: string[];
   isCompleted: boolean;
-  progress?: number;        // Porcentaje de avance (0, 25, 50, 75, 100)
+  progress?: number;         // Porcentaje de avance (0, 25, 50, 75, 100)
   discount?: number;        // Descuento individual por ítem (%)
   paidAmount?: number;      // Monto abonado a esta prestación
   isPaid?: boolean;         // Estado de pago completo
+  
+  // 📍 NUEVOS CAMPOS AÑADIDOS AL MODELO PRISMA
+  evolutionNote?: string | null;
+  isPrivate?: boolean;
+  fileUrl?: string | null;
+  hasIncident?: boolean;
+  hasAdverseEvent?: boolean;
+  performedById?: string | null;
+
   createdAt?: string | Date;
   updatedAt?: string | Date;
 }
@@ -73,14 +82,13 @@ export type UpdateTreatmentInput = Partial<TreatmentPlanInput> & {
   collaborators?: string;
 };
 
-// --- ENTRADA PARA REGISTRAR EVOLUCIÓN CLÍNICA ---
+// --- ENTRADA COMPLETA PARA REGISTRAR EVOLUCIÓN CLÍNICA ---
 export interface EvolutionInput {
-  itemId: string;
   progress: number;
-  isCompleted: boolean;
-  notes?: string;
-  doctorId?: string;
+  note?: string;
+  isPrivate?: boolean;
   hasIncident?: boolean;
   hasAdverseEvent?: boolean;
-  isPrivate?: boolean;
+  doctorId?: string;
+  fileUrl?: string;
 }

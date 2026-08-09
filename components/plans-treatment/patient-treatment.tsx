@@ -56,7 +56,7 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
   }
 
   return (
-    <div className="w-full animate-in fade-in duration-500">
+    <div className="w-full animate-in fade-in duration-500 font-sans antialiased">
       
       {/* MODAL NUEVO PLAN */}
       <CreatePlanModal 
@@ -87,7 +87,7 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
             <AlertDialogAction 
               onClick={confirmDeletePlan} 
               disabled={isDeleting} 
-              className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs h-10 shadow-sm"
+              className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs h-10 shadow-sm cursor-pointer"
             >
               Sí, mover a papelera
             </AlertDialogAction>
@@ -100,7 +100,11 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
         <TreatmentPlanDetail 
           plan={selectedPlan} 
           patient={patient} 
-          onBack={() => setSelectedPlanId(null)} 
+          onBack={() => {
+            refetch()
+            setSelectedPlanId(null)
+          }} 
+          onPlanUpdate={refetch} 
           onSaveComment={handleSaveComment}
           isSavingComment={isSavingComment}
         />

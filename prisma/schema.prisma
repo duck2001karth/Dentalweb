@@ -170,6 +170,8 @@ model Patient {
   observaciones         String?   @db.Text
   medicalAlerts         String?   @db.Text 
   
+  signatureBase64 String?   @db.Text
+
   appointments          Appointment[]
   clinicalNotes         ClinicalNote[] 
 
@@ -388,7 +390,7 @@ model TreatmentPlan {
 }
 
 model TreatmentItem {
-  id              String   @id @default(cuid())
+  id              String        @id @default(cuid())
   treatmentPlanId String
   plan            TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
 
@@ -396,10 +398,18 @@ model TreatmentItem {
   paidAmount      Float         @default(0)
   isPaid          Boolean       @default(false)
   
-  tooth           String?  // Pieza dental (Ej: "11", "45")
-  procedureName   String   // Ej: "Corona de Porcelana"
-  cost            Float    @default(0)
-  isCompleted     Boolean  @default(false) // Para calcular el progreso %
+  tooth           String?       
+  procedureName   String       
+  cost            Float         @default(0)
+  isCompleted     Boolean       @default(false) 
+
+  progress        Int?          @default(0) 
+  evolutionNote   String?       @db.Text    
+  isPrivate       Boolean       @default(false) 
+  fileUrl         String?       @db.Text    
+  hasIncident     Boolean       @default(false) 
+  hasAdverseEvent Boolean       @default(false) 
+  performedById   String?       
 }
 
 model EvolutionTemplate {

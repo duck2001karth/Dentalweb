@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
+import { EvolutionInput } from "@/types/treatments"
 
 interface EvolutionModalProps {
   isOpen: boolean
@@ -18,7 +19,7 @@ interface EvolutionModalProps {
   evolutionProgress: number
   evolutionNote: string
   setEvolutionNote: (note: string | ((prev: string) => string)) => void
-  handleSaveEvolution: () => void
+  handleSaveEvolution: (data?: EvolutionInput) => void
   setIsTemplateModalOpen: (open: boolean) => void
 }
 
@@ -41,8 +42,6 @@ export function EvolutionModal({
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [hasIncident, setHasIncident] = useState(false)
   const [hasAdverseEvent, setHasAdverseEvent] = useState(false)
-  
-  // Estado para resaltar el campo si intenta enviar sin llenarlo
   const [showError, setShowError] = useState(false)
 
   const onSubmit = () => {
@@ -50,14 +49,20 @@ export function EvolutionModal({
       setShowError(true)
       toast({
         title: "Campos incompletos",
-        description: "Debes completar los campos obligatorios: Nota de Evolución.",
+        description: "Debes completar la Nota de Evolución.",
         variant: "destructive"
       })
       return
     }
 
-    setShowError(false)
-    handleSaveEvolution()
+    handleSaveEvolution({
+      progress: evolutionProgress,
+      note: evolutionNote,
+      isPrivate: isPrivateEvolution,
+      hasIncident,
+      hasAdverseEvent,
+      doctorId: selectedDoctor
+    })
   }
 
   return (
@@ -66,6 +71,7 @@ export function EvolutionModal({
       setIsOpen(open)
     }}>
       <DialogContent className="sm:max-w-[900px] w-[95vw] max-h-[88vh] bg-card text-card-foreground border border-border shadow-2xl rounded-2xl p-0 overflow-hidden font-sans">
+        
         <DialogHeader className="p-5 border-b border-border bg-muted/30">
           <DialogTitle className="text-lg md:text-xl font-black uppercase text-foreground tracking-tight">
             EVOLUCIÓN PARA {patient?.firstName} {patient?.lastName}
@@ -74,6 +80,7 @@ export function EvolutionModal({
             Prestación seleccionada: <b className="text-[#008bcd] dark:text-blue-400">{selectedItemToEvolve?.procedureName || selectedItemToEvolve?.name}</b>
           </DialogDescription>
         </DialogHeader>
+
         <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-6 overflow-y-auto max-h-[calc(88vh-130px)]">
           <div className="md:col-span-7 space-y-4 flex flex-col">
             <div className="space-y-1.5">
@@ -90,6 +97,7 @@ export function EvolutionModal({
                 </option>
               </select>
             </div>
+
             <div className="space-y-1.5 flex-1 flex flex-col">
               <div className="flex justify-between items-center">
                 <Label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1">
@@ -132,6 +140,7 @@ export function EvolutionModal({
               )}
             </div>
           </div>
+
           <div className="md:col-span-5 space-y-4 flex flex-col justify-between border-t md:border-t-0 md:border-l border-border pt-4 md:pt-0 md:pl-6">
             <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1">
               <div className="flex items-center gap-2">
@@ -144,6 +153,7 @@ export function EvolutionModal({
                 (Opcional) Sólo podrá ser leída por el profesional emisor.
               </p>
             </div>
+
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground uppercase tracking-wider">
                 Archivos Adjuntos <span className="text-muted-foreground font-normal text-[11px]">(Opcional)</span>
@@ -157,6 +167,7 @@ export function EvolutionModal({
                 <input type="file" className="hidden" onChange={(e) => setAttachedFile(e.target.files?.[0] || null)} />
               </label>
             </div>
+
             <div className="space-y-3 border-t border-border pt-3">
               <div className="space-y-1">
                 <p className="text-xs font-bold text-foreground">
@@ -178,9 +189,9 @@ export function EvolutionModal({
                 </div>
               </div>
             </div>
-
           </div>
         </div>
+
         <DialogFooter className="px-5 py-3.5 bg-muted/30 border-t border-border flex justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => setIsOpen(false)} className="font-bold border-border text-foreground hover:bg-muted">
             Cancelar
