@@ -19,23 +19,17 @@ export function PaymentSuccessStep({
   patient,
   onReset
 }: PaymentSuccessStepProps) {
-
-  // 📍 ABRIR FACTURA / RECIBO EN UNA NUEVA PESTAÑA
   const handleViewInvoicePDF = () => {
     if (!invoiceId) return
-    // Abre la ruta oficial de recibos/facturas en una pestaña independiente
     window.open(`/api/invoices/${invoiceId}/pdf`, "_blank")
   }
 
-  // 📍 DISPARAR IMPRESIÓN DIRECTA DE PANTALLA
   const handlePrintReceipt = () => {
     window.print()
   }
 
   return (
     <div className="p-8 flex flex-col items-center text-center space-y-6 animate-in zoom-in-95 duration-300 font-sans antialiased">
-      
-      {/* ICONO ÉXITO ANIMADO */}
       <div className="w-20 h-20 bg-emerald-500/15 text-emerald-600 rounded-full flex items-center justify-center border border-emerald-500/30 shadow-xs">
         <CheckCircle className="w-10 h-10 stroke-[2.5]" />
       </div>
@@ -48,8 +42,6 @@ export function PaymentSuccessStep({
           Se ha generado el comprobante <b className="text-foreground">#{invoiceId || "REC-706645"}</b>
         </p>
       </div>
-
-      {/* TARJETA RESUMEN DEL COBRO */}
       <div className="w-full bg-muted/20 border border-border/80 rounded-2xl p-5 space-y-3 text-sm">
         <div className="flex justify-between items-center">
           <span className="text-xs font-bold text-muted-foreground uppercase">Monto Cobrado:</span>
@@ -61,7 +53,6 @@ export function PaymentSuccessStep({
         </div>
       </div>
 
-      {/* BOTONES DE ACCIÓN: VER PDF EN OTRA PESTAÑA, IMPRIMIR Y FINALIZAR */}
       <div className="w-full space-y-3 pt-2">
         <Button
           onClick={handleViewInvoicePDF}

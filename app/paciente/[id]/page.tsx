@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation" 
+import { useSession } from "next-auth/react"
 import { 
   Loader2, User, CreditCard, ShieldAlert, Pill, Trash2, 
   Calendar as CalendarIcon, Banknote 
@@ -49,7 +50,11 @@ export default function FichaClinicaPage() {
   const router = useRouter()
   const searchParams = useSearchParams() 
   const { toast } = useToast()
-  
+  const { data: session } = useSession()
+  const userRole = (session?.user as any)?.role || "DOCTOR"
+  const canReceivePayments = userRole === "ADMIN" || userRole === "RECEPCION"
+  const isDoctor = userRole === "DOCTOR"
+
   const patientId = params.id as string
   const tabFromUrl = searchParams.get("tab")
 
@@ -97,6 +102,7 @@ export default function FichaClinicaPage() {
     setActiveTab(newTab)
     router.replace(`/paciente/${patientId}?tab=${newTab}`, { scroll: false })
   }
+
   const patientPlans = (treatmentPlans && treatmentPlans.length > 0) 
     ? treatmentPlans 
     : ((patient as any)?.treatmentPlans || (patient as any)?.plans || [])
@@ -137,8 +143,6 @@ export default function FichaClinicaPage() {
   return (
     <AppLayout>
       <div className="flex-1 flex flex-col w-full bg-background min-h-screen relative pb-12 font-sans antialiased">
-        
-        {/* MODAL ELIMINAR PACIENTE */}
         <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
           <DialogContent className="sm:max-w-[425px] bg-background border-border">
             <DialogHeader>
@@ -158,11 +162,14 @@ export default function FichaClinicaPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {/* 📍 MODAL DE PAGOS CENTRALIZADO Y SINCRONIZADO */}
-        <PaymentReceiptModal
+        {canReceivePayments && (
+          <PaymentReceiptModal
           isOpen={isPaymentModalOpen}
-          onClose={() => setIsPaymentModalOpen(false)}
+          onClose={() => {
+            setIsPaymentModalOpen(false)
+            if (refetchPatient) refetchPatient()
+            if (refetchPlans) refetchPlans()
+          }}
           patient={patient}
           plans={patientPlans} 
           debt={totalPatientDebt}
@@ -171,6 +178,7 @@ export default function FichaClinicaPage() {
             if (refetchPlans) refetchPlans()
           }}
         />
+        )}
 
         <div className="bg-card w-full shadow-sm z-10 relative overflow-hidden border-b border-border print:hidden">
           
@@ -251,8 +259,6 @@ export default function FichaClinicaPage() {
             
           </div>
         </div>
-
-        {/* BARRA PRINCIPAL DE PESTAÑAS */}
         <div className="bg-card border-b border-border w-full shadow-sm z-0 sticky top-0 print:hidden">
           <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex overflow-x-auto custom-scrollbar items-center justify-between">
             
@@ -295,8 +301,6 @@ export default function FichaClinicaPage() {
                 Facturación y pagos
               </button>
             </div>
-
-            {/* BOTONES EXTREMO DERECHO */}
             <div className="flex items-center gap-2 py-2 shrink-0">
               <button 
                 onClick={() => router.push(`/agendavand?patientId=${patientId}`)} 
@@ -304,19 +308,18 @@ export default function FichaClinicaPage() {
               >
                 <CalendarIcon size={15} /> Agendar Cita
               </button>
-
-              <Button
-                onClick={() => setIsPaymentModalOpen(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs h-10 px-4 rounded-xl shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
-              >
-                <Banknote size={16} className="stroke-[2.5]" /> Recibir pago
-              </Button>
+              {canReceivePayments && (
+                <Button
+                  onClick={() => setIsPaymentModalOpen(true)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs h-10 px-4 rounded-xl shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                >
+                  <Banknote size={16} className="stroke-[2.5]" /> Recibir pago
+                </Button>
+              )}
             </div>
 
           </div>
         </div>
-
-        {/* CONTENIDO PRINCIPAL */}
         <div className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-8">
           
           {activeTab === "datos" && (

@@ -57,8 +57,6 @@ export function PaymentMethodsEcuador({
 
   return (
     <div className="space-y-4 font-sans antialiased">
-      
-      {/* ABONO PARCIAL / LIBRE */}
       <div 
         onClick={() => setUseCustomAmount(!useCustomAmount)}
         className={cn(

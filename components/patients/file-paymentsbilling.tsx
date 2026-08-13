@@ -1,103 +1,113 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useSearchParams, useRouter, usePathname } from "next/navigation" 
-import { Wrench, Lock, Clock } from "lucide-react"
-import { cn } from "@/lib/utils"
+import React, { useState, useEffect } from "react"
+import { Loader2 } from "lucide-react"
+import { PaymentsTable } from "@/components/patients-file/payments/payments-table"
 
-const SUB_TABS = [
-  { id: "pagos", label: "Pagos" },
-  { id: "documentos_emitidos", label: "Documentos emitidos" },
-  { id: "devoluciones", label: "Devoluciones" },
-  { id: "eliminados", label: "Pagos Eliminados" },
-  { id: "balance", label: "Balance" },
-]
+interface PayBillingLayoutProps {
+  patientId: string
+  patient: any
+  plans?: any[]
+  onRefreshData?: () => void
+}
 
-export function PayBillingLayout({ 
-  patientId, 
-  patient, 
-  plans, 
-  onRefreshData 
-}: { 
-  patientId: string;
-  patient?: any;
-  plans?: any[];
-  onRefreshData?: () => void;
-}) {
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
-  const tabFromUrl = searchParams.get("tab")
+export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData }: PayBillingLayoutProps) {
+  const [activeSubTab, setActiveSubTab] = useState<string>("pagos")
+  const [paymentsList, setPaymentsList] = useState<any[]>([])
+  const [isLoadingPayments, setIsLoadingPayments] = useState<boolean>(false)
 
-  const [activeTab, setActiveTab] = useState(tabFromUrl || "pagos")
+  const fetchPayments = async () => {
+  if (!patientId) return
+  setIsLoadingPayments(true)
+  try {
+    const res = await fetch(`/api/payments?patientId=${patientId}`)
+    if (res.ok) {
+      const data = await res.json()
+      const rawPayments = Array.isArray(data) ? data : (data.payments || data.data || [])
+      const formatted = rawPayments.map((p: any, idx: number) => ({
+        id: p.id,
+        paymentNumber: p.receiptNumber || p.number || `#REC-${p.id?.slice(-6) || idx + 1}`,
+        treatmentId: p.treatmentPlan?.name || p.treatmentPlanId?.slice(-4) || "General",
+        paymentMethod: p.method || p.paymentMethod || "Efectivo",
+        receivedBy: p.user?.name || p.receivedBy || "Administración",
+        invoiceNumber: p.invoiceNumber || "-",
+        receiptDate: p.createdAt || p.receiptDate || new Date(),
+        dueDate: p.createdAt || new Date(),
+        amount: Number(p.amount || p.paidAmount || 0),
+        transactionRef: p.transactionRef || p.reference || null
+      }))
+
+      setPaymentsList(formatted)
+    }
+  } catch (error) {
+    console.error("Error al cargar historial de pagos:", error)
+  } finally {
+    setIsLoadingPayments(false)
+  }
+}
 
   useEffect(() => {
-    if (tabFromUrl && SUB_TABS.some(t => t.id === tabFromUrl)) {
-      setActiveTab(tabFromUrl)
-    }
-  }, [tabFromUrl])
-
-  const handleTabChange = (tabId: string) => {
-    setActiveTab(tabId)
-    router.replace(`${pathname}?tab=${tabId}`, { scroll: false })
-  }
-
-  const getTabLabel = (id: string) => {
-    const tab = SUB_TABS.find(t => t.id === id)
-    return tab ? tab.label : id
-  }
+    fetchPayments()
+  }, [patientId, plans])
 
   return (
-    <div className="animate-in fade-in duration-500 flex flex-col h-full w-full overflow-hidden font-sans">
-      
-      {/* BARRA DE SUBPESTAÑAS CON ID ÚNICO 'documentos_emitidos' */}
-      <div className="w-full border-b border-border mb-6 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] print:hidden">
-        <div className="flex w-max min-w-full px-2">
-          {SUB_TABS.map((tab) => (
+    <div className="space-y-6 font-sans antialiased">
+      <div className="flex items-center gap-1 border-b border-border/80 overflow-x-auto custom-scrollbar pb-px">
+        {[
+          { id: "pagos", label: "Pagos" },
+          { id: "documentos_emitidos", label: "Documentos emitidos" },
+          { id: "devoluciones", label: "Devoluciones" },
+          { id: "eliminados", label: "Pagos Eliminados" },
+          { id: "balance", label: "Balance" },
+        ].map((tab) => {
+          const isActive = activeSubTab === tab.id
+          return (
             <button
               key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={cn(
-                "px-5 py-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 relative -mb-[1px] cursor-pointer",
-                activeTab === tab.id 
-                  ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400" 
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-              )}
+              onClick={() => setActiveSubTab(tab.id)}
+              className={`px-5 py-3 font-semibold text-sm whitespace-nowrap transition-all border-b-[3px] cursor-pointer ${
+                isActive
+                  ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30 font-medium"
+              }`}
             >
               {tab.label}
             </button>
-          ))}
-        </div>
+          )
+        })}
       </div>
 
-      {/* TARJETA EN DESARROLLO CON NOMBRE EXACTO */}
-      <div className="flex-1 w-full flex flex-col items-center justify-center py-16 px-4">
-        <div className="bg-card border border-border/80 rounded-2xl p-10 max-w-md text-center shadow-xs space-y-4">
-          
-          <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/20 text-amber-500 rounded-2xl mx-auto flex items-center justify-center shadow-xs">
-            <Wrench className="w-8 h-8 animate-pulse stroke-[2]" />
+      {/* CONTENIDO PRINCIPAL */}
+      <div className="pt-2">
+        {isLoadingPayments ? (
+          <div className="flex flex-col items-center justify-center py-12 text-[#008bcd]">
+            <Loader2 className="w-7 h-7 animate-spin mb-2" />
+            <p className="text-sm font-medium text-muted-foreground">Cargando historial de pagos...</p>
           </div>
-
-          <div className="space-y-1.5">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
-              <Clock className="w-3 h-3" /> Módulo en desarrollo
-            </span>
-            <h3 className="text-xl font-bold text-foreground">
-              Facturación y Pagos ({getTabLabel(activeTab)})
-            </h3>
-            <p className="text-xs font-semibold text-muted-foreground leading-relaxed">
-              Esta sección está temporalmente deshabilitada por mantenimiento y sincronización con el sistema SRI / Comprobantes.
-            </p>
+        ) : activeSubTab === "pagos" ? (
+          <PaymentsTable 
+            paymentsList={paymentsList} 
+            patient={patient} 
+            onRefresh={fetchPayments}
+          />
+        ) : activeSubTab === "documentos_emitidos" ? (
+          <div className="p-8 text-center text-sm font-medium text-muted-foreground bg-card border border-border/80 rounded-2xl">
+            Historial de Facturas y Boletas electrónicas emitidas al paciente.
           </div>
-
-          <div className="p-3 bg-muted/30 border border-border/60 rounded-xl text-left text-xs font-semibold text-muted-foreground flex items-center gap-2.5">
-            <Lock className="w-4 h-4 text-[#008bcd] shrink-0" />
-            <span>Los cobros directos siguen disponibles desde el botón <b>"Recibir pago"</b>.</span>
+        ) : activeSubTab === "devoluciones" ? (
+          <div className="p-8 text-center text-sm font-medium text-muted-foreground bg-card border border-border/80 rounded-2xl">
+            Registro de Notas de Crédito y Devoluciones aplicadas.
           </div>
-
-        </div>
+        ) : activeSubTab === "eliminados" ? (
+          <div className="p-8 text-center text-sm font-medium text-muted-foreground bg-card border border-border/80 rounded-2xl">
+            Auditoría de Pagos Anulados o Eliminados.
+          </div>
+        ) : (
+          <div className="p-8 text-center text-sm font-medium text-muted-foreground bg-card border border-border/80 rounded-2xl">
+            Resumen del Balance Financiero general del paciente.
+          </div>
+        )}
       </div>
-
     </div>
   )
 }
