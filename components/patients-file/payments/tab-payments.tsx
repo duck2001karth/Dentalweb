@@ -5,23 +5,17 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { 
-  MoreHorizontal, Printer, Mail, FileText, 
-  RotateCcw, Edit, Trash2, Plus, ExternalLink, Receipt, Eye
-} from "lucide-react"
+import { Plus, ExternalLink, Receipt, Eye } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 
+import { PaymentActionsMenu } from "./payment-actions-menu"
 import { PaymentReceiptModal } from "./payment-receipt-modal"
 import { PaymentBreakdownModal } from "./payment-breakdown-modal"
-import { ManagePaymentModal } from "./manage-payment-modal"
+import { ManagePaymentModal } from "./modify-payment-modal"
+import { SendEmailModal } from "./send-email-modal"
+import { CreditNoteModal } from "./credit-note-modal"
+import { DailyReceiptModal } from "./daily-receipt-modal"
 
 const formatPaymentMethod = (method?: string) => {
   if (!method) return "Efectivo"
@@ -38,7 +32,6 @@ const formatPaymentMethod = (method?: string) => {
       return "Tarjeta de Débito"
     case "TRANSFER":
     case "TRANSFERENCIA":
-    case "NEQUI":
       return "Transferencia Bancaria"
     case "CHECK":
     case "CHEQUE":
@@ -68,30 +61,30 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
   const canCreateDocument = isAdmin || isRecepcion
   const canEditPayment = isAdmin || isRecepcion
   const canDeletePayment = isAdmin || isRecepcion
+
+  const activePayments = paymentsList.filter((item: any) => {
+    const isDeleted = item.notes && typeof item.notes === "string" && item.notes.includes("[PAGO ELIMINADO")
+    return !isDeleted
+  })
+
   const [selectedPaymentForReceipt, setSelectedPaymentForReceipt] = useState<any>(null)
   const [isReceiptOpen, setIsReceiptOpen] = useState(false)
 
   const [selectedPaymentForBreakdown, setSelectedPaymentForBreakdown] = useState<any>(null)
   const [isBreakdownOpen, setIsBreakdownOpen] = useState(false)
+
   const [selectedPaymentForManage, setSelectedPaymentForManage] = useState<any>(null)
   const [manageMode, setManageMode] = useState<"edit" | "delete">("edit")
   const [isManageOpen, setIsManageOpen] = useState(false)
 
-  const handlePrintReceipt = (payment: any) => {
-    setSelectedPaymentForReceipt(payment)
-    setIsReceiptOpen(true)
-  }
+  const [selectedPaymentForEmail, setSelectedPaymentForEmail] = useState<any>(null)
+  const [isEmailOpen, setIsEmailOpen] = useState(false)
 
-  const handleOpenBreakdown = (payment: any) => {
-    setSelectedPaymentForBreakdown(payment)
-    setIsBreakdownOpen(true)
-  }
+  const [selectedPaymentForCreditNote, setSelectedPaymentForCreditNote] = useState<any>(null)
+  const [isCreditNoteOpen, setIsCreditNoteOpen] = useState(false)
 
-  const handleOpenManage = (payment: any, mode: "edit" | "delete") => {
-    setSelectedPaymentForManage(payment)
-    setManageMode(mode)
-    setIsManageOpen(true)
-  }
+  const [selectedPaymentForDaily, setSelectedPaymentForDaily] = useState<any>(null)
+  const [isDailyOpen, setIsDailyOpen] = useState(false)
 
   const navigateToTreatment = (e: React.MouseEvent, targetPlanId?: string) => {
     e.preventDefault()
@@ -108,14 +101,14 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
 
   return (
     <div className="space-y-5 font-sans antialiased">
-      {/* CABECERA */}
+      {/* CABECERA DE SECCIÓN */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2.5">
             Pagos recibidos del paciente
             {isDoctor && (
               <span className="text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 px-2.5 py-0.5 rounded-md border border-amber-500/20">
-                Solo lectura
+                Vista de Doctor (Solo Lectura)
               </span>
             )}
           </h2>
@@ -132,7 +125,7 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
         )}
       </div>
 
-      {/* TABLA DE PAGOS */}
+      {/* TABLA DE TRANSACCIONES */}
       <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -149,10 +142,9 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60 text-sm font-normal">
-              {paymentsList.length > 0 ? (
-                paymentsList.map((item: any, idx: number) => {
+              {activePayments.length > 0 ? (
+                activePayments.map((item: any, idx: number) => {
                   const paymentNum = item.paymentNumber || item.receiptNumber || item.number || `#REC-${item.id?.slice(-6) || idx + 1}`
-                  
                   const treatmentName = item.treatmentPlan?.name || item.treatmentName
                   const targetPlanId = item.treatmentPlanId || item.treatmentPlan?.id || item.planId
                   const isPlanDeleted = !treatmentName && !targetPlanId
@@ -167,14 +159,33 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
 
                   return (
                     <tr key={item.id || idx} className="hover:bg-muted/20 transition-colors">
-                      
                       {/* # PAGO */}
                       <td className="py-3.5 px-4 align-middle">
-                        <p className="font-bold text-[#008bcd] text-sm">{paymentNum}</p>
-                        {item.reference && (
-                          <p className="text-xs text-muted-foreground font-normal">Ref: {item.reference}</p>
-                        )}
+                        <div className="flex flex-col items-start gap-1">
+                          <p className="font-bold text-[#008bcd] text-sm leading-none">
+                            {paymentNum}
+                          </p>
+                          {rawAmount < 0 && (
+                            <span className="inline-block text-[10px] font-extrabold bg-amber-500/15 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded border border-amber-500/20 uppercase tracking-wider">
+                              Nota de Crédito
+                            </span>
+                          )}
+                          {item.notes && typeof item.notes === "string" && item.notes.startsWith("NOTA DE CRÉDITO") ? (
+                            <p 
+                              className="text-[11px] text-amber-600/90 dark:text-amber-400/90 font-medium truncate max-w-[180px] mt-0.5" 
+                              title={item.notes}
+                            >
+                              {item.notes.replace(/^NOTA DE CRÉDITO \[[^\]]+\]:\s*/, "")}
+                            </p>
+                          ) : item.reference ? (
+                            <p className="text-xs text-muted-foreground font-normal">
+                              Ref: {item.reference}
+                            </p>
+                          ) : null}
+                        </div>
                       </td>
+
+                      {/* # TRATAMIENTO */}
                       <td className="py-3.5 px-4 align-middle">
                         {isPlanDeleted ? (
                           <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 italic">
@@ -193,12 +204,16 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
                           <span className="font-medium text-foreground text-sm">{treatmentName || "Extracción / Cirugía"}</span>
                         )}
                       </td>
+
+                      {/* MEDIO DE PAGO */}
                       <td className="py-3.5 px-4 align-middle space-y-0.5">
                         <p className="font-semibold text-foreground text-sm">{methodSpanish}</p>
                         <p className="text-xs text-muted-foreground font-normal">
                           Recibido por <b className="text-foreground/90 font-medium">{receiverStr}</b>
                         </p>
                       </td>
+
+                      {/* # BOLETA / FACTURA */}
                       <td className="py-3.5 px-4 align-middle">
                         {invoiceStr ? (
                           <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 text-xs bg-emerald-500/10 px-2.5 py-0.5 rounded-md border border-emerald-500/20">
@@ -210,81 +225,78 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
                           </span>
                         )}
                       </td>
+
+                      {/* RECEPCIÓN */}
                       <td className="py-3.5 px-4 align-middle text-sm font-normal text-foreground">
                         {format(new Date(receiptDateStr), "dd MMM yyyy", { locale: es })}
                       </td>
+
+                      {/* VENCIMIENTO */}
                       <td className="py-3.5 px-4 align-middle text-sm font-normal text-foreground">
                         {format(new Date(dueDateStr), "dd MMM yyyy", { locale: es })}
                       </td>
+
+                      {/* MONTO Y DESGLOSE */}
                       <td className="py-3.5 px-4 align-middle text-right">
                         <p className="font-bold text-foreground text-sm tracking-tight">
                           ${rawAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                         </p>
                         <button
                           type="button"
-                          onClick={() => handleOpenBreakdown(item)}
+                          onClick={() => {
+                            setSelectedPaymentForBreakdown(item)
+                            setIsBreakdownOpen(true)
+                          }}
                           className="text-xs font-semibold text-[#008bcd] hover:underline flex items-center justify-end gap-1 ml-auto mt-0.5 cursor-pointer"
                         >
                           <span>Ver desglose</span>
                           <Eye className="w-3 h-3 stroke-[2]" />
                         </button>
                       </td>
+
+                      {/* 📍 ACCIONES CON EL NUEVO COMPONENTE EXTRAÍDO */}
                       <td className="py-3.5 px-4 align-middle text-center">
                         <div className="flex items-center justify-center w-full">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-8 w-8 p-0 rounded-full hover:bg-muted/80 flex items-center justify-center cursor-pointer"
-                                title="Opciones del pago"
-                              >
-                                <MoreHorizontal className="w-4 h-4 text-foreground/80" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-52 rounded-xl font-sans text-xs p-1 shadow-xl">
-                              
-                              <DropdownMenuItem onClick={() => handlePrintReceipt(item)} className="cursor-pointer font-medium py-2">
-                                <Printer className="w-4 h-4 mr-2 text-[#008bcd]" /> Imprimir comprobante
-                              </DropdownMenuItem>
-                              
-                              <DropdownMenuItem onClick={() => handlePrintReceipt(item)} className="cursor-pointer font-medium py-2">
-                                <FileText className="w-4 h-4 mr-2 text-slate-500" /> Imprimir comprobante diario
-                              </DropdownMenuItem>
-
-                              <DropdownMenuItem className="cursor-pointer font-medium py-2">
-                                <Mail className="w-4 h-4 mr-2 text-slate-500" /> Enviar comprobante
-                              </DropdownMenuItem>
-                              {canEditPayment && (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => handleOpenManage(item, "edit")} className="cursor-pointer font-medium py-2 text-blue-600 dark:text-blue-400">
-                                    <Edit className="w-4 h-4 mr-2" /> Modificar datos
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                              {canDeletePayment && (
-                                <>
-                                  <DropdownMenuItem className="cursor-pointer font-medium py-2 text-amber-600 dark:text-amber-400">
-                                    <RotateCcw className="w-4 h-4 mr-2" /> Nota de crédito
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => handleOpenManage(item, "delete")} className="cursor-pointer font-medium py-2 text-red-600 dark:text-red-400">
-                                    <Trash2 className="w-4 h-4 mr-2" /> Eliminar pago
-                                  </DropdownMenuItem>
-                                </>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <PaymentActionsMenu
+                            payment={item}
+                            canEdit={canEditPayment}
+                            canDelete={canDeletePayment}
+                            onPrintReceipt={(p) => {
+                              setSelectedPaymentForReceipt(p)
+                              setIsReceiptOpen(true)
+                            }}
+                            onPrintDaily={(p) => {
+                              setSelectedPaymentForDaily(p)
+                              setIsDailyOpen(true)
+                            }}
+                            onSendEmail={(p) => {
+                              setSelectedPaymentForEmail(p)
+                              setIsEmailOpen(true)
+                            }}
+                            onEdit={(p) => {
+                              setSelectedPaymentForManage(p)
+                              setManageMode("edit")
+                              setIsManageOpen(true)
+                            }}
+                            onCreditNote={(p) => {
+                              setSelectedPaymentForCreditNote(p)
+                              setIsCreditNoteOpen(true)
+                            }}
+                            onDelete={(p) => {
+                              setSelectedPaymentForManage(p)
+                              setManageMode("delete")
+                              setIsManageOpen(true)
+                            }}
+                          />
                         </div>
                       </td>
-
                     </tr>
                   )
                 })
               ) : (
                 <tr>
                   <td colSpan={8} className="py-14 text-center text-muted-foreground font-medium text-sm">
-                    No hay registros de pagos recibidos para este paciente.
+                    No hay registros de pagos activos para este paciente.
                   </td>
                 </tr>
               )}
@@ -292,6 +304,8 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
           </table>
         </div>
       </div>
+
+      {/* MODALES */}
       {selectedPaymentForReceipt && (
         <PaymentReceiptModal
           isOpen={isReceiptOpen}
@@ -300,6 +314,7 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
           patient={patient}
         />
       )}
+
       {selectedPaymentForBreakdown && (
         <PaymentBreakdownModal
           isOpen={isBreakdownOpen}
@@ -316,6 +331,34 @@ export function PaymentsTable({ paymentsList = [], patient, onRefresh }: any) {
           payment={selectedPaymentForManage}
           mode={manageMode}
           onSuccess={onRefresh}
+        />
+      )}
+
+      {selectedPaymentForEmail && (
+        <SendEmailModal
+          isOpen={isEmailOpen}
+          onClose={() => setIsEmailOpen(false)}
+          payment={selectedPaymentForEmail}
+          patient={patient}
+        />
+      )}
+
+      {selectedPaymentForCreditNote && (
+        <CreditNoteModal
+          isOpen={isCreditNoteOpen}
+          onClose={() => setIsCreditNoteOpen(false)}
+          payment={selectedPaymentForCreditNote}
+          onSuccess={onRefresh}
+        />
+      )}
+
+      {selectedPaymentForDaily && (
+        <DailyReceiptModal
+          isOpen={isDailyOpen}
+          onClose={() => setIsDailyOpen(false)}
+          payment={selectedPaymentForDaily}
+          patient={patient}
+          allPaymentsOfDay={activePayments}
         />
       )}
     </div>
