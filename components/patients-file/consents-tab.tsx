@@ -1,84 +1,158 @@
 "use client"
 
 import React, { useState, useEffect, useCallback } from "react"
-import { Loader2, FileText, CheckCircle2, XCircle, Eye, Printer, X } from "lucide-react"
+import { Loader2, FileText, CheckCircle2, XCircle, Eye, Printer, X, ShieldCheck, AlertCircle } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
+import { useSession } from "next-auth/react"
+
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+
+import { useGetPatient } from "@/hooks/patients"
+import { ClinicalDocPrint } from "@/components/patients-file/document-print"
+const calculateAge = (birthDateString?: string | Date | null) => {
+  if (!birthDateString) return ""
+  const today = new Date()
+  const birthDate = new Date(birthDateString)
+  let age = today.getFullYear() - birthDate.getFullYear()
+  const m = today.getMonth() - birthDate.getMonth()
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--
+  return age
+}
 
 export function ConsentimientosTab({ patientId }: { patientId: string }) {
   const { toast } = useToast()
+  const { data: session } = useSession()
+  const currentUser = session?.user as any
+  const { patient } = useGetPatient(patientId)
   
   const [documents, setDocuments] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDoc, setSelectedDoc] = useState<any>(null)
+  const patientFullName = patient ? `${patient.firstName} ${patient.lastName}` : "Paciente Registrado"
+  const patientDocId = patient?.ci || "No registrado"
+  const patientAge = calculateAge(patient?.birthDate)
 
   const fetchDocs = useCallback(async () => {
     try {
       const res = await fetch(`/api/clinical-documents?patientId=${patientId}`)
       const data = await res.json()
       setDocuments((data || []).filter((d: any) => !d.isVoided))
-    } catch (e) { toast({ title: "Error", variant: "destructive" }) } 
-    finally { setIsLoading(false) }
+    } catch (e) { 
+      toast({ title: "Error", description: "No se pudo cargar el historial", variant: "destructive" }) 
+    } finally { 
+      setIsLoading(false) 
+    }
   }, [patientId, toast])
 
   useEffect(() => { fetchDocs() }, [fetchDocs])
+  const SignatureBadge = ({ isSigned, label }: { isSigned: boolean, label: string }) => {
+    if (isSigned) {
+      return (
+        <div className="flex items-center justify-between w-[110px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-md">
+          <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+          <CheckCircle2 size={14} className="shrink-0" />
+        </div>
+      )
+    }
+    return (
+      <div className="flex items-center justify-between w-[110px] bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 px-2 py-1 rounded-md">
+        <span className="text-[10px] font-bold uppercase tracking-wider">{label}</span>
+        <AlertCircle size={14} className="shrink-0" />
+      </div>
+    )
+  }
 
-  if (isLoading) return <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#5cb85c] w-10 h-10"/></div>
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 text-[#008bcd]">
+        <Loader2 className="w-10 h-10 animate-spin mb-4" />
+        <p className="font-semibold text-muted-foreground">Cargando historial de consentimientos...</p>
+      </div>
+    )
+  }
 
   return (
-    <div className="animate-in fade-in pb-20">
+    <div className="animate-in fade-in duration-300 pb-20">
       
-      <div className="flex justify-between items-center mb-6 bg-card p-4 rounded-xl border border-border shadow-sm">
-        <h2 className="text-2xl font-light text-foreground flex items-center gap-2">
-          <FileText className="text-[#5cb85c]" size={24}/> Historial de Consentimientos
-        </h2>
-        <span className="text-xs text-muted-foreground bg-muted px-3 py-1 rounded-full font-medium">
-          Solo lectura (Auditoría Legal)
-        </span>
+      {/*CABECERA PREMIUM */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-card p-5 rounded-2xl border border-border shadow-sm sticky top-0 z-20 print:hidden">
+        <div>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+              <ShieldCheck className="text-emerald-500 w-6 h-6" />
+              Historial de Consentimientos
+            </h2>
+            <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 tracking-wider">
+              AUDITORÍA LEGAL - SOLO LECTURA
+            </span>
+          </div>
+          <p className="text-sm font-medium text-muted-foreground mt-1">
+            Registro inmutable de acuerdos y documentos clínicos firmados por el paciente.
+          </p>
+        </div>
       </div>
 
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+      {/*TABLA MODERNA DE AUDITORÍA */}
+      <div className="bg-card border border-border/80 rounded-2xl shadow-sm overflow-hidden print:hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
-            <thead className="bg-muted/50 border-b border-border text-muted-foreground">
+            <thead className="bg-muted/30 border-b border-border/70 text-muted-foreground">
               <tr>
-                <th className="p-4 font-bold">#</th>
-                <th className="p-4 font-bold">Nombre del Consentimiento</th>
-                <th className="p-4 font-bold">Profesional</th>
-                <th className="p-4 font-bold">Fecha de Creación</th>
-                <th className="p-4 font-bold text-center">Estado de Firmas</th>
-                <th className="p-4 font-bold text-center">Acciones</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-16">Nº</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Documento Legal</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Profesional</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Emisión</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">Estado de Firmas</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-right">Acción</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-border/60">
               {documents.length === 0 ? (
-                <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">No existen consentimientos firmados o pendientes.</td></tr>
+                <tr>
+                  <td colSpan={6} className="p-12 text-center text-muted-foreground">
+                    <div className="flex flex-col items-center justify-center">
+                      <FileText className="w-12 h-12 opacity-20 mb-3" />
+                      <p className="font-bold text-lg text-foreground">Sin documentos legales</p>
+                      <p className="text-sm">No existen consentimientos firmados o pendientes para este paciente.</p>
+                    </div>
+                  </td>
+                </tr>
               ) : (
                 documents.map((doc, index) => (
-                  <tr key={doc.id} className="hover:bg-muted/20 transition-colors">
-                    <td className="p-4 font-medium text-muted-foreground">{documents.length - index}</td>
-                    <td className="p-4 font-bold text-[#008bcd]">{doc.title}</td>
-                    <td className="p-4">{doc.specialistName || "No especificado"}</td>
-                    <td className="p-4">{format(new Date(doc.createdAt), "dd MMM yyyy", { locale: es })}</td>
-                    <td className="p-4">
-                      <div className="flex flex-col gap-1 items-center justify-center text-xs">
-                        <div className="flex items-center gap-1 w-24 justify-between">
-                          <span className="text-muted-foreground">Paciente:</span> 
-                          {doc.patientSignature ? <CheckCircle2 size={14} className="text-emerald-500"/> : <XCircle size={14} className="text-red-500"/>}
-                        </div>
-                        <div className="flex items-center gap-1 w-24 justify-between">
-                          <span className="text-muted-foreground">Doctor:</span> 
-                          {doc.doctorSignature ? <CheckCircle2 size={14} className="text-emerald-500"/> : <XCircle size={14} className="text-red-500"/>}
-                        </div>
+                  <tr key={doc.id} className="hover:bg-muted/10 transition-colors group">
+                    <td className="px-6 py-4 font-bold text-muted-foreground/70">
+                      {(documents.length - index).toString().padStart(2, '0')}
+                    </td>
+                    <td className="px-6 py-4">
+                      <p className="font-bold text-foreground line-clamp-1">{doc.title}</p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
+                        ID: {doc.id.substring(0, 8).toUpperCase()}
+                      </p>
+                    </td>
+                    <td className="px-6 py-4 font-medium text-foreground">
+                      {doc.specialistName || "No especificado"}
+                    </td>
+                    <td className="px-6 py-4 font-medium text-muted-foreground whitespace-nowrap">
+                      {format(new Date(doc.createdAt), "dd MMM yyyy", { locale: es })}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1.5 items-center justify-center">
+                        <SignatureBadge isSigned={!!doc.patientSignature} label="Paciente" />
+                        <SignatureBadge isSigned={!!doc.doctorSignature} label="Doctor" />
                       </div>
                     </td>
-                    <td className="p-4 text-center">
-                      <Button variant="outline" size="sm" onClick={() => setSelectedDoc(doc)} className="bg-background text-[#5cb85c] hover:bg-[#5cb85c]/10 hover:text-[#4cae4c] border-[#5cb85c]/30">
-                        <Eye size={14} className="mr-2"/> Ver
+                    <td className="px-6 py-4 text-right">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setSelectedDoc(doc)} 
+                        className="bg-background text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/30 border-border/80 font-bold rounded-lg shadow-xs"
+                      >
+                        <Eye size={14} className="mr-1.5"/> Ver Documento
                       </Button>
                     </td>
                   </tr>
@@ -89,57 +163,92 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
         </div>
       </div>
 
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          #printable-doc-view, #printable-doc-view * { visibility: visible; }
-          #printable-doc-view { position: absolute; left: 0; top: 0; width: 100%; }
-          @page { size: portrait; margin: 1.5cm; }
-        }
-      `}</style>
+      {/* INYECCIÓN DEL COMPONENTE OFICIAL DE IMPRESIÓN */}
+      {selectedDoc && (
+        <ClinicalDocPrint 
+          document={selectedDoc} 
+          patientFullName={patientFullName}
+          patientAge={patientAge}
+          patientDocId={patientDocId}
+          doctorSpecialty={currentUser?.specialty || "Odontología General"}
+        />
+      )}
 
+      {/*VISOR MODAL TIPO PDF */}
       <Dialog open={!!selectedDoc} onOpenChange={(open) => !open && setSelectedDoc(null)}>
-        <DialogContent className="max-w-[95vw] md:max-w-4xl h-[85vh] flex flex-col bg-card border-border overflow-hidden p-0 [&>button]:hidden">
-          <DialogHeader className="shrink-0 flex flex-row justify-between items-center px-6 py-4 border-b border-border bg-muted/10">
-            <DialogTitle className="text-xl font-light text-[#5cb85c]">Vista de Consentimiento</DialogTitle>
+        <DialogContent className="max-w-[95vw] md:max-w-4xl h-[90vh] flex flex-col bg-card border-border overflow-hidden p-0 rounded-[24px] shadow-2xl [&>button]:hidden print:hidden">
+          
+          <DialogHeader className="shrink-0 flex flex-row justify-between items-center px-6 py-4 border-b border-border/70 bg-muted/15">
+            <div>
+              <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
+                <ShieldCheck className="w-5 h-5 text-emerald-500" /> Auditoría de Consentimiento
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                Visualización de solo lectura. Para imprimir, utiliza el botón correspondiente.
+              </DialogDescription>
+            </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => window.print()}><Printer size={14} className="mr-1"/> Imprimir Respaldo</Button>
-              <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => setSelectedDoc(null)}><X size={18}/></Button>
+              <Button size="sm" variant="outline" onClick={() => window.print()} className="rounded-xl font-bold border-border/80">
+                <Printer size={14} className="mr-1.5"/> Imprimir Respaldo
+              </Button>
+              <Button size="sm" variant="ghost" className="h-9 w-9 p-0 rounded-xl bg-muted/50 hover:bg-muted" onClick={() => setSelectedDoc(null)}>
+                <X size={18}/>
+              </Button>
             </div>
           </DialogHeader>
 
           {selectedDoc && (
-            <div id="printable-doc-view" className="flex-1 overflow-y-auto custom-scrollbar p-8 print:m-0 print:p-0 bg-background">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-0 bg-muted/20">
               
-              <div className="text-center mb-8 border-b border-border pb-6">
-                <h1 className="text-2xl font-bold uppercase mb-2">{selectedDoc.title}</h1>
-                <p className="text-muted-foreground text-sm">Generado el: {format(new Date(selectedDoc.createdAt), "dd/MM/yyyy HH:mm")}</p>
-              </div>
-
-              <div className="prose dark:prose-invert max-w-none text-foreground whitespace-pre-wrap leading-relaxed text-base mb-12">
-                {selectedDoc.content}
-              </div>
-
-              <div className="grid grid-cols-2 gap-12 mt-12 print:mt-12 print:break-inside-avoid">
-                {/* FIRMA PACIENTE (Read Only) */}
-                <div className="flex flex-col items-center border-t border-slate-400 pt-4">
-                  {selectedDoc.patientSignature ? (
-                    <img src={selectedDoc.patientSignature} alt="Firma Paciente" className="h-20 object-contain -mt-16 mb-2" />
-                  ) : (
-                    <div className="h-16 flex items-center justify-center text-red-500 font-bold mb-2">NO FIRMADO</div>
-                  )}
-                  <p className="font-bold text-sm uppercase">Firma del Paciente</p>
+              {/* Simulador de hoja A4 en pantalla */}
+              <div className="max-w-[210mm] mx-auto bg-white dark:bg-slate-50 my-8 p-12 rounded-lg shadow-sm border border-border/40 text-slate-900 font-sans relative">
+                
+                {/* Marca de agua simulada */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04] z-0">
+                  <ShieldCheck className="w-96 h-96" />
                 </div>
 
-                {/* FIRMA DOCTOR (Read Only) */}
-                <div className="flex flex-col items-center border-t border-slate-400 pt-4">
-                  {selectedDoc.doctorSignature ? (
-                    <img src={selectedDoc.doctorSignature} alt="Firma Doctor" className="h-20 object-contain -mt-16 mb-2" />
-                  ) : (
-                    <div className="h-16 flex items-center justify-center text-red-500 font-bold mb-2">NO FIRMADO</div>
-                  )}
-                  <p className="font-bold text-sm uppercase">{selectedDoc.specialistName}</p>
-                  <p className="text-xs text-muted-foreground">Profesional Tratante</p>
+                <div className="relative z-10">
+                  <div className="text-center mb-8 border-b-2 border-emerald-500/20 pb-6">
+                    <h1 className="text-2xl font-black uppercase text-slate-800 tracking-tight">{selectedDoc.title}</h1>
+                    <p className="text-slate-500 text-xs font-bold mt-2 tracking-wider">
+                      DOCUMENTO CLÍNICO LEGAL • {format(new Date(selectedDoc.createdAt), "dd/MM/yyyy HH:mm")}
+                    </p>
+                  </div>
+
+                  <div className="prose prose-sm max-w-none text-slate-700 whitespace-pre-wrap leading-relaxed font-medium mb-16">
+                    {selectedDoc.content}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-16 mt-16 pt-8 border-t border-slate-200">
+                    {/* FIRMA PACIENTE */}
+                    <div className="flex flex-col items-center">
+                      <div className="h-16 w-56 flex items-center justify-center border-b border-slate-300">
+                        {selectedDoc.patientSignature ? (
+                          <img src={selectedDoc.patientSignature} alt="Firma Paciente" className="max-h-14 max-w-full object-contain mix-blend-multiply" />
+                        ) : (
+                          <span className="text-[10px] text-red-500 font-bold tracking-widest bg-red-500/10 px-3 py-1 rounded-md">PENDIENTE DE FIRMA</span>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 mt-2 uppercase">{patientFullName}</p>
+                      <p className="text-[10px] text-slate-500">C.I.: {patientDocId}</p>
+                      <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Firma del Paciente / Tutor</p>
+                    </div>
+
+                    {/* FIRMA DOCTOR */}
+                    <div className="flex flex-col items-center">
+                      <div className="h-16 w-56 flex items-center justify-center border-b border-slate-300">
+                        {selectedDoc.doctorSignature ? (
+                          <img src={selectedDoc.doctorSignature} alt="Firma Doctor" className="max-h-14 max-w-full object-contain mix-blend-multiply" />
+                        ) : (
+                          <span className="text-[10px] text-red-500 font-bold tracking-widest bg-red-500/10 px-3 py-1 rounded-md">PENDIENTE DE FIRMA</span>
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 mt-2 uppercase">{selectedDoc.specialistName || "Profesional Asignado"}</p>
+                      <p className="text-[10px] text-slate-500">Especialista Tratante</p>
+                      <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Firma del Profesional</p>
+                    </div>
+                  </div>
                 </div>
               </div>
 

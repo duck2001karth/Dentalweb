@@ -1,11 +1,12 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { Loader2, Receipt } from "lucide-react"
+import { Loader2 } from "lucide-react"
 import { PaymentsTable } from "@/components/patients-file/payments/tab-payments"
-import { DeletedPaymentsTable } from "@/components/patients-file/payments/tab-deleted-payments"
+import { DeletedPaymentsTab } from "@/components/patients-file/payments/tab-deleted-payments"
 import { RefundsView } from "@/components/patients-file/payments/tab-refunds"
 import { FinancialBalanceView } from "@/components/patients-file/payments/tab-balance"
+import { IssuedDocumentsView } from "@/components/patients-file/payments/tab-documents"
 
 interface PayBillingLayoutProps {
   patientId: string
@@ -17,15 +18,16 @@ interface PayBillingLayoutProps {
 export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData }: PayBillingLayoutProps) {
   const [activeSubTab, setActiveSubTab] = useState<string>("pagos")
   const [paymentsList, setPaymentsList] = useState<any[]>([])
+  const [issuedDocsList, setIssuedDocsList] = useState<any[]>([])
   const [isLoadingPayments, setIsLoadingPayments] = useState<boolean>(false)
 
-  const fetchPayments = async () => {
+  const fetchPaymentsAndDocs = async () => {
     if (!patientId) return
     setIsLoadingPayments(true)
     try {
-      const res = await fetch(`/api/payments?patientId=${patientId}`)
-      if (res.ok) {
-        const data = await res.json()
+      const resPayments = await fetch(`/api/payments?patientId=${patientId}`)
+      if (resPayments.ok) {
+        const data = await resPayments.json()
         const rawPayments = Array.isArray(data) ? data : (data.payments || data.data || [])
         
         const formatted = rawPayments.map((p: any, idx: number) => ({
@@ -46,19 +48,25 @@ export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData
 
         setPaymentsList(formatted)
       }
+
+      const resDocs = await fetch(`/api/sri/invoices?patientId=${patientId}`)
+      if (resDocs.ok) {
+        const dataDocs = await resDocs.json()
+        setIssuedDocsList(Array.isArray(dataDocs) ? dataDocs : (dataDocs.documents || dataDocs.taxDocuments || []))
+      }
     } catch (error) {
-      console.error("Error al cargar pagos:", error)
+      console.error("Error al cargar datos financieros:", error)
     } finally {
       setIsLoadingPayments(false)
     }
   }
 
   useEffect(() => {
-    fetchPayments()
+    fetchPaymentsAndDocs()
   }, [patientId, plans])
 
   const handleRefresh = () => {
-    fetchPayments()
+    fetchPaymentsAndDocs()
     if (onRefreshData) onRefreshData()
   }
 
@@ -74,7 +82,8 @@ export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData
 
   const pagosActivosList = paymentsList.filter((p) => {
     const isDeleted = typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO")
-    return !isDeleted
+    const isNC = Number(p.amount) < 0 || (typeof p.notes === "string" && p.notes.includes("NOTA DE CRÉDITO"))
+    return !isDeleted && !isNC
   })
 
   const totalCobrado = pagosActivosList
@@ -86,13 +95,18 @@ export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData
   )
 
   const balanceNeto = totalCobrado - totalDevuelto
+  const totalPresupuesto = plans.reduce((acc, plan) => {
+    const planTotal = Number(plan.total || plan.cost || plan.price || 0)
+    return acc + planTotal
+  }, 0)
 
   return (
     <div className="space-y-6 font-sans antialiased">
+      {/* NAVEGACIÓN DE SUBPESTAÑAS */}
       <div className="flex items-center gap-1 border-b border-border/80 overflow-x-auto custom-scrollbar pb-px">
         {[
           { id: "pagos", label: "Pagos", count: pagosActivosList.length },
-          { id: "documentos_emitidos", label: "Documentos emitidos" },
+          { id: "documentos_emitidos", label: "Documentos emitidos", count: issuedDocsList.length },
           { id: "devoluciones", label: "Devoluciones", count: devolucionesList.length },
           { id: "eliminados", label: "Pagos Eliminados", count: eliminadosList.length },
           { id: "balance", label: "Balance" },
@@ -122,16 +136,27 @@ export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData
           )
         })}
       </div>
+
+      {/* CONTENIDO ACTIVO */}
       <div className="pt-2">
         {isLoadingPayments ? (
           <div className="flex flex-col items-center justify-center py-16 text-[#008bcd]">
             <Loader2 className="w-7 h-7 animate-spin mb-2" />
-            <p className="text-sm font-medium text-muted-foreground">Cargando historial de pagos...</p>
+            <p className="text-sm font-medium text-muted-foreground">Cargando información financiera...</p>
           </div>
         ) : activeSubTab === "pagos" ? (
           <PaymentsTable 
             paymentsList={pagosActivosList} 
             patient={patient} 
+            onRefresh={handleRefresh}
+          />
+       ) : activeSubTab === "documentos_emitidos" ? (
+          <IssuedDocumentsView 
+            documents={issuedDocsList} 
+            patient={patient} 
+            patientFullName={`${patient?.firstName || ''} ${patient?.lastName || ''}`.trim() || "Paciente Registrado"}
+            patientDocId={patient?.ci || patient?.identification || "No registrado"}
+            patientAge={patient?.age || (patient?.birthDate ? new Date().getFullYear() - new Date(patient.birthDate).getFullYear() : "--")}
             onRefresh={handleRefresh}
           />
         ) : activeSubTab === "devoluciones" ? (
@@ -141,23 +166,26 @@ export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData
             onRefresh={handleRefresh} 
           />
         ) : activeSubTab === "eliminados" ? (
-          <DeletedPaymentsTable 
-            payments={eliminadosList} 
+          <DeletedPaymentsTab
+            payments={eliminadosList}
+            patientFullName={`${patient?.firstName || ''} ${patient?.lastName || ''}`.trim() || "Paciente Registrado"}
+            patientDocId={patient?.ci || patient?.identification || "No registrado"}
+            patientAge={patient?.age || (patient?.birthDate ? new Date().getFullYear() - new Date(patient.birthDate).getFullYear() : "--")}
+            onRefresh={handleRefresh}
           />
         ) : activeSubTab === "balance" ? (
-          <FinancialBalanceView 
-            totalIncome={totalCobrado} 
-            totalRefunds={totalDevuelto} 
-            netBalance={balanceNeto} 
+          <FinancialBalanceView
+            patientId={patientId}
+            patientData={patient}
+            totalIncome={totalCobrado}
+            totalRefunds={totalDevuelto}
+            netBalance={balanceNeto}
+            payments={pagosActivosList}
+            refunds={devolucionesList}
+            totalBudget={totalPresupuesto > 0 ? totalPresupuesto : totalCobrado}
           />
-        ) : (
-          <div className="p-12 text-center text-sm font-medium text-muted-foreground bg-card border border-border/80 rounded-2xl">
-            <Receipt className="w-8 h-8 text-muted-foreground/40 mx-auto mb-2" />
-            Historial de Facturas y Boletas electrónicas emitidas al paciente.
-          </div>
-        )}
+        ) : null}
       </div>
-
     </div>
   )
 }

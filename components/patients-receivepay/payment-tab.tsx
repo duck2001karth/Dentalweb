@@ -2,12 +2,34 @@
 
 import React, { useState, useMemo } from "react"
 import { DollarSign, CheckCircle2, Loader2 } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 
 import { PaymentItemsList } from "./payment-list"
 import { PaymentMethodsEcuador } from "./payment-methods"
-import { PaymentSuccessStep } from "./payment-success"
+import { PaymentSuccessStep as PaymentSuccessStep } from "./payment-success"
+
+const formatToothLocation = (item: any): string => {
+  const tooth = item.tooth ?? item.toothNumber ?? item.piece ?? item.piezas ?? item.sector ?? null
+  if (!tooth || tooth === "" || tooth === "0" || tooth === "null") {
+    return "General"
+  }
+
+  const str = String(tooth).trim()
+
+  if (str.toLowerCase().includes("arcada") || str.toLowerCase().includes("sextante") || str.toLowerCase().includes("general")) {
+    return str
+  }
+
+  return `Pieza ${str}`
+}
 
 export function PaymentReceiptModal({
   isOpen,
@@ -27,7 +49,6 @@ export function PaymentReceiptModal({
   const [isProcessing, setIsProcessing] = useState(false)
   const [generatedInvoiceId, setGeneratedInvoiceId] = useState<string | null>(null)
   const [confirmedAmount, setConfirmedAmount] = useState<number>(0)
-
   const pendingItems = useMemo(() => {
     let itemsList: any[] = []
     let rawPlansList: any[] = []
@@ -55,7 +76,9 @@ export function PaymentReceiptModal({
               ...item,
               id: item.id || `item-${Math.random()}`,
               name: item.procedureName || item.name || "Prestación Dental",
+              toothLabel: formatToothLocation(item), // 👈 Pieza dental limpia y legible
               planName: p.name || `Plan #${p.id?.slice(-4)?.toUpperCase()}`,
+              planId: p.id,
               cost,
               finalPrice,
               paidAmount: paid,
@@ -68,6 +91,11 @@ export function PaymentReceiptModal({
 
     return itemsList
   }, [plan, plans, patient])
+  React.useEffect(() => {
+    if (isOpen && pendingItems.length > 0 && selectedItemIds.length === 0) {
+      setSelectedItemIds(pendingItems.map((i: any) => i.id))
+    }
+  }, [isOpen, pendingItems])
 
   const toggleSelectItem = (id: string) => {
     setSelectedItemIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
@@ -109,7 +137,8 @@ export function PaymentReceiptModal({
           paymentMethod,
           reference: requiresReference ? reference : null,
           receiptImage: receiptImage || null,
-          itemIds: selectedItemIds
+          itemIds: selectedItemIds,
+          treatmentPlanId: pendingItems[0]?.planId || undefined
         })
       })
 
@@ -134,32 +163,40 @@ export function PaymentReceiptModal({
     setReference("")
     setReceiptImage(null)
     setConfirmedAmount(0)
+    setUseCustomAmount(false)
+    setCustomAmount("")
     onClose()
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleReset()}>
-      <DialogContent className="sm:max-w-[850px] bg-card border border-border/80 shadow-2xl rounded-2xl p-0 overflow-hidden font-sans antialiased">
+      <DialogContent className="sm:max-w-[860px] bg-card text-foreground border border-border/80 shadow-2xl rounded-3xl p-0 overflow-hidden font-sans antialiased">
         {step === "SELECT" ? (
           <>
-            <DialogHeader className="px-6 py-4 border-b border-border/80 bg-muted/20">
-              <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-2.5">
-                <div className="p-2 bg-emerald-500/15 text-emerald-600 rounded-xl shrink-0">
+            {/* CABECERA */}
+            <DialogHeader className="px-7 py-4 border-b border-border/70 bg-muted/20">
+              <DialogTitle className="text-xl font-bold text-foreground flex items-center gap-3">
+                <div className="p-2 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-2xl shrink-0 border border-emerald-500/20">
                   <DollarSign className="w-5 h-5 stroke-[2.5]" />
                 </div>
                 Recibir Pago de Tratamiento
               </DialogTitle>
-              <DialogDescription className="text-xs font-semibold text-muted-foreground mt-0.5">
-                Paciente: <b className="text-foreground">{patient?.firstName} {patient?.lastName}</b>
+              <DialogDescription className="text-xs font-medium text-muted-foreground mt-0.5">
+                Paciente: <b className="text-foreground font-semibold">{patient?.firstName} {patient?.lastName}</b>
               </DialogDescription>
             </DialogHeader>
-
-            <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+            <div className="p-7 grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
               <div className="md:col-span-7 space-y-3">
-                <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
-                  Selección de Prestaciones Pendientes
-                </p>
-                <div className="max-h-[380px] overflow-y-auto pr-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+                    Selección de Prestaciones Pendientes
+                  </p>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {selectedItemIds.length} de {pendingItems.length} seleccionadas
+                  </span>
+                </div>
+
+                <div className="max-h-[340px] overflow-y-auto pr-1">
                   <PaymentItemsList 
                     pendingItems={pendingItems}
                     selectedItemIds={selectedItemIds}
@@ -169,7 +206,8 @@ export function PaymentReceiptModal({
                 </div>
               </div>
 
-              <div className="md:col-span-5 bg-muted/20 p-4 rounded-2xl border border-border/60">
+              {/* COLUMNA DERECHA: MEDIOS DE PAGO Y CAJA */}
+              <div className="md:col-span-5 bg-muted/20 p-5 rounded-2xl border border-border/60">
                 <PaymentMethodsEcuador 
                   paymentMethod={paymentMethod}
                   setPaymentMethod={setPaymentMethod}
@@ -186,20 +224,35 @@ export function PaymentReceiptModal({
               </div>
             </div>
 
-            <DialogFooter className="px-6 py-4 border-t border-border/80 bg-muted/20 flex flex-row items-center justify-between">
+            {/* FOOTER */}
+            <DialogFooter className="px-7 py-4 border-t border-border/70 bg-muted/20 flex flex-row items-center justify-between">
               <div>
-                <p className="text-[10px] font-bold text-muted-foreground uppercase">Total a Cobrar</p>
-                <p className="text-xl font-black text-emerald-600">${totalToPay.toFixed(2)} USD</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Total a Cobrar</p>
+                <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+                  ${totalToPay.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD
+                </p>
               </div>
 
-              <div className="flex gap-2">
-                <Button variant="ghost" onClick={handleReset} className="font-bold text-xs h-10 rounded-xl">Cancelar</Button>
+              <div className="flex items-center gap-3">
                 <Button 
+                  type="button" 
+                  variant="ghost" 
+                  onClick={handleReset} 
+                  className="font-bold text-xs h-11 px-4 rounded-xl hover:bg-muted cursor-pointer"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="button"
                   onClick={handleProcessPayment} 
                   disabled={isProcessing || !canProcessPayment || !isReferenceValid}
-                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs h-10 px-6 rounded-xl shadow-md cursor-pointer transition-all"
+                  className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs h-11 px-6 rounded-xl shadow-xs cursor-pointer transition-all flex items-center gap-2"
                 >
-                  {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle2 className="w-4 h-4 mr-1.5" />}
+                  {isProcessing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+                  )}
                   Pagar Tratamiento(s)
                 </Button>
               </div>

@@ -1,6 +1,47 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { prisma } from "@/lib/db"
+
+const normalizePrismaPaymentMethod = (method?: string): any => {
+  if (!method) return "CASH"
+  const m = method.toUpperCase().trim()
+
+  switch (m) {
+    case "EFECTIVO":
+    case "CASH":
+      return "CASH"
+
+    case "TARJETA_CREDITO":
+    case "TARJETA_DE_CREDITO":
+    case "CREDIT_CARD":
+    case "TARJETA":
+      return "CREDIT_CARD"
+
+    case "TARJETA_DEBITO":
+    case "TARJETA_DE_DEBITO":
+    case "DEBIT_CARD":
+      return "DEBIT_CARD"
+
+    case "TRANSFERENCIA":
+    case "TRANSFERENCIA_BANCARIA":
+    case "TRANSFER":
+    case "DEUNA":
+    case "DE_UNA":
+    case "BANCO_PICHINCHA":
+    case "BANCO_GUAYAQUIL":
+    case "PRODUBANCO":
+    case "QR":
+      return "TRANSFER"
+
+    case "CHEQUE":
+    case "CHECK":
+      return "CHECK"
+
+    default:
+      return "CASH"
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -17,6 +58,7 @@ export async function GET(request: Request) {
           select: { 
             id: true, 
             name: true,
+            totalPaid: true,
             items: {
               select: {
                 id: true,
@@ -42,11 +84,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Error al obtener historial de pagos" }, { status: 500 })
   }
 }
+
 export async function POST(request: Request) {
   try {
     const session = await getServerSession()
     const body = await request.json()
-    const { patientId, amount, paymentMethod, reference, itemIds, receiptImage, treatmentPlanId } = body
+    const { 
+      patientId, 
+      amount, 
+      paymentMethod, 
+      reference, 
+      itemIds, 
+      receiptImage, 
+      treatmentPlanId 
+    } = body
 
     const parsedAmount = parseFloat(amount || 0)
 
@@ -54,28 +105,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Monto o paciente no válido" }, { status: 400 })
     }
 
-    let targetItemIds = itemIds || []
-
+    let targetItemIds: string[] = itemIds || []
     if (targetItemIds.length === 0) {
-      const activePlans = await prisma.treatmentPlan.findMany({
-        where: { patientId, status: { not: "CANCELLED" } },
-        include: { items: true },
-      })
+      if (treatmentPlanId) {
+        const planItems = await prisma.treatmentItem.findMany({
+          where: { treatmentPlanId },
+        })
 
-      for (const p of activePlans) {
-        for (const item of p.items) {
-          const cost = item.cost || 0
-          const dscto = item.discount || 0
+        for (const item of planItems) {
+          const cost = Number(item.cost || 0)
+          const dscto = Number(item.discount || 0)
           const finalCost = cost - (cost * (dscto / 100))
-          const paid = item.paidAmount || 0
+          const paid = Number(item.paidAmount || 0)
 
           if (finalCost - paid > 0 && !item.isPaid) {
             targetItemIds.push(item.id)
           }
         }
+      } else {
+        const activePlans = await prisma.treatmentPlan.findMany({
+          where: { patientId, status: { not: "CANCELLED" } },
+          include: { items: true },
+        })
+
+        for (const p of activePlans) {
+          if (p.items && Array.isArray(p.items)) {
+            for (const item of p.items) {
+              const cost = Number(item.cost || 0)
+              const dscto = Number(item.discount || 0)
+              const finalCost = cost - (cost * (dscto / 100))
+              const paid = Number(item.paidAmount || 0)
+
+              if (finalCost - paid > 0 && !item.isPaid) {
+                targetItemIds.push(item.id)
+              }
+            }
+          }
+        }
       }
     }
 
+    // 2. Distribuir el dinero en los items seleccionados
     const itemsToPay = await prisma.treatmentItem.findMany({
       where: { id: { in: targetItemIds } },
     })
@@ -84,15 +154,19 @@ export async function POST(request: Request) {
     const planIdsToUpdate = new Set<string>()
     const paidSnapshotItems: any[] = []
 
+    if (treatmentPlanId) {
+      planIdsToUpdate.add(treatmentPlanId)
+    }
+
     for (const item of itemsToPay) {
       if (remainingMoneyToDistribute <= 0) break
 
       planIdsToUpdate.add(item.treatmentPlanId)
 
-      const cost = item.cost || 0
-      const dscto = item.discount || 0
+      const cost = Number(item.cost || 0)
+      const dscto = Number(item.discount || 0)
       const itemFinalPrice = cost - (cost * (dscto / 100))
-      const currentPaid = item.paidAmount || 0
+      const currentPaid = Number(item.paidAmount || 0)
       const pendingDebt = Math.max(0, itemFinalPrice - currentPaid)
 
       const moneyForThisItem = Math.min(remainingMoneyToDistribute, pendingDebt)
@@ -106,6 +180,7 @@ export async function POST(request: Request) {
           isPaid: isFullyPaid,
         },
       })
+
       paidSnapshotItems.push({
         procedureName: item.procedureName || "Procedimiento Odontológico",
         tooth: item.tooth || "General",
@@ -115,25 +190,36 @@ export async function POST(request: Request) {
       remainingMoneyToDistribute -= moneyForThisItem
     }
 
+
     for (const planId of Array.from(planIdsToUpdate)) {
       const allPlanItems = await prisma.treatmentItem.findMany({
         where: { treatmentPlanId: planId },
       })
 
-      const totalPaidForPlan = allPlanItems.reduce((acc, i) => acc + (i.paidAmount || 0), 0)
-      const allItemsPaid = allPlanItems.every(
-        (i) => i.isPaid || (i.paidAmount || 0) >= (i.cost || 0) - ((i.cost || 0) * ((i.discount || 0) / 100)) - 0.01
-      )
+      let totalPaidForPlan = 0
+      let allItemsPaid = false
+
+      if (allPlanItems.length > 0) {
+        totalPaidForPlan = allPlanItems.reduce((acc, i) => acc + (Number(i.paidAmount) || 0), 0)
+        allItemsPaid = allPlanItems.every(
+          (i) => i.isPaid || (Number(i.paidAmount) || 0) >= (Number(i.cost) || 0) - ((Number(i.cost) || 0) * ((Number(i.discount) || 0) / 100)) - 0.01
+        )
+      } else {
+        const currentPlan = await prisma.treatmentPlan.findUnique({ where: { id: planId } })
+        totalPaidForPlan = (Number(currentPlan?.totalPaid) || 0) + parsedAmount
+      }
 
       await prisma.treatmentPlan.update({
         where: { id: planId },
         data: {
           totalPaid: totalPaidForPlan,
-          status: allItemsPaid ? "COMPLETED" : undefined,
+          status: allItemsPaid ? "COMPLETED" : "ACTIVE",
         },
       })
     }
 
+
+    const validMethod = normalizePrismaPaymentMethod(paymentMethod)
     const primaryPlanId = treatmentPlanId || (planIdsToUpdate.size > 0 ? Array.from(planIdsToUpdate)[0] : null)
     const currentUserId = (session?.user as any)?.id || null
 
@@ -141,12 +227,14 @@ export async function POST(request: Request) {
       data: {
         patientId,
         amount: parsedAmount,
-        method: paymentMethod || "CASH",
+        method: validMethod,
         reference: reference || null,
         receiptImage: receiptImage || null,
         treatmentPlanId: primaryPlanId || undefined,
         processedById: currentUserId || undefined,
-        notes: JSON.stringify(paidSnapshotItems),
+        notes: paidSnapshotItems.length > 0 
+          ? JSON.stringify(paidSnapshotItems) 
+          : `Abono directo al tratamiento: $${parsedAmount.toFixed(2)}`,
       },
       include: {
         treatmentPlan: { select: { id: true, name: true } },

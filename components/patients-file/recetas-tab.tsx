@@ -1,12 +1,13 @@
 "use client"
 
 import React, { useState, useRef, useEffect, useCallback } from "react"
-import { Printer, Save, Trash2, Edit, Send, Loader2, CalendarIcon, PlusCircle, CheckCircle2 } from "lucide-react"
+import { Printer, Save, Trash2, Edit, Send, Loader2, CalendarIcon, PlusCircle, CheckCircle2, Search, Pill, PenTool } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -25,7 +26,6 @@ const calculateAge = (birthDateString?: string | Date | null) => {
   if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--
   return age
 }
-
 const SignaturePad = ({ onSave, onCancel, title }: any) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
@@ -51,19 +51,19 @@ const SignaturePad = ({ onSave, onCancel, title }: any) => {
   const handleSave = () => onSave(canvasRef.current?.toDataURL("image/png"))
 
   return (
-    <div className="flex flex-col gap-4 items-center">
-      <p className="font-medium text-foreground">{title}</p>
-      <div className="border-2 border-dashed border-border rounded-lg bg-white overflow-hidden touch-none">
-        <canvas ref={canvasRef} width={400} height={200} 
+    <div className="flex flex-col gap-4 items-center w-full">
+      <p className="font-medium text-xs text-muted-foreground">{title}</p>
+      <div className="relative w-full rounded-xl border-2 border-dashed border-border/80 bg-white shadow-xs overflow-hidden touch-none">
+        <canvas ref={canvasRef} width={500} height={200} 
           onMouseDown={startDrawing} onMouseUp={stopDrawing} onMouseOut={stopDrawing} onMouseMove={draw}
-          onTouchStart={startDrawing} onTouchEnd={stopDrawing} onTouchMove={draw} className="cursor-crosshair" />
+          onTouchStart={startDrawing} onTouchEnd={stopDrawing} onTouchMove={draw} className="cursor-crosshair w-full h-40" />
       </div>
-      <div className="flex gap-2 w-full justify-between mt-2">
-        <Button variant="outline" onClick={handleClear}>Limpiar</Button>
-        <div className="flex gap-2">
-          <Button variant="ghost" onClick={onCancel}>Cancelar</Button>
-          <Button onClick={handleSave} className="bg-[#008bcd] text-white font-bold">Guardar Firma</Button>
-        </div>
+      <div className="flex gap-2 w-full justify-end mt-2">
+        <Button variant="outline" onClick={handleClear} className="rounded-xl font-bold">Limpiar lienzo</Button>
+        <Button variant="ghost" onClick={onCancel} className="rounded-xl font-bold">Cancelar</Button>
+        <Button onClick={handleSave} className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl shadow-sm">
+          Guardar Firma
+        </Button>
       </div>
     </div>
   )
@@ -83,6 +83,7 @@ export function RecetasTab({ patientId }: { patientId: string }) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [medications, setMedications] = useState("")
@@ -108,7 +109,6 @@ export function RecetasTab({ patientId }: { patientId: string }) {
   }, [patientId, toast])
 
   useEffect(() => { fetchPrescriptions() }, [fetchPrescriptions])
-
   useEffect(() => {
     if (!canEditClinicalData) return
     const timer = setTimeout(() => {
@@ -117,51 +117,50 @@ export function RecetasTab({ patientId }: { patientId: string }) {
     return () => clearTimeout(timer)
   }, [medications, indications, observations, isDirty, canEditClinicalData])
 
-const handleSave = async (isAutoSave = false) => {
-  if (!canEditClinicalData) return;
+  const handleSave = async (isAutoSave = false) => {
+    if (!canEditClinicalData) return;
 
-  if (!medications.trim() && !indications.trim() && !observations.trim()) {
-    if (!isAutoSave) toast({ title: "La receta está vacía", variant: "destructive" });
-    return;
-  }
-
-  setIsSaving(true);
-  try {
-    const method = editingId ? "PUT" : "POST";
-    const url = editingId ? `/api/prescriptions/${editingId}` : `/api/prescriptions`;
-    
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        patientId, 
-        medications, 
-        indications, 
-        observations, // Envia el estado de observaciones
-        authorId: currentUser?.id 
-      })
-    });
-
-    if (!res.ok) throw new Error("Error en la respuesta del servidor");
-
-    const savedDoc = await res.json();
-    
-    if (!isAutoSave) {
-      toast({ title: editingId ? "Receta actualizada" : "Receta creada", variant: "success" });
-      handleNewRecipe(); 
-    } else {
-      if (!editingId && savedDoc.id) setEditingId(savedDoc.id);
-      setIsDirty(false);
+    if (!medications.trim() && !indications.trim() && !observations.trim()) {
+      if (!isAutoSave) toast({ title: "La receta está vacía", variant: "destructive" });
+      return;
     }
-    
-    // REFRESCA INMEDIATAMENTE LA LISTA EN PANTALLA
-    await fetchPrescriptions();
-  } catch (error) { 
-    if (!isAutoSave) toast({ title: "Error al guardar", variant: "destructive" });
-  } finally { 
-    setIsSaving(false); 
-  }
-};
+
+    setIsSaving(true);
+    try {
+      const method = editingId ? "PUT" : "POST";
+      const url = editingId ? `/api/prescriptions/${editingId}` : `/api/prescriptions`;
+      
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          patientId, 
+          medications, 
+          indications, 
+          observations,
+          authorId: currentUser?.id 
+        })
+      });
+
+      if (!res.ok) throw new Error("Error en la respuesta del servidor");
+
+      const savedDoc = await res.json();
+      
+      if (!isAutoSave) {
+        toast({ title: editingId ? "Receta actualizada" : "Receta creada", variant: "success" });
+        handleNewRecipe(); 
+      } else {
+        if (!editingId && savedDoc.id) setEditingId(savedDoc.id);
+        setIsDirty(false);
+      }
+      
+      await fetchPrescriptions();
+    } catch (error) { 
+      if (!isAutoSave) toast({ title: "Error al guardar", variant: "destructive" });
+    } finally { 
+      setIsSaving(false); 
+    }
+  };
 
   const handleNewRecipe = () => {
     setEditingId(null)
@@ -191,7 +190,6 @@ const handleSave = async (isAutoSave = false) => {
     } catch (error) { toast({ title: "Error", variant: "destructive" }) }
   }
 
-  // ENVÍO DE RECETA DIGITAL POR WHATSAPP (INCLUYE OBSERVACIONES)
   const handleWhatsApp = (p: any) => {
     if (!patientPhone) return toast({ title: "Atención", description: "El paciente no tiene celular registrado.", variant: "destructive" })
 
@@ -217,6 +215,15 @@ const handleSave = async (isAutoSave = false) => {
     window.open(`https://wa.me/${patientPhone}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
+  // FILTRADO
+  const filteredPrescriptions = prescriptions.filter(p => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return p.medications?.toLowerCase().includes(term) || 
+           p.indications?.toLowerCase().includes(term) || 
+           p.author?.name?.toLowerCase().includes(term);
+  });
+
   return (
     <div className="animate-in fade-in duration-300 pb-20">
       
@@ -229,135 +236,179 @@ const handleSave = async (isAutoSave = false) => {
         patientAllergies={patientAllergies} 
       />
 
-      {/* 2. MODAL DE FIRMA */}
       <Dialog open={!!signingRecipe} onOpenChange={(open) => !open && setSigningRecipe(null)}>
-        <DialogContent className="sm:max-w-md bg-card border-border">
-          <DialogHeader><DialogTitle className="text-foreground">Firma del Especialista</DialogTitle></DialogHeader>
-          {signingRecipe && (
-            <SignaturePad title="Firme aquí para validar la receta digital antes de imprimir" onCancel={() => setSigningRecipe(null)} 
-              onSave={async (img: string) => {
-                await fetch(`/api/prescriptions/${signingRecipe.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorSignature: img }) })
-                setPrintingDoc({ ...signingRecipe, doctorSignature: img }); setSigningRecipe(null)
-                setTimeout(() => { window.print(); setPrintingDoc(null) }, 300)
-              }} 
-            />
-          )}
+        <DialogContent className="sm:max-w-xl bg-card border-border rounded-[24px] shadow-2xl p-0 overflow-hidden">
+          <DialogHeader className="px-6 py-4 border-b border-border/70 bg-muted/15">
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
+              <PenTool className="w-5 h-5 text-[#008bcd]" /> Firma del Especialista
+            </DialogTitle>
+          </DialogHeader>
+          <div className="p-6">
+            {signingRecipe && (
+              <SignaturePad title="Firme aquí para validar la receta digital antes de imprimir" onCancel={() => setSigningRecipe(null)} 
+                onSave={async (img: string) => {
+                  await fetch(`/api/prescriptions/${signingRecipe.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorSignature: img }) })
+                  setPrintingDoc({ ...signingRecipe, doctorSignature: img }); 
+                  setSigningRecipe(null)
+                  setTimeout(() => { window.print(); setPrintingDoc(null) }, 300)
+                }} 
+              />
+            )}
+          </div>
         </DialogContent>
-      </Dialog>
+      </Dialog> {/* 2. MODAL DE FIRMA */}
+     
 
       {/* CABECERA Y ACCIONES */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 bg-card p-4 rounded-xl border border-border shadow-sm print:hidden sticky top-0 z-10">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl font-semibold text-foreground">Recetas y Prescripciones</h2>
-          {!canEditClinicalData && (
-            <span className="text-[10px] font-bold tracking-widest bg-slate-100 border border-slate-200 text-slate-500 px-2 py-0.5 rounded-md">
-              SÓLO LECTURA
-            </span>
-          )}
-          {isSaving && (
-            <span className="text-xs text-muted-foreground flex items-center">
-              <Loader2 className="w-3 h-3 mr-1 animate-spin"/> Guardando...
-            </span>
-          )}
-          {!isSaving && isDirty && (
-            <span className="text-xs text-amber-500 font-bold">Cambios sin guardar</span>
-          )}
-          {!isSaving && !isDirty && editingId && (
-            <span className="text-xs text-emerald-500 font-bold flex items-center">
-              <CheckCircle2 className="w-3 h-3 mr-1"/> Editando Receta #{editingId.substring(0, 6).toUpperCase()}
-            </span>
-          )}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-5 bg-card p-5 rounded-2xl border border-border shadow-sm sticky top-0 z-20 print:hidden">
+        
+        <div>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+              Recetas y Prescripciones
+            </h2>
+            {!canEditClinicalData && (
+              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 tracking-wider">
+                SÓLO LECTURA
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-1.5">
+            <p className="text-sm font-medium text-muted-foreground">
+              Emisión de indicaciones médicas.
+            </p>
+            {/* INDICADORES DE GUARDADO */}
+            {isSaving && (
+              <span className="text-[11px] bg-blue-500/10 text-blue-600 font-bold px-2 py-0.5 rounded-full flex items-center">
+                <Loader2 className="w-3 h-3 mr-1 animate-spin"/> Guardando...
+              </span>
+            )}
+            {!isSaving && isDirty && (
+              <span className="text-[11px] bg-amber-500/10 text-amber-600 font-bold px-2 py-0.5 rounded-full">
+                Cambios sin guardar
+              </span>
+            )}
+            {!isSaving && !isDirty && editingId && (
+              <span className="text-[11px] bg-emerald-500/10 text-emerald-600 font-bold px-2 py-0.5 rounded-full flex items-center">
+                <CheckCircle2 className="w-3 h-3 mr-1"/> Editando #{editingId.substring(0, 6).toUpperCase()}
+              </span>
+            )}
+          </div>
         </div>
         
-        {canEditClinicalData && (
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            {/* BOTÓN "NUEVA RECETA": SIEMPRE VISIBLE */}
-            <Button 
-              variant="outline" 
-              onClick={handleNewRecipe} 
-              className="bg-background text-foreground hover:bg-muted font-bold border-border rounded-xl"
-            >
-              <PlusCircle size={15} className="mr-1.5 text-[#008bcd]"/> Nueva Receta
-            </Button>
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
+          
+          <div className="relative w-full sm:w-[240px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input type="text" placeholder="Buscar medicamento..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 bg-background border-border text-sm font-medium focus-visible:ring-[#008bcd] w-full h-11 rounded-xl" />
+          </div>
 
-            {/* BOTÓN GUARDAR MANUAL */}
-            <Button 
-              onClick={() => handleSave(false)} 
-              disabled={isSaving}
-              className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl shadow-sm"
-            >
-              {isSaving ? <Loader2 className="mr-2 w-4 h-4 animate-spin"/> : <Save className="mr-2 w-4 h-4"/>} 
-              Guardar Manual
-            </Button>
+          {canEditClinicalData && (
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button 
+                variant="outline" 
+                onClick={handleNewRecipe} 
+                className="bg-background text-foreground hover:bg-muted font-bold border-border rounded-xl h-11"
+              >
+                <PlusCircle size={16} className="mr-1.5 text-[#008bcd]"/> Nueva Receta
+              </Button>
+
+              <Button 
+                onClick={() => handleSave(false)} 
+                disabled={isSaving}
+                className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl h-11 shadow-sm transition-all active:scale-95"
+              >
+                {isSaving ? <Loader2 className="mr-2 w-4 h-4 animate-spin"/> : <Save className="mr-2 w-4 h-4"/>} 
+                Guardar Manual
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
+        
+        {/* 3. EDITOR MODULAR */}
+        {canEditClinicalData && (
+          <div className="lg:col-span-5">
+            <PrescriptionEditor 
+              editingId={editingId}
+              medications={medications} setMedications={setMedications}
+              indications={indications} setIndications={setIndications}
+              observations={observations} setObservations={setObservations}
+              setIsDirty={setIsDirty}
+            />
           </div>
         )}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:hidden">
-        
-        {/* 3. EDITOR MODULAR (Solo Doctor/Admin) */}
-        {canEditClinicalData && (
-          <PrescriptionEditor 
-            editingId={editingId}
-            medications={medications} setMedications={setMedications}
-            indications={indications} setIndications={setIndications}
-            observations={observations} setObservations={setObservations}
-            setIsDirty={setIsDirty}
-          />
-        )}
 
-        {/* HISTORIAL DE RECETAS */}
-        <div className={cn("flex flex-col gap-4", canEditClinicalData ? "lg:col-span-7" : "lg:col-span-12")}>
+        {/* HISTORIAL DE RECETAS - ESTILO PREMIUM */}
+        <div className={cn("flex flex-col gap-5", canEditClinicalData ? "lg:col-span-7" : "lg:col-span-12")}>
           {isLoading ? (
-            <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#008bcd] w-8 h-8"/></div>
-          ) : prescriptions.length === 0 ? (
-            <div className="bg-card border border-dashed border-border rounded-xl p-10 text-center text-muted-foreground">No hay recetas previas para este paciente.</div>
+            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#008bcd] w-8 h-8"/></div>
+          ) : filteredPrescriptions.length === 0 ? (
+            <div className="bg-card border border-dashed border-border/80 rounded-2xl p-12 text-center text-muted-foreground flex flex-col items-center justify-center h-full min-h-[300px]">
+              <Pill className="w-12 h-12 mb-4 opacity-20" />
+              <p className="font-bold text-foreground text-lg">Sin Recetas</p>
+              <p className="text-sm">No hay prescripciones registradas para este paciente.</p>
+            </div>
           ) : (
-            prescriptions.map((p) => (
-              <div key={p.id} className={cn("bg-card border rounded-xl shadow-sm overflow-hidden flex flex-col transition-colors", editingId === p.id ? "border-[#008bcd]/50" : "border-border")}>
+            filteredPrescriptions.map((p) => (
+              <div key={p.id} className={cn("bg-card border rounded-2xl shadow-xs overflow-hidden flex flex-col transition-all hover:shadow-sm", editingId === p.id ? "border-[#008bcd] ring-1 ring-[#008bcd]/20" : "border-border/80 hover:border-border")}>
                 
-                <div className="bg-muted/30 px-4 py-3 border-b border-border flex justify-between items-center text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-[#008bcd]/10 flex items-center justify-center text-[#008bcd] font-bold text-xs">{p.author?.name ? p.author.name.charAt(0) : "D"}</div>
-                    <span className="font-semibold text-[#008bcd]">{p.author?.name || "Dr. Asignado"}</span>
+                <div className="bg-muted/15 px-5 py-3.5 border-b border-border/60 flex flex-wrap gap-3 justify-between items-center text-sm">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-full bg-[#008bcd]/10 flex items-center justify-center text-[#008bcd] font-bold text-xs shadow-xs">
+                      {p.author?.name ? p.author.name.charAt(0) : "D"}
+                    </div>
+                    <span className="font-bold text-foreground">{p.author?.name || "Dr. Asignado"}</span>
                   </div>
-                  <div className="text-muted-foreground text-xs flex items-center gap-2">
+                  <div className="text-muted-foreground text-xs font-medium flex items-center gap-1.5 bg-background px-2.5 py-1 rounded-md border border-border/50">
                     <CalendarIcon size={12}/> {format(new Date(p.createdAt), "dd MMM yyyy - HH:mm", { locale: es })}
                   </div>
                 </div>
 
-                <div className="p-4 text-sm text-foreground whitespace-pre-wrap leading-relaxed [&>ul]:list-disc [&>ul]:ml-5">
-                  <p className="font-bold text-xs text-muted-foreground mb-1 uppercase">R.P.</p>
-                  <div dangerouslySetInnerHTML={{ __html: p.medications }} className="mb-3"/>
+                <div className="p-5 text-sm text-foreground whitespace-pre-wrap leading-relaxed [&>ul]:list-disc [&>ul]:ml-5">
+                  <div className="mb-4">
+                    <p className="font-extrabold text-[11px] text-[#008bcd] mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                      <Pill className="w-3.5 h-3.5" /> R.P. (Medicamentos)
+                    </p>
+                    <div dangerouslySetInnerHTML={{ __html: p.medications }} className="pl-1"/>
+                  </div>
                   
-                  <p className="font-bold text-xs text-muted-foreground mb-1 uppercase">Indicaciones</p>
-                  <div dangerouslySetInnerHTML={{ __html: p.indications }} className="mb-3"/>
+                  <div>
+                    <p className="font-extrabold text-[11px] text-[#008bcd] mb-1.5 uppercase tracking-wider">
+                      Indicaciones
+                    </p>
+                    <div dangerouslySetInnerHTML={{ __html: p.indications }} className="pl-1"/>
+                  </div>
 
                   {p.observations && (
-                  <div className="mt-3 pt-2.5 border-t border-border/60">
-                    <p className="font-bold text-xs text-muted-foreground mb-1 uppercase tracking-wider">
-                      Observaciones / Cuidados
+                  <div className="mt-4 pt-3 border-t border-dashed border-border/60 bg-amber-500/5 -mx-5 px-5 pb-1">
+                    <p className="font-extrabold text-[11px] text-amber-600 mb-1.5 uppercase tracking-wider">
+                      Observaciones Especiales
                     </p>
                     <div 
                       dangerouslySetInnerHTML={{ __html: p.observations }} 
-                      className="text-foreground text-xs font-medium leading-relaxed"
+                      className="text-foreground text-xs font-medium leading-relaxed pl-1"
                     />
                   </div>
                 )}
                 </div>
 
-                <div className="bg-muted/10 px-4 py-2 border-t border-border flex flex-wrap justify-end gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => handleWhatsApp(p)} className="text-[#25D366] hover:text-[#1da851] hover:bg-[#25D366]/10 h-8 text-xs font-medium">
-                    <Send size={14} className="mr-1.5"/> Enviar WhatsApp
+                <div className="bg-muted/10 px-4 py-3 border-t border-border/60 flex flex-wrap justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => handleWhatsApp(p)} className="text-[#25D366] hover:text-[#1da851] hover:bg-[#25D366]/10 border-[#25D366]/20 h-8 text-xs font-bold rounded-lg">
+                    <Send size={14} className="mr-1.5"/> WhatsApp
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => {
+                  
+                  <Button variant="outline" size="sm" onClick={() => {
                     if (!p.doctorSignature && canEditClinicalData) setSigningRecipe(p)
                     else { setPrintingDoc(p); setTimeout(() => { window.print(); setPrintingDoc(null) }, 300) }
-                  }} className="text-muted-foreground hover:text-[#008bcd] h-8 text-xs">
+                  }} className="text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 border-border h-8 text-xs font-bold rounded-lg">
                     <Printer size={14} className="mr-1.5"/> Imprimir
                   </Button>
 
                   {canEditClinicalData && (
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(p)} className="text-muted-foreground hover:text-amber-600 h-8 text-xs">
+                    <Button variant="outline" size="sm" onClick={() => handleEdit(p)} className="text-foreground hover:text-amber-600 hover:bg-amber-500/10 border-border h-8 text-xs font-bold rounded-lg">
                       <Edit size={14} className="mr-1.5"/> Editar
                     </Button>
                   )}
@@ -365,13 +416,19 @@ const handleSave = async (isAutoSave = false) => {
                   {canDeleteData && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-red-500 hover:bg-red-50 h-8 text-xs">
+                        <Button variant="outline" size="sm" className="text-foreground hover:text-red-500 hover:bg-red-500/10 border-border h-8 text-xs font-bold rounded-lg">
                           <Trash2 size={14} className="mr-1.5"/> Eliminar
                         </Button>
                       </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-background border-border">
-                        <AlertDialogHeader><AlertDialogTitle className="text-foreground">¿Eliminar receta?</AlertDialogTitle><AlertDialogDescription>Se eliminará de forma permanente del historial del paciente.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel className="text-foreground border-border">Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(p.id)} className="bg-red-600 text-white hover:bg-red-700">Eliminar</AlertDialogAction></AlertDialogFooter>
+                      <AlertDialogContent className="bg-card border-border rounded-[24px]">
+                        <AlertDialogHeader>
+                          <AlertDialogTitle className="text-foreground font-bold">¿Eliminar receta?</AlertDialogTitle>
+                          <AlertDialogDescription>Se eliminará de forma permanente del historial del paciente.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel className="text-foreground border-border rounded-xl font-bold">Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(p.id)} className="bg-red-600 text-white hover:bg-red-700 rounded-xl font-bold">Eliminar</AlertDialogAction>
+                        </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   )}

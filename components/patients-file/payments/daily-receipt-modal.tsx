@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 
-// 📍 1. Declarar la función helper ARRIBA del componente
 const formatPaymentMethod = (method?: string) => {
   if (!method) return "Efectivo"
   const m = method.toUpperCase()
@@ -37,7 +36,6 @@ const formatPaymentMethod = (method?: string) => {
   }
 }
 
-// 📍 2. Interface con 'patient' declarado explícitamente
 interface DailyReceiptModalProps {
   isOpen: boolean
   onClose: () => void
@@ -51,13 +49,12 @@ export function DailyReceiptModal({
   isOpen,
   onClose,
   payment,
-  patient, // 👈 Ya está recibido como prop
+  patient, 
   allPaymentsOfDay = [],
   clinicInfo,
 }: DailyReceiptModalProps) {
   if (!payment) return null
 
-  // DATOS REALES CLÍNICA
   const clinicName = clinicInfo?.clinicName || "CARMO DENTAL"
   const clinicAddress = clinicInfo?.address || "Av. Principal #123 - Centro Médico"
   const clinicPhone = clinicInfo?.phone || "Teléfono: +593 99 999 9999"
@@ -65,7 +62,6 @@ export function DailyReceiptModal({
 
   const transactionDate = payment.createdAt ? new Date(payment.createdAt) : new Date()
 
-  // Pagos del día
   const dayPayments = allPaymentsOfDay.length > 0 ? allPaymentsOfDay : [payment]
   
   const totalCash = dayPayments
@@ -198,7 +194,6 @@ export function DailyReceiptModal({
                 </thead>
                 <tbody className="divide-y divide-slate-200 font-medium text-slate-800">
                   {dayPayments.map((item: any, idx: number) => {
-                    // Lógica segura para obtener el nombre del paciente
                     const itemPatientName = item.patient
                       ? `${item.patient.firstName || ''} ${item.patient.lastName || ''}`.trim()
                       : (patient 
@@ -228,15 +223,11 @@ export function DailyReceiptModal({
                 </tbody>
               </table>
             </div>
-
-            {/* PIE DE PÁGINA */}
             <div className="mt-12 pt-4 border-t border-slate-200 text-center text-[10px] text-slate-400 font-bold uppercase tracking-widest">
               Documento de Cierre Contable Interno — Carmo Dental
             </div>
-
           </div>
         </div>
-
       </DialogContent>
     </Dialog>
   )

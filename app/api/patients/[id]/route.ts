@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 
-// OBTENER UN PACIENTE (GET)
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -26,7 +25,6 @@ export async function GET(
   }
 }
 
-// ACTUALIZAR UN PACIENTE (PATCH)
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> } 
@@ -58,7 +56,6 @@ export async function PATCH(
   }
 }
 
-// ELIMINAR UN PACIENTE (DELETE - Soft Delete)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> } 

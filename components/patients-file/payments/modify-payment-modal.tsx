@@ -89,8 +89,6 @@ export function ManagePaymentModal({
       setIsLoading(false)
     }
   }
-
-  // Eliminar Pago con Comentario (DELETE)
   const handleDelete = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!deletionReason.trim()) {
@@ -211,7 +209,6 @@ export function ManagePaymentModal({
                 ¿Está seguro de eliminar este cobro de <strong className="text-foreground">${rawAmount.toFixed(2)}</strong>? Si es así, ingrese a continuación un comentario como referencia de esta eliminación.
               </DialogDescription>
             </DialogHeader>
-
             <div className="py-4 space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
                 Comentario para eliminación <span className="text-red-500">*</span>
@@ -224,7 +221,6 @@ export function ManagePaymentModal({
                 required
               />
             </div>
-
             <DialogFooter className="pt-3 border-t border-border/60 gap-2">
               <Button type="button" variant="outline" onClick={onClose} className="rounded-xl text-xs h-10 font-medium">
                 Cancelar
@@ -239,7 +235,6 @@ export function ManagePaymentModal({
             </DialogFooter>
           </form>
         )}
-
       </DialogContent>
     </Dialog>
   )

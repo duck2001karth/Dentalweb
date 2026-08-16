@@ -1,6 +1,7 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
+import { useSearchParams, useRouter, usePathname } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { AlertTriangle } from "lucide-react"
 
@@ -18,6 +19,11 @@ import { useGetPatient } from "@/hooks/patients"
 
 export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
   const { toast } = useToast()
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const urlPlanId = searchParams.get("planId")
   
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
@@ -28,7 +34,26 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
   const { deleteTreatmentPlan, isLoading: isDeleting } = useDeleteTreatmentPlan()
   const { updateTreatmentPlan, isLoading: isSavingComment } = useUpdateTreatmentPlan()
 
+  useEffect(() => {
+    if (urlPlanId) {
+      setSelectedPlanId(urlPlanId)
+    } else {
+      setSelectedPlanId(null)
+    }
+  }, [urlPlanId])
+
   const selectedPlan = plans.find((p: any) => p.id === selectedPlanId)
+
+  const handleBackToList = () => {
+    setSelectedPlanId(null)
+    router.push(`${pathname}?tab=planes`)
+    refetch()
+  }
+
+  const handleSelectPlan = (id: string) => {
+    setSelectedPlanId(id)
+    router.push(`${pathname}?tab=planes&planId=${id}`)
+  }
 
   const handleSaveComment = (text: string) => {
     if (!selectedPlanId) return
@@ -46,7 +71,9 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
       onSuccess: () => {
         toast({ title: "Plan enviado a la papelera", variant: "success" })
         setPlanToDelete(null)
-        if (selectedPlanId === planToDelete) setSelectedPlanId(null)
+        if (selectedPlanId === planToDelete) {
+          handleBackToList()
+        }
         refetch()
       },
       onError: () => {
@@ -64,7 +91,7 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
         onClose={() => setIsCreateModalOpen(false)} 
         patientId={patientId} 
         onSuccessCallback={(id: string) => {
-          setSelectedPlanId(id)
+          handleSelectPlan(id)
           refetch()
         }} 
       />
@@ -95,15 +122,11 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* DETALLE O LISTADO */}
       {selectedPlanId && selectedPlan ? (
         <TreatmentPlanDetail 
           plan={selectedPlan} 
           patient={patient} 
-          onBack={() => {
-            refetch()
-            setSelectedPlanId(null)
-          }} 
+          onBack={handleBackToList} 
           onPlanUpdate={refetch} 
           onSaveComment={handleSaveComment}
           isSavingComment={isSavingComment}
@@ -114,7 +137,7 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
           isLoading={isLoading} 
           patientName={patient ? `${patient.firstName} ${patient.lastName}` : ""} 
           onNewPlan={() => setIsCreateModalOpen(true)}
-          onSelectPlan={(id: string) => setSelectedPlanId(id)}
+          onSelectPlan={handleSelectPlan}
           onDeletePlan={(id: string) => setPlanToDelete(id)}
           refetchPlans={refetch}
         />

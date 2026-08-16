@@ -188,7 +188,8 @@ model Patient {
 
   comments              PatientComment[]
   tasks                 PatientTask[]
-  
+
+  taxDocuments TaxDocument[]
   payments          Payment[]
 
   isDeleted             Boolean   @default(false)
@@ -548,6 +549,8 @@ model Payment {
   receiptImage    String?
   notes           String?       @db.Text
 
+  taxDocuments TaxDocument[]
+  
   patientId       String
   patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
   
@@ -637,3 +640,66 @@ model InventoryItem {
   updatedAt         DateTime  @updatedAt
 }
 
+// ==========================================
+// 7. FACTURACIÓN ELECTRÓNICA SRI ECUADOR
+// ==========================================
+
+enum TaxDocType {
+  FACTURA        
+  NOTA_CREDITO   
+  RETENCION      
+}
+
+enum TaxDocStatus {
+  PENDING       
+  RECEIVED     
+  AUTHORIZED     
+  REJECTED       
+  VOIDED         
+}
+
+enum SriEnvironment {
+  TEST           
+  PRODUCTION     
+}
+
+model TaxDocument {
+  id                String         @id @default(uuid())
+  
+  // Datos del Comprobante Fiscal
+  docType           TaxDocType     @default(FACTURA)
+  secuencial        String         
+  accessKey         String?        @unique // Clave de acceso de 49 dígitos del SRI
+  authorizationNum  String?        
+  authorizationDate DateTime?
+  status            TaxDocStatus   @default(PENDING)
+  environment       SriEnvironment @default(PRODUCTION)
+
+  // Datos del Receptor (Paciente)
+  idType            String         
+  identification    String         
+  businessName      String         
+  email             String         
+  address           String?
+
+  // Desglose Tributario Ecuador (Servicios Odontológicos IVA 0%)
+  subtotal0         Float          @default(0) // Gravado 0%
+  subtotal15        Float          @default(0) // Gravado tarifa general (si vende productos)
+  ivaAmount         Float          @default(0)
+  total             Float          @default(0)
+
+  // Archivos Digitales Generados
+  xmlUrl            String?        @db.Text
+  ridePdfUrl        String?        @db.Text
+  sriResponse       String?        @db.Text // Mensaje de error/éxito retornado por el SRI
+
+  // Relaciones Clínicas
+  patientId         String
+  patient           Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  paymentId         String?
+  payment           Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
