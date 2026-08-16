@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { prisma } from "@/lib/db"
+import { authOptions } from "@/lib/auth" 
 
 export async function GET(
   request: Request,
@@ -29,6 +30,7 @@ export async function GET(
     return NextResponse.json({ error: "Error interno" }, { status: 500 })
   }
 }
+
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -60,7 +62,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await getServerSession()
+    const session = await getServerSession(authOptions)
     const { id: paymentId } = await params
     
     let deletionReason = "Sin motivo especificado"
@@ -71,65 +73,47 @@ export async function DELETE(
       if (body?.reason) deletionReason = body.reason
       if (body?.permanent) isPermanent = true
     } catch (e) {}
-
-    // 1. Verificar si existe antes de actuar
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
-      include: { treatmentPlan: { include: { items: true } } }
+      include: { 
+        treatmentPlan: { 
+          include: { items: true } 
+        } 
+      }
     })
 
     if (!payment) {
       return NextResponse.json({ success: true, message: "El registro ya no existe o fue purgado" }, { status: 200 })
     }
+
+    const planId = payment.treatmentPlanId
+    const plan = payment.treatmentPlan
     if (isPermanent) {
+      // Purgar de la tabla Payment
       await prisma.payment.deleteMany({
         where: { id: paymentId }
       })
-      return NextResponse.json({ 
-        success: true, 
-        message: "Registro purgado definitivamente de la base de datos" 
-      })
-    }
-
-    // 3. SI ES ANULACIÓN REGULAR (Soft Delete con reversión contable)
-    if (payment.treatmentPlanId && payment.treatmentPlan) {
-      const refundAmount = payment.amount
-      const plan = payment.treatmentPlan
-      const newTotalPaid = Math.max(0, (plan.totalPaid || 0) - refundAmount)
-      let remainingToRevert = refundAmount
-
-      for (const item of plan.items) {
-        if (remainingToRevert <= 0) break
-        if ((item.paidAmount || 0) > 0) {
-          const deduct = Math.min(item.paidAmount, remainingToRevert)
-          await prisma.treatmentItem.update({
-            where: { id: item.id },
-            data: {
-              paidAmount: item.paidAmount - deduct,
-              isPaid: false,
-            }
-          })
-          remainingToRevert -= deduct
-        }
+      if (planId && plan) {
+        await syncPlanFinancials(planId, plan.items)
       }
 
-      await prisma.treatmentPlan.update({
-        where: { id: payment.treatmentPlanId },
-        data: {
-          totalPaid: newTotalPaid,
-          status: "ACTIVE",
-        }
+      return NextResponse.json({ 
+        success: true, 
+        message: "Registro purgado definitivamente y saldo sincronizado" 
       })
     }
-
     const userName = (session?.user as any)?.name || "Administrador"
 
+    // Marcar como anulado en notas
     await prisma.payment.update({
       where: { id: paymentId },
       data: {
         notes: `[PAGO ELIMINADO/ANULADO por ${userName}]: ${deletionReason} | Historial previo: ${payment.notes || 'N/A'}`,
       }
     })
+    if (planId && plan) {
+      await syncPlanFinancials(planId, plan.items)
+    }
 
     return NextResponse.json({ 
       success: true, 
@@ -139,4 +123,47 @@ export async function DELETE(
     console.error("Error al eliminar/anular el pago:", error)
     return NextResponse.json({ error: "Error interno al procesar la anulación" }, { status: 500 })
   }
+}
+
+async function syncPlanFinancials(planId: string, items: any[] = []) {
+  const activePayments = await prisma.payment.findMany({
+    where: {
+      treatmentPlanId: planId,
+      NOT: {
+        notes: { contains: "[PAGO ELIMINADO" }
+      }
+    }
+  })
+
+  const realTotalPaid = activePayments.reduce((acc, p) => acc + Number(p.amount || 0), 0)
+
+  let remainingPaidToDistribute = realTotalPaid
+
+  for (const item of items) {
+    const itemCost = Number(item.cost || item.price || 0)
+    const discount = Number(item.discount || 0)
+    const itemFinalPrice = itemCost - (itemCost * (discount / 100))
+
+    let itemPaid = 0
+    if (remainingPaidToDistribute > 0) {
+      itemPaid = Math.min(itemFinalPrice, remainingPaidToDistribute)
+      remainingPaidToDistribute -= itemPaid
+    }
+
+    await prisma.treatmentItem.update({
+      where: { id: item.id },
+      data: {
+        paidAmount: itemPaid,
+        isPaid: itemPaid >= itemFinalPrice && itemFinalPrice > 0
+      }
+    })
+  }
+
+  await prisma.treatmentPlan.update({
+    where: { id: planId },
+    data: {
+      totalPaid: realTotalPaid,
+      status: "ACTIVE"
+    }
+  })
 }

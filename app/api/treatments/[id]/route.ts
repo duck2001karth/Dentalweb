@@ -12,6 +12,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         doctor: true,
         patient: true,
         items: true,
+        payments: true,
       }
     })
 

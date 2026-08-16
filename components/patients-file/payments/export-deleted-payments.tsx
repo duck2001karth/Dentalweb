@@ -12,6 +12,7 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
+import { useToast } from "@/hooks/use-toast"
 
 const formatPaymentMethod = (method?: string) => {
   if (!method) return "Efectivo"
@@ -20,7 +21,7 @@ const formatPaymentMethod = (method?: string) => {
     case "CASH": case "EFECTIVO": return "Efectivo"
     case "CREDIT_CARD": case "TARJETA_CREDITO": return "Tarjeta de Crédito"
     case "DEBIT_CARD": case "TARJETA_DEBITO": return "Tarjeta de Débito"
-    case "TRANSFER": case "TRANSFERENCIA": case "NEQUI": return "Transferencia Bancaria"
+    case "TRANSFER": case "TRANSFERENCIA": case "DEUNA": return "Transferencia Bancaria"
     case "CHECK": case "CHEQUE": return "Cheque"
     default: return method
   }
@@ -35,15 +36,22 @@ interface ExportDeletedPaymentsProps {
 }
 
 export function ExportDeletedPayments({ 
-  data, 
+  data = [], 
   patientFullName = "Paciente Registrado",
   patientDocId = "No registrado",
   patientAge = "--",
   issuedBy = "Administrador"
 }: ExportDeletedPaymentsProps) {
-  
+  const { toast } = useToast()
   const handleExportCSV = () => {
-    if (!data || data.length === 0) return
+    if (!data || data.length === 0) {
+      toast({
+        title: "Sin registros",
+        description: "No existen pagos anulados para generar el archivo Excel.",
+        variant: "info"
+      })
+      return
+    }
 
     const headers = [
       "No. Pago", "Medio de Pago", "No. Documento (Factura)", 
@@ -90,9 +98,15 @@ export function ExportDeletedPayments({
     link.click()
     document.body.removeChild(link)
   }
-
   const handleExportPDF = () => {
-    if (!data || data.length === 0) return
+    if (!data || data.length === 0) {
+      toast({
+        title: "Sin registros",
+        description: "No existen pagos anulados para generar el reporte PDF.",
+        variant: "info"
+      })
+      return
+    }
 
     const printWindow = window.open("", "_blank", "width=1000,height=800")
     if (!printWindow) return

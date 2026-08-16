@@ -12,30 +12,19 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu"
+import { useToast } from "@/hooks/use-toast"
+
 const formatSriStatus = (status?: string, isAuthorized?: boolean) => {
   if (isAuthorized) return "AUTORIZADO"
   if (!status) return "PENDIENTE"
   
   const s = status.toUpperCase()
   switch (s) {
-    case "AUTHORIZED":
-    case "AUTORIZADO":
-      return "AUTORIZADO"
-    case "VOIDED":
-    case "CANCELLED":
-    case "CANCELED":
-    case "ANULADO":
-      return "ANULADO"
-    case "REJECTED":
-    case "DEVUELTA":
-    case "RECHAZADO":
-      return "RECHAZADO"
-    case "PENDING":
-    case "PENDIENTE":
-    case "EN PROCESO":
-      return "PENDIENTE"
-    default:
-      return s
+    case "AUTHORIZED": case "AUTORIZADO": return "AUTORIZADO"
+    case "VOIDED": case "CANCELLED": case "CANCELED": case "ANULADO": return "ANULADO"
+    case "REJECTED": case "DEVUELTA": case "RECHAZADO": return "RECHAZADO"
+    case "PENDING": case "PENDIENTE": case "EN PROCESO": return "PENDIENTE"
+    default: return s
   }
 }
 
@@ -54,9 +43,16 @@ export function ExportIssuedDocuments({
   patientAge = "--",
   issuedBy = "Administrador"
 }: ExportIssuedDocsProps) {
-  //EXPORTAR A EXCEL (.CSV)
+  const { toast } = useToast()
   const handleExportCSV = () => {
-    if (!data || data.length === 0) return
+    if (!data || data.length === 0) {
+      toast({
+        title: "Sin comprobantes",
+        description: "No existen documentos tributarios emitidos para generar el archivo Excel.",
+        variant: "info"
+      })
+      return
+    }
 
     const headers = [
       "No. Factura / Comprobante", "Tipo Documento", "Receptor", 
@@ -93,10 +89,15 @@ export function ExportIssuedDocuments({
     link.click()
     document.body.removeChild(link)
   }
-
-  //EXPORTAR REPORTE A PDF (IMPRESIÓN)
   const handleExportPDF = () => {
-    if (!data || data.length === 0) return
+    if (!data || data.length === 0) {
+      toast({
+        title: "Sin comprobantes",
+        description: "No existen documentos tributarios emitidos para generar el reporte PDF.",
+        variant: "info"
+      })
+      return
+    }
 
     const printWindow = window.open("", "_blank", "width=1000,height=800")
     if (!printWindow) return
@@ -109,7 +110,6 @@ export function ExportIssuedDocuments({
       const authKey = item.accessKey || item.authorizationNumber || "Sin clave registrada"
       const emissionDate = format(new Date(item.emissionDate || item.createdAt || new Date()), "dd/MM/yyyy HH:mm", { locale: es })
       
-      // Traducir estado y aplicar color correspondiente
       const statusSri = formatSriStatus(item.status, item.isAuthorized)
       const isAuthorized = statusSri === "AUTORIZADO"
       const isAnulado = statusSri === "ANULADO"

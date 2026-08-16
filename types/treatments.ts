@@ -13,8 +13,6 @@ export interface TreatmentItem {
   discount?: number;        // Descuento individual por ítem (%)
   paidAmount?: number;      // Monto abonado a esta prestación
   isPaid?: boolean;         // Estado de pago completo
-  
-  // 📍 NUEVOS CAMPOS AÑADIDOS AL MODELO PRISMA
   evolutionNote?: string | null;
   isPrivate?: boolean;
   fileUrl?: string | null;

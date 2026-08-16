@@ -196,7 +196,10 @@ export function FinancialBalanceView({
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border shadow-xs w-full">
         <div>
           <h2 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
-            <Wallet className="w-5 h-5 text-[#008bcd]" /> Estado de Cuenta y Balance Financiero
+            <div className="bg-[#008bcd]/10 p-1.5 rounded-lg border border-[#008bcd]/20">
+            <Wallet className="w-5 h-5 text-[#008bcd]" /> 
+            </div>
+            Estado de Cuenta y Balance Financiero
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             Consolidado de ingresos brutos, devoluciones/ajustes y saldo neto percibido del paciente.

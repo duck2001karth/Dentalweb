@@ -70,7 +70,7 @@ export async function POST(
         reference: `NC-${originalPayment.receiptNumber || originalPayment.id.slice(-6)}`,
         treatmentPlanId: originalPayment.treatmentPlanId || undefined,
         processedById: currentUserId || undefined,
-        notes: `NOTA DE CRÉDITO [${reason}]: ${notes || 'Sin observaciones'}`,
+        notes: ` [${reason}]: ${notes || 'Sin observaciones'}`,
       },
       include: {
         treatmentPlan: { select: { id: true, name: true } },

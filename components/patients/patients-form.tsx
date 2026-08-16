@@ -112,7 +112,7 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
       onClose()  
     } catch (error: any) {
       if (error.message === "DUPLICATE_CI") {
-        toast({ title: "Documento duplicado", description: "Ya existe un paciente registrado con este número de CI/DNI.", variant: "destructive" })
+        toast({ title: "Documento duplicado", description: "Ya existe un paciente registrado con este número de CI/Identificación.", variant: "destructive" })
         setStep(1); 
       } else {
         toast({ title: "Error", description: "Hubo un problema al procesar la solicitud.", variant: "destructive" })

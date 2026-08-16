@@ -89,6 +89,7 @@ export function CreditNoteModal({ isOpen, onClose, payment, onSuccess }: any) {
                 <SelectItem value="DUPLICADO">Cobro registrado por duplicado</SelectItem>
                 <SelectItem value="DEVOLUCION_PACIENTE">Devolución a solicitud del paciente</SelectItem>
                 <SelectItem value="TRATAMIENTO_CANCELADO">Procedimiento no realizado</SelectItem>
+                <SelectItem value="OTRO">Otro motivo</SelectItem>
               </SelectContent>
             </Select>
           </div>

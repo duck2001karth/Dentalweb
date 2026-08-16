@@ -31,7 +31,7 @@ export async function PATCH(
   }
 }
 
-// 📍 DELETE: Purgado Físico (Solo ADMIN)
+// DELETE: Purgado Físico (Solo ADMIN)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

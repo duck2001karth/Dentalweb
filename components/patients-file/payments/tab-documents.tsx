@@ -4,7 +4,7 @@ import React, { useState, useMemo } from "react"
 import { 
   Receipt, CheckCircle2, XCircle, Clock, Trash2, 
   Ban, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, 
-  SlidersHorizontal, AlertCircle 
+  SlidersHorizontal, AlertCircle, FileText, Printer, Eye 
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -21,31 +21,17 @@ import {
 
 import { ExportIssuedDocuments } from "./export-issued-documents"
 
-// 📍 Función para traducir estados del SRI
 const formatSriStatus = (status?: string, isAuthorized?: boolean) => {
   if (isAuthorized) return "AUTORIZADO"
   if (!status) return "PENDIENTE"
   
   const s = status.toUpperCase()
   switch (s) {
-    case "AUTHORIZED":
-    case "AUTORIZADO":
-      return "AUTORIZADO"
-    case "VOIDED":
-    case "CANCELLED":
-    case "CANCELED":
-    case "ANULADO":
-      return "ANULADO"
-    case "REJECTED":
-    case "DEVUELTA":
-    case "RECHAZADO":
-      return "RECHAZADO"
-    case "PENDING":
-    case "PENDIENTE":
-    case "EN PROCESO":
-      return "PENDIENTE"
-    default:
-      return s
+    case "AUTHORIZED": case "AUTORIZADO": return "AUTORIZADO"
+    case "VOIDED": case "CANCELLED": case "CANCELED": case "ANULADO": return "ANULADO"
+    case "REJECTED": case "DEVUELTA": case "RECHAZADO": return "RECHAZADO"
+    case "PENDING": case "PENDIENTE": case "EN PROCESO": return "PENDIENTE"
+    default: return s
   }
 }
 
@@ -71,9 +57,9 @@ export function IssuedDocumentsView({
   
   const currentUser = session?.user as any
   const userRole = currentUser?.role || "DOCTOR"
+  const canHardDelete = userRole === "ADMIN"
+  const canCancelDoc = userRole === "ADMIN" || userRole === "RECEPTIONIST"
 
-  const canHardDelete = userRole === "ADMIN" 
-  const canCancelDoc = userRole === "ADMIN" || userRole === "RECEPTIONIST" 
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
@@ -82,8 +68,9 @@ export function IssuedDocumentsView({
   const [isProcessing, setIsProcessing] = useState(false)
 
   const resolvedFullName = patientFullName || (patient?.firstName ? `${patient.firstName} ${patient.lastName || ''}`.trim() : "Paciente Registrado")
-  const resolvedDocId = patientDocId || patient?.ci || patient?.identification || "No registrado"
+  const resolvedDocId = patientDocId || patient?.ci || "No registrado"
   const resolvedAge = patientAge || (patient?.birthDate ? new Date().getFullYear() - new Date(patient.birthDate).getFullYear() : "--")
+
   const totalItems = documents.length
   const totalPages = Math.ceil(totalItems / pageSize) || 1
 
@@ -91,8 +78,10 @@ export function IssuedDocumentsView({
     const startIndex = (currentPage - 1) * pageSize
     return documents.slice(startIndex, startIndex + pageSize)
   }, [documents, currentPage, pageSize])
-
-  // ANULACIÓN TRIBUTARIA (Recepción y Admin)
+  const handleViewInvoicePDF = (doc: any) => {
+    const targetId = doc.paymentId || doc.id
+    window.open(`/api/invoices/${targetId}/pdf`, "_blank")
+  }
   const handleCancelInvoice = async () => {
     if (!docToCancel) return
     setIsProcessing(true)
@@ -104,11 +93,11 @@ export function IssuedDocumentsView({
       })
       if (!res.ok) throw new Error()
 
-      toast({ title: "Comprobante Anulado", description: "El documento ha sido marcado como ANULADO.", variant: "success" })
+      toast({ variant: "success", title: "Comprobante Anulado", description: "El documento ha sido marcado como ANULADO." })
       setDocToCancel(null)
       if (onRefresh) onRefresh()
     } catch {
-      toast({ title: "Error", description: "No se pudo anular el comprobante.", variant: "destructive" })
+      toast({ variant: "destructive", title: "Error", description: "No se pudo anular el comprobante." })
     } finally {
       setIsProcessing(false)
     }
@@ -122,41 +111,30 @@ export function IssuedDocumentsView({
       })
       if (!res.ok) throw new Error()
 
-      toast({ title: "Documento eliminado", description: "Comprobante purgado de la base de datos.", variant: "success" })
+      toast({ variant: "success", title: "Documento eliminado", description: "Comprobante purgado de la base de datos." })
       setDocToDelete(null)
       if (onRefresh) onRefresh()
     } catch {
-      toast({ title: "Error", description: "No se pudo eliminar el documento.", variant: "destructive" })
+      toast({ variant: "destructive", title: "Error", description: "No se pudo eliminar el documento." })
     } finally {
       setIsProcessing(false)
     }
   }
 
-  if (!documents || documents.length === 0) {
-    return (
-      <div className="py-20 px-4 text-center bg-card border border-border/80 rounded-2xl shadow-xs space-y-3">
-        <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto text-muted-foreground/60 border border-border/70">
-          <Receipt className="w-7 h-7 stroke-[1.5]" />
-        </div>
-        <div>
-          <h4 className="text-base font-bold text-foreground">Sin comprobantes electrónicos</h4>
-          <p className="text-xs text-muted-foreground mt-0.5">No se han emitido facturas o notas tributarias para este paciente.</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6 font-sans antialiased animate-in fade-in duration-200">
       
-      {/* CABECERA */}
+      {/* CABECERA (Visible para Doctor, Recepción y Admin) */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border shadow-xs">
         <div>
           <h2 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
-            <Receipt className="w-5 h-5 text-[#008bcd]" /> Comprobantes y Facturas Electrónicas (SRI)
+            <div className="bg-[#008bcd]/10 p-1.5 rounded-lg border border-[#008bcd]/20">
+              <Receipt className="w-5 h-5 text-[#008bcd]" />
+            </div>
+            Comprobantes y Facturas Electrónicas (SRI)
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Historial de documentos tributarios registrados y asociados al RUC / Cédula del paciente.
+            Historial de documentos tributarios registrados y autorizados ante el SRI.
           </p>
         </div>
 
@@ -183,68 +161,83 @@ export function IssuedDocumentsView({
                 <th className="py-4 px-5">Fecha Emisión</th>
                 <th className="py-4 px-5 text-center">Estado SRI</th>
                 <th className="py-4 px-5 text-right">Total Factura</th>
-                {(canCancelDoc || canHardDelete) && <th className="py-4 px-5 text-right">Acciones</th>}
+                <th className="py-4 px-5 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60 text-xs">
-              {paginatedDocs.map((doc, idx) => {
-                const docNum = doc.invoiceNumber || doc.number || doc.secuencial || `#FAC-${doc.id?.slice(-6) || idx + 1}`
-                const docType = doc.documentType || "FACTURA ELECTRÓNICA (01)"
-                const authKey = doc.accessKey || doc.authorizationNumber || "Sin clave registrada"
-                const emissionDate = doc.emissionDate || doc.createdAt ? new Date(doc.emissionDate || doc.createdAt) : new Date()
-                const statusStr = formatSriStatus(doc.status, doc.isAuthorized)
-                const isAuthorized = statusStr === "AUTORIZADO"
-                const isAnulado = statusStr === "ANULADO"
-                
-                const totalAmount = Math.abs(Number(doc.totalAmount || doc.amount || doc.total || 0))
+              {paginatedDocs.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="py-14 text-center text-muted-foreground font-medium">
+                    No se han emitido facturas o notas tributarias para este paciente.
+                  </td>
+                </tr>
+              ) : (
+                paginatedDocs.map((doc, idx) => {
+                  const docNum = doc.invoiceNumber || doc.number || doc.secuencial || `#FAC-${doc.id?.slice(-6) || idx + 1}`
+                  const docType = doc.documentType || "FACTURA ELECTRÓNICA (01)"
+                  const authKey = doc.accessKey || doc.authorizationNumber || "Sin clave registrada"
+                  const emissionDate = doc.emissionDate || doc.createdAt ? new Date(doc.emissionDate || doc.createdAt) : new Date()
+                  
+                  const statusStr = formatSriStatus(doc.status, doc.isAuthorized)
+                  const isAuthorized = statusStr === "AUTORIZADO"
+                  const isAnulado = statusStr === "ANULADO"
+                  const totalAmount = Math.abs(Number(doc.totalAmount || doc.amount || doc.total || 0))
 
-                return (
-                  <tr key={doc.id || idx} className="hover:bg-muted/15 transition-colors">
-                    <td className="py-4 px-5 align-middle">
-                      <p className="font-bold text-[#008bcd] text-sm tracking-tight">{docNum}</p>
-                      <span className="text-[10px] font-semibold text-muted-foreground uppercase">{docType}</span>
-                    </td>
+                  return (
+                    <tr key={doc.id || idx} className="hover:bg-muted/15 transition-colors">
+                      <td className="py-4 px-5 align-middle whitespace-nowrap">
+                        <p className="font-bold text-[#008bcd] text-sm tracking-tight">{docNum}</p>
+                        <span className="text-[10px] font-semibold text-muted-foreground uppercase">{docType}</span>
+                      </td>
 
-                    <td className="py-4 px-5 align-middle">
-                      <p className="font-bold text-foreground">{resolvedFullName}</p>
-                      <p className="text-[11px] text-muted-foreground font-medium">CEDULA: {resolvedDocId}</p>
-                    </td>
+                      <td className="py-4 px-5 align-middle whitespace-nowrap">
+                        <p className="font-bold text-foreground">{resolvedFullName}</p>
+                        <p className="text-[11px] text-muted-foreground font-medium">CI/RUC: {resolvedDocId}</p>
+                      </td>
 
-                    <td className="py-4 px-5 align-middle font-mono text-[11px] text-muted-foreground max-w-[180px] truncate" title={authKey}>
-                      {authKey}
-                    </td>
+                      <td className="py-4 px-5 align-middle font-mono text-[11px] text-muted-foreground max-w-[170px] truncate" title={authKey}>
+                        {authKey}
+                      </td>
 
-                    <td className="py-4 px-5 align-middle text-muted-foreground whitespace-nowrap">
-                      <p className="font-medium text-foreground">{format(emissionDate, "dd MMM yyyy", { locale: es })}</p>
-                      <p className="text-[10px]">Por: {doc.issuedBy || "Recepción"}</p>
-                    </td>
+                      <td className="py-4 px-5 align-middle text-muted-foreground whitespace-nowrap">
+                        <p className="font-medium text-foreground">{format(emissionDate, "dd MMM yyyy", { locale: es })}</p>
+                        <p className="text-[10px]">Por: {doc.issuedBy || "Recepción"}</p>
+                      </td>
 
-                    <td className="py-4 px-5 align-middle text-center">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
-                        isAuthorized 
-                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" 
-                          : isAnulado 
-                          ? "bg-rose-500/10 text-rose-600 border-rose-500/20"
-                          : "bg-amber-500/10 text-amber-600 border-amber-500/20"
-                      }`}>
-                        {isAuthorized ? <CheckCircle2 className="w-3 h-3" /> : isAnulado ? <XCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                        {statusStr}
-                      </span>
-                    </td>
+                      <td className="py-4 px-5 align-middle text-center whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                          isAuthorized 
+                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" 
+                            : isAnulado 
+                            ? "bg-rose-500/10 text-rose-600 border-rose-500/20"
+                            : "bg-amber-500/10 text-amber-600 border-amber-500/20"
+                        }`}>
+                          {isAuthorized ? <CheckCircle2 className="w-3 h-3" /> : isAnulado ? <XCircle className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                          {statusStr}
+                        </span>
+                      </td>
 
-                    <td className="py-4 px-5 align-middle text-right font-black text-foreground text-sm whitespace-nowrap">
-                      ${totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </td>
+                      <td className="py-4 px-5 align-middle text-right font-black text-foreground text-sm whitespace-nowrap">
+                        ${totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </td>
 
-                    {(canCancelDoc || canHardDelete) && (
                       <td className="py-4 px-5 align-middle text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => handleViewInvoicePDF(doc)}
+                            className="h-8 w-8 text-[#008bcd] hover:bg-[#008bcd]/10 hover:text-[#0074a6] border-border/80 rounded-lg cursor-pointer transition-colors"
+                            title="Ver e Imprimir Factura Electrónica (PDF)"
+                          >
+                            <FileText size={13} />
+                          </Button>
                           {canCancelDoc && !isAnulado && (
                             <Button
                               variant="outline"
                               size="icon"
                               onClick={() => setDocToCancel(doc)}
-                              className="h-8 w-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 border-border/80 rounded-lg cursor-pointer"
+                              className="h-8 w-8 text-amber-600 hover:bg-amber-500/10 hover:text-amber-700 border-border/80 rounded-lg cursor-pointer transition-colors"
                               title="Anular comprobante ante el SRI"
                             >
                               <Ban size={13} />
@@ -255,7 +248,7 @@ export function IssuedDocumentsView({
                               variant="outline"
                               size="icon"
                               onClick={() => setDocToDelete(doc)}
-                              className="h-8 w-8 text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 border-border/80 rounded-lg cursor-pointer"
+                              className="h-8 w-8 text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 border-border/80 rounded-lg cursor-pointer transition-colors"
                               title="Eliminar permanentemente de la BD"
                             >
                               <Trash2 size={13} />
@@ -263,10 +256,10 @@ export function IssuedDocumentsView({
                           )}
                         </div>
                       </td>
-                    )}
-                  </tr>
-                )
-              })}
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -313,7 +306,7 @@ export function IssuedDocumentsView({
         )}
       </div>
 
-      {/* MODAL ANULAR (Recepción / Admin) */}
+      {/* MODAL ANULAR */}
       <AlertDialog open={!!docToCancel} onOpenChange={(open) => !open && setDocToCancel(null)}>
         <AlertDialogContent className="bg-card border-border rounded-[24px] sm:max-w-[450px] p-6 shadow-2xl">
           <AlertDialogHeader className="space-y-3">
@@ -334,7 +327,7 @@ export function IssuedDocumentsView({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* MODAL PURGAR (Solo Admin) */}
+      {/* MODAL PURGAR */}
       <AlertDialog open={!!docToDelete} onOpenChange={(open) => !open && setDocToDelete(null)}>
         <AlertDialogContent className="bg-card border-border rounded-[24px] sm:max-w-[450px] p-6 shadow-2xl">
           <AlertDialogHeader className="space-y-3">

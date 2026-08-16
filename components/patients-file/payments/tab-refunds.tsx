@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react"
 import { 
-  History, Receipt, Eye, Trash2, ChevronLeft, ChevronRight, 
+  History, Trash2, ChevronLeft, ChevronRight, 
   ChevronsLeft, ChevronsRight, SlidersHorizontal, AlertCircle 
 } from "lucide-react"
 import { format } from "date-fns"
@@ -19,10 +19,9 @@ import {
   AlertDialogHeader, AlertDialogTitle 
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-
 const formatPaymentMethod = (method?: string) => {
   if (!method) return "Efectivo"
-  const m = method.toUpperCase()
+  const m = method.toUpperCase().trim()
   switch (m) {
     case "CASH":
     case "EFECTIVO":
@@ -35,11 +34,46 @@ const formatPaymentMethod = (method?: string) => {
       return "Tarjeta de Débito"
     case "TRANSFER":
     case "TRANSFERENCIA":
-    case "NEQUI":
+    case "DEUNA":
       return "Transferencia Bancaria"
+    case "CHECK":
+    case "CHEQUE":
+      return "Cheque"
     default:
       return method
   }
+}
+
+const parseRefundReason = (rawNotes?: string) => {
+  if (!rawNotes) return { reasonLabel: "Nota de Crédito", detail: "" }
+
+  let reasonLabel = "Nota de Crédito"
+  let detail = rawNotes.trim()
+  if (rawNotes.includes("[ANULACION]") || rawNotes.includes("Anulación de cobro por error")) {
+    reasonLabel = "Anulación de cobro por error"
+    detail = rawNotes.replace(/\[ANULACION\]:\s*/gi, "").replace(/Anulación de cobro por error:\s*/gi, "").trim()
+  } else if (rawNotes.includes("[DUPLICADO]") || rawNotes.includes("Cobro registrado por duplicado")) {
+    reasonLabel = "Cobro registrado por duplicado"
+    detail = rawNotes.replace(/\[DUPLICADO\]:\s*/gi, "").replace(/Cobro registrado por duplicado:\s*/gi, "").trim()
+  } else if (rawNotes.includes("[DEVOLUCION_PACIENTE]") || rawNotes.includes("Devolución a solicitud del paciente")) {
+    reasonLabel = "Devolución a solicitud del paciente"
+    detail = rawNotes.replace(/\[DEVOLUCION_PACIENTE\]:\s*/gi, "").replace(/Devolución a solicitud del paciente:\s*/gi, "").trim()
+  } else if (rawNotes.includes("[PROCEDIMIENTO_NO_REALIZADO]") || rawNotes.includes("Procedimiento no realizado")) {
+    reasonLabel = "Procedimiento no realizado"
+    detail = rawNotes.replace(/\[PROCEDIMIENTO_NO_REALIZADO\]:\s*/gi, "").replace(/Procedimiento no realizado:\s*/gi, "").trim()
+  } else if (rawNotes.includes("[OTRO]") || rawNotes.includes("Otro motivo")) {
+    reasonLabel = "Otro motivo"
+    detail = rawNotes.replace(/\[OTRO\]:\s*/gi, "").replace(/Otro motivo:\s*/gi, "").trim()
+  } else {
+    const match = rawNotes.match(/^NOTA DE CRÉDITO\s*(\[.*?\])?:\s*(.*)/i)
+    if (match) {
+      reasonLabel = "Nota de Crédito"
+      detail = match[2] || ""
+    }
+  }
+  detail = detail.split(" | Historial previo:")[0].trim()
+
+  return { reasonLabel, detail }
 }
 
 interface RefundsViewProps {
@@ -52,6 +86,7 @@ export function RefundsView({ refunds = [], patient, onRefresh }: RefundsViewPro
   const { data: session } = useSession()
   const { toast } = useToast()
   const currentUser = session?.user as any
+
   const canDeleteRefund = currentUser?.role === "ADMIN"
 
   const [currentPage, setCurrentPage] = useState(1)
@@ -59,6 +94,7 @@ export function RefundsView({ refunds = [], patient, onRefresh }: RefundsViewPro
   const [refundToDelete, setRefundToDelete] = useState<any | null>(null)
   const [deleteReason, setDeleteReason] = useState("")
   const [isDeleting, setIsDeleting] = useState(false)
+
   const totalItems = refunds.length
   const totalPages = Math.ceil(totalItems / pageSize) || 1
 
@@ -75,10 +111,15 @@ export function RefundsView({ refunds = [], patient, onRefresh }: RefundsViewPro
     setPageSize(Number(val))
     setCurrentPage(1)
   }
+
   const handleConfirmDelete = async () => {
     if (!refundToDelete) return
     if (!deleteReason.trim()) {
-      toast({ title: "Justificación requerida", description: "Debes escribir el motivo de la anulación.", variant: "destructive" })
+      toast({ 
+        title: "Justificación requerida", 
+        description: "Debes escribir el motivo de la anulación.", 
+        variant: "destructive" 
+      })
       return
     }
 
@@ -95,52 +136,47 @@ export function RefundsView({ refunds = [], patient, onRefresh }: RefundsViewPro
 
       if (!res.ok) throw new Error()
 
-      toast({ title: "Nota de Crédito eliminada", description: "El registro ha pasado a la auditoría de eliminados.", variant: "success" })
+      toast({ 
+        title: "Nota de Crédito eliminada", 
+        description: "El registro ha pasado a la auditoría de eliminados.", 
+        variant: "success" 
+      })
       setRefundToDelete(null)
       setDeleteReason("")
       if (onRefresh) onRefresh()
     } catch (e) {
-      toast({ title: "Error", description: "No se pudo eliminar la nota de crédito.", variant: "destructive" })
+      toast({ 
+        title: "Error", 
+        description: "No se pudo eliminar la nota de crédito.", 
+        variant: "destructive" 
+      })
     } finally {
       setIsDeleting(false)
     }
   }
 
-  if (!refunds || refunds.length === 0) {
-    return (
-      <div className="py-20 px-4 text-center bg-card border border-border/80 rounded-2xl shadow-xs space-y-3">
-        <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto text-muted-foreground/60 border border-border/70">
-          <History className="w-7 h-7 stroke-[1.5]" />
-        </div>
-        <div>
-          <h4 className="text-base font-bold text-foreground">Sin devoluciones registradas</h4>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            No existen notas de crédito o reajustes contables para este paciente.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6 font-sans antialiased animate-in fade-in duration-200">
-      
-      {/* CABECERA */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border shadow-xs">
         <div>
           <h2 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
-            <History className="w-5 h-5 text-amber-500" /> Historial de Devoluciones y Notas de Crédito
+            <div className="bg-[#008bcd]/10 p-1.5 rounded-lg border border-[#008bcd]/20"> 
+            <History className="w-5 h-5 text-[#008bcd]" /> 
+            </div>
+            Historial de Devoluciones y Notas de Crédito
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             Registro de ajustes contables a favor del paciente, devoluciones y saldos reabiertos.
           </p>
         </div>
         {!canDeleteRefund && (
-          <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 font-bold px-2.5 py-1 rounded-md border border-border tracking-wider">
+          <span className="text-[10px] bg-muted text-muted-foreground font-bold px-2.5 py-1 rounded-md border border-border tracking-wider">
             SOLO LECTURA
           </span>
         )}
       </div>
+
+      {/* TABLA DE DEVOLUCIONES */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
@@ -149,67 +185,84 @@ export function RefundsView({ refunds = [], patient, onRefresh }: RefundsViewPro
                 <th className="py-4 px-5"># Documento</th>
                 <th className="py-4 px-5"># Tratamiento Afectado</th>
                 <th className="py-4 px-5">Método Reembolso</th>
-                <th className="py-4 px-5">Motivo / Detalle</th>
-                <th className="py-4 px-5">Fecha Emisión</th>
-                <th className="py-4 px-5 text-right">Monto Devuelto</th>
-                <th className="py-4 px-5 text-right">Acciones</th>
+                <th className="py-4 px-5 min-w-[280px]">Motivo / Detalle</th>
+                <th className="py-4 px-5 whitespace-nowrap">Fecha Emisión</th>
+                <th className="py-4 px-5 text-right whitespace-nowrap">Monto Devuelto</th>
+                {canDeleteRefund && <th className="py-4 px-5 text-right">Acciones</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60 text-xs">
-              {paginatedRefunds.map((refund, idx) => {
-                const refundDocNum = refund.paymentNumber || refund.number || `#NC-${refund.id?.slice(-6) || idx + 1}`
-                const rawAmount = Math.abs(Number(refund.amount || 0))
+              {paginatedRefunds.length === 0 ? (
+                <tr>
+                  <td colSpan={canDeleteRefund ? 7 : 6} className="py-14 text-center text-muted-foreground font-medium">
+                    No existen notas de crédito o devoluciones registradas para este paciente.
+                  </td>
+                </tr>
+              ) : (
+                paginatedRefunds.map((refund, idx) => {
+                  const refundDocNum = refund.paymentNumber || refund.receiptNumber || refund.number || `#REC-${refund.id?.slice(-6) || idx + 1}`
+                  const rawAmount = Math.abs(Number(refund.amount || 0))
+                  const { reasonLabel, detail } = parseRefundReason(refund.notes || refund.reason || refund.concept)
 
-                return (
-                  <tr key={refund.id || idx} className="hover:bg-muted/15 transition-colors group">
-                    <td className="py-4 px-5 align-middle">
-                      <p className="font-bold text-amber-600 dark:text-amber-400 text-sm tracking-tight">{refundDocNum}</p>
-                      <span className="inline-block bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase mt-0.5 border border-amber-500/20">
-                        Nota de Crédito
-                      </span>
-                    </td>
+                  return (
+                    <tr key={refund.id || idx} className="hover:bg-muted/15 transition-colors group">
+                      <td className="py-4 px-5 align-middle whitespace-nowrap">
+                        <p className="font-bold text-amber-600 dark:text-amber-400 text-sm tracking-tight">{refundDocNum}</p>
+                        <span className="inline-block bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[9px] font-extrabold px-1.5 py-0.5 rounded uppercase mt-0.5 border border-amber-500/20">
+                          Nota de Crédito
+                        </span>
+                      </td>
 
-                    <td className="py-4 px-5 align-middle">
-                      <span className="font-bold text-[#008bcd]">{refund.treatmentName || "Tratamiento General"}</span>
-                    </td>
+                      <td className="py-4 px-5 align-middle">
+                        <span className="font-bold text-[#008bcd]">{refund.treatmentName || "Tratamiento General"}</span>
+                      </td>
 
-                    <td className="py-4 px-5 align-middle font-medium text-foreground">
-                      {formatPaymentMethod(refund.method)}
-                    </td>
+                      <td className="py-4 px-5 align-middle font-medium text-foreground whitespace-nowrap">
+                        {formatPaymentMethod(refund.method)}
+                      </td>
+                      <td className="py-4 px-5 align-middle">
+                        <div className="p-2.5 rounded-xl bg-muted/40 border border-border space-y-1.5 max-w-[420px]">
+                          <span className="inline-block bg-sky-500/10 text-[#008bcd] dark:text-[#38bdf8] text-[10px] font-bold px-2 py-0.5 rounded-md border border-sky-500/20">
+                            {reasonLabel}
+                          </span>
+                          {detail && (
+                            <p className="text-xs font-medium text-foreground leading-snug break-words">
+                              {detail}
+                            </p>
+                          )}
+                        </div>
+                      </td>
 
-                    <td className="py-4 px-5 align-middle max-w-[200px] text-muted-foreground font-medium truncate" title={refund.notes}>
-                      {refund.notes?.replace(/^\[.*?\]:\s*/, "") || "Sin observación"}
-                    </td>
+                      <td className="py-4 px-5 align-middle text-muted-foreground whitespace-nowrap">
+                        {format(new Date(refund.createdAt), "dd MMM yyyy", { locale: es })}
+                      </td>
 
-                    <td className="py-4 px-5 align-middle text-muted-foreground whitespace-nowrap">
-                      {format(new Date(refund.createdAt), "dd MMM yyyy", { locale: es })}
-                    </td>
+                      <td className="py-4 px-5 align-middle text-right font-black text-amber-600 dark:text-amber-400 text-sm whitespace-nowrap">
+                        -${rawAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </td>
 
-                    <td className="py-4 px-5 align-middle text-right font-black text-amber-600 dark:text-amber-400 text-sm whitespace-nowrap">
-                      -${rawAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </td>
-
-                    <td className="py-4 px-5 align-middle text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {canDeleteRefund && (
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 border-border/80 rounded-lg cursor-pointer"
-                            onClick={() => {
-                              setRefundToDelete(refund)
-                              setDeleteReason("")
-                            }}
-                            title="Eliminar Nota de Crédito"
-                          >
-                            <Trash2 size={13} />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                      {canDeleteRefund && (
+                        <td className="py-4 px-5 align-middle text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 border-border/80 rounded-lg cursor-pointer transition-colors"
+                              onClick={() => {
+                                setRefundToDelete(refund)
+                                setDeleteReason("")
+                              }}
+                              title="Eliminar Nota de Crédito"
+                            >
+                              <Trash2 size={13} />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -317,7 +370,7 @@ export function RefundsView({ refunds = [], patient, onRefresh }: RefundsViewPro
             <AlertDialogAction
               onClick={handleConfirmDelete}
               disabled={isDeleting || !deleteReason.trim()}
-              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs h-10 px-5"
+              className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs h-10 px-5 border-none"
             >
               {isDeleting ? "Anulando..." : "Confirmar Anulación"}
             </AlertDialogAction>

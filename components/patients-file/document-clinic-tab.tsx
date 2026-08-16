@@ -25,7 +25,6 @@ import {
 import { cn } from "@/lib/utils"
 
 import { SignaturePad } from "@/components/patients-file/signature-pad" 
-// 📍 Importamos los estados centralizados
 import { documentStatuses } from "@/constants/status"
 import { ClinicalDocEditorModal } from "./document-editor-modal"
 import { ClinicalDocPrint } from "@/components/patients-file/document-print"
@@ -77,16 +76,12 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
   }, [patientId, toast])
 
   useEffect(() => { fetchDocs() }, [fetchDocs])
-
-  // 📍 LÓGICA DE ESTADOS OPTIMIZADA
   const getStatusConfig = (doc: any) => {
     if (doc.isVoided) return documentStatuses.VOIDED || documentStatuses.DRAFT
     if (doc.patientSignature && doc.doctorSignature) return documentStatuses.COMPLETED
     if (doc.patientSignature || doc.doctorSignature) return documentStatuses.PARTIAL || documentStatuses.DRAFT
     return documentStatuses.DRAFT
   }
-
-  // Datos calculados del paciente
   const patientFullName = currentPatient?.firstName && currentPatient?.lastName
     ? `${currentPatient.firstName} ${currentPatient.lastName}`.trim()
     : currentPatient?.name || currentPatient?.fullName || "Paciente Registrado"
@@ -187,8 +182,6 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
 
   return (
     <div className="animate-in fade-in duration-300 pb-20">
-      
-      {/* 📍 CABECERA PREMIUM */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-card p-5 rounded-2xl border border-border shadow-sm sticky top-0 z-20 print:hidden">
         <div>
           <div className="flex items-center gap-3">
@@ -225,8 +218,6 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
           </div>
         </div>
       </div>
-
-      {/* 📍 LISTADO DE DOCUMENTOS (GRID) */}
       {displayedDocs.length === 0 ? (
         <div className="bg-card border border-dashed border-border/80 rounded-2xl p-12 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[300px]">
           <FileText className="w-12 h-12 mb-4 opacity-20" />
@@ -308,8 +299,6 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
           })}
         </div>
       )}
-
-      {/* 📍 MODAL EDITOR EXTERNO */}
       <ClinicalDocEditorModal
         isOpen={isCreating}
         onClose={() => { setIsCreating(false); setEditingDocId(null); setNewTitle(""); setNewContent(""); }}
@@ -331,8 +320,6 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
           doctorSpecialty={currentUser?.specialty || "Odontología General"}
         />
       )}
-
-      {/* 📍 VISOR DETALLADO DEL DOCUMENTO (MODAL DIVIDIDO) */}
       <Dialog open={!!selectedDoc} onOpenChange={(open) => !open && setSelectedDoc(null)}>
         <DialogContent className="max-w-[95vw] md:max-w-5xl h-[85vh] flex flex-col bg-card border-border overflow-hidden p-0 rounded-[24px] shadow-2xl [&>button]:hidden print:hidden">
           
@@ -443,8 +430,6 @@ export function DocumentosClinicosTab({ patientId, patientData }: { patientId: s
           )}
         </DialogContent>
       </Dialog>
-
-      {/* 📍 MODAL PAD DE FIRMAS */}
       <Dialog open={!!signingRole} onOpenChange={(open) => !open && setSigningRole(null)}>
         <DialogContent className="sm:max-w-[500px] bg-card border-border rounded-[24px] shadow-2xl p-0 overflow-hidden">
           <DialogHeader className="px-6 py-4 border-b border-border/70 bg-muted/15">

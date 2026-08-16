@@ -14,7 +14,7 @@ import { useGetClinicalNotes, useCreateClinicalNote } from "@/hooks/clinical-not
 import { useGetPatient } from "@/hooks/patients"
 import { EvolutionCard } from "@/components/patients-file/evolutions-card"
 import { EvolutionModal } from "@/components/patients-file/evolutions-modal"
-import { EvolutionsPrint } from "@/components/patients-file/evolutions-print" // 📍 Importamos el Print
+import { EvolutionsPrint } from "@/components/patients-file/evolutions-print"
 
 import { treatmentStatuses } from "@/constants/status"
 

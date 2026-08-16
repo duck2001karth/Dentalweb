@@ -30,8 +30,6 @@ export function PaymentItemsList({
 
   return (
     <div className="space-y-2.5 font-sans antialiased w-full">
-      
-      {/* 📍 CABECERA ÚNICA Y ALINEADA */}
       <div className="flex items-center justify-between px-1 pb-1">
         <div className="flex items-center gap-2">
           <span className="text-[11px] font-extrabold text-foreground/80 uppercase tracking-wider">
@@ -51,8 +49,6 @@ export function PaymentItemsList({
           <span>{allSelected ? "Deseleccionar todo" : "Seleccionar todo"}</span>
         </button>
       </div>
-
-      {/* 📍 TABLA CON ANCHO COMPLETO PARA MODO OSCURO Y CLARO */}
       <div className="rounded-2xl border border-border/80 bg-card/60 overflow-hidden shadow-xs">
         <div className="max-h-[320px] overflow-y-auto">
           <table className="w-full text-left text-xs border-collapse">

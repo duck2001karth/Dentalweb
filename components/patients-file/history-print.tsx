@@ -74,15 +74,11 @@ export function HistorialPrint({ patientId, notes, doctorName, doctorSpecialty }
 
   return (
     <div id="historial-printable" className="hidden print:block font-sans text-slate-900 bg-white min-h-[297mm] relative overflow-hidden">
-      
-      {/* 📍 MARCA DE AGUA CON LOGO ORIGINAL */}
       <div aria-hidden="true" className="fixed inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0">
         <img src="/logosn.png" alt="Marca de Agua Carmo Dental" className="w-[500px] object-contain" />
       </div>
 
       <div className="relative z-10 flex flex-col min-h-[265mm]">
-        
-        {/* 📍 CABECERA MEMBRETADA */}
         <div>
           <div className="flex justify-between items-start border-b-2 border-[#008bcd] pb-4">
             <div className="flex items-center gap-4">
@@ -115,7 +111,7 @@ export function HistorialPrint({ patientId, notes, doctorName, doctorSpecialty }
               <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Datos del Paciente</p>
               <p className="font-extrabold text-slate-900 text-sm mt-0.5">{patientFullName}</p>
               <div className="flex gap-4 text-slate-600 mt-1">
-                <p><b>C.I./DNI:</b> {patientDocId}</p>
+                <p><b>C.I./Cedula:</b> {patientDocId}</p>
                 <p><b>Edad:</b> {patientAge !== "--" ? `${patientAge} Años` : "--"}</p>
               </div>
               {patient.medicalAlerts && (

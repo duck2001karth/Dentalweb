@@ -8,8 +8,6 @@ export async function POST(
   try {
     const { id } = await params; 
     const body = await request.json();
-
-    // 📍 1. Extraemos con tolerancia a distintos nombres de variables
     const procedureName = body.procedureName || body.name || "Prestación sin nombre";
     const rawPrice = body.cost ?? body.price ?? body.basePrice ?? 0;
     const parsedPrice = isNaN(parseFloat(rawPrice)) ? 0 : parseFloat(rawPrice);
@@ -18,8 +16,6 @@ export async function POST(
     if (!id) {
       return NextResponse.json({ error: "Falta el ID del plan de tratamiento" }, { status: 400 });
     }
-
-    // 📍 2. Creamos la prestación en la base de datos
     const newItem = await prisma.treatmentItem.create({
       data: {
         treatmentPlanId: id,
@@ -28,8 +24,6 @@ export async function POST(
         tooth: tooth ? String(tooth) : null,
       }
     });
-
-    // 📍 3. Incrementamos el costo total del plan usando el valor procesado
     await prisma.treatmentPlan.update({
       where: { id },
       data: {

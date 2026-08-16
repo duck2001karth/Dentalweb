@@ -11,7 +11,6 @@ interface ReceiptPrintSheetProps {
   paymentMethod: string
   items?: any[]
   emissionDate?: Date
-  logoUrl?: string 
 }
 
 export function generateReceiptHTML({
@@ -21,10 +20,9 @@ export function generateReceiptHTML({
   totalPaid,
   paymentMethod,
   items = [],
-  emissionDate = new Date(),
-  logoUrl = "/logosn.png" 
+  emissionDate = new Date()
 }: ReceiptPrintSheetProps) {
-  const formattedDate = format(emissionDate, "dd 'de' MMMM 'de' yyyy", { locale: es })
+  const formattedDate = format(emissionDate, "dd 'de' MMMM 'de' yyyy - HH:mm", { locale: es })
   const formattedAmount = Number(totalPaid || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })
 
   return `
@@ -32,7 +30,7 @@ export function generateReceiptHTML({
     <html lang="es">
     <head>
       <meta charset="UTF-8">
-      <title>Comprobante de Pago - ${receiptNumber}</title>
+      <title>Recibo Oficial - ${receiptNumber}</title>
       <style>
         @page {
           size: A4 portrait;
@@ -42,208 +40,233 @@ export function generateReceiptHTML({
           box-sizing: border-box;
           margin: 0;
           padding: 0;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-          color: #1e293b;
+          font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+          color: #0f172a;
         }
         body {
           background-color: #ffffff;
-          padding: 25px;
-          position: relative;
+          padding: 20px;
           min-height: 100%;
         }
-
-        /* 📍 MARCA DE AGUA CENTRADA */
-        .watermark-container {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          opacity: 0.05;
-          z-index: 0;
-          pointer-events: none;
-          text-align: center;
-          width: 380px;
-        }
-        .watermark-container img {
-          width: 280px;
-          height: auto;
-          filter: grayscale(100%);
-        }
-        .watermark-text {
-          font-size: 36px;
-          font-weight: 900;
-          color: #008bcd;
-          letter-spacing: 2px;
-          text-transform: uppercase;
-          margin-top: 10px;
-        }
-
-        /* CONTENIDO PRINCIPAL */
-        .content {
-          position: relative;
-          z-index: 1;
-        }
-
         .header {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          border-bottom: 2px solid #e2e8f0;
-          padding-bottom: 15px;
-          margin-bottom: 20px;
+          border-bottom: 2px solid #f1f5f9;
+          padding-bottom: 25px;
+          margin-bottom: 30px;
         }
-        .clinic-title {
-          font-size: 22px;
+        .clinic-brand {
+          font-size: 28px;
           font-weight: 900;
           color: #008bcd;
           letter-spacing: -0.5px;
+          text-transform: uppercase;
         }
-        .clinic-subtitle {
-          font-size: 10px;
+        .clinic-sub {
+          font-size: 11px;
           font-weight: 700;
           color: #64748b;
           text-transform: uppercase;
           letter-spacing: 1px;
-          margin-top: 2px;
+          margin-top: 4px;
         }
-        .badge {
-          display: inline-block;
-          background-color: #ecfdf5;
-          color: #047857;
-          border: 1px solid #a7f3d0;
-          padding: 4px 10px;
-          border-radius: 6px;
-          font-size: 11px;
+        .clinic-info {
+          font-size: 10px;
+          color: #64748b;
+          margin-top: 6px;
+          line-height: 1.5;
+        }
+        .receipt-box {
+          background-color: #f8fafc;
+          border: 1px solid #e2e8f0;
+          padding: 15px 25px;
+          border-radius: 12px;
+          text-align: right;
+        }
+        .receipt-title {
+          font-size: 10px;
           font-weight: 800;
+          color: #008bcd;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+        .receipt-number {
+          font-size: 20px;
+          font-weight: 900;
+          color: #0f172a;
+          margin-top: 4px;
+        }
+
+        .info-grid {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 30px;
+          background-color: #f8fafc;
+          border-radius: 16px;
+          border: 1px solid #f1f5f9;
+          padding: 20px;
+        }
+        .info-col {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .info-item {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .info-label {
+          font-size: 10px;
+          font-weight: 700;
+          color: #64748b;
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
-        .receipt-code {
+        .info-value {
           font-size: 14px;
-          font-weight: 900;
-          color: #0f172a;
-          margin-top: 6px;
-          text-align: right;
+          font-weight: 800;
         }
-
-        .meta-grid {
-          display: flex;
-          justify-content: space-between;
-          background-color: #f8fafc;
+        .table-container {
           border: 1px solid #e2e8f0;
           border-radius: 12px;
-          padding: 14px 18px;
-          margin-bottom: 25px;
-          font-size: 11px;
+          overflow: hidden;
+          margin-bottom: 30px;
         }
-        .meta-label {
-          font-size: 9px;
-          font-weight: 800;
-          color: #94a3b8;
-          text-transform: uppercase;
-          margin-bottom: 3px;
-        }
-
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 25px;
-          font-size: 12px;
         }
         thead th {
           background-color: #f8fafc;
-          border-bottom: 2px solid #cbd5e1;
           color: #475569;
-          font-size: 10px;
+          font-size: 11px;
           font-weight: 800;
           text-transform: uppercase;
-          padding: 10px 12px;
+          padding: 16px;
           letter-spacing: 0.5px;
-        }
-        tbody td {
-          padding: 12px;
           border-bottom: 1px solid #e2e8f0;
         }
-        .plan-tag {
-          display: inline-block;
-          font-size: 10px;
-          color: #64748b;
-          margin-top: 2px;
+        tbody td {
+          padding: 16px;
+          font-size: 13px;
+          border-bottom: 1px solid #f1f5f9;
         }
+        tbody tr:last-child td {
+          border-bottom: none;
+        }
+        .desc-title { font-weight: 800; color: #0f172a; }
+        .desc-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
 
-        .total-box {
+        /* 📍 TOTALES */
+        .total-container {
           display: flex;
           justify-content: flex-end;
-          margin-bottom: 30px;
+          margin-bottom: 50px;
         }
-        .total-card {
-          width: 260px;
-          background-color: #f8fafc;
-          border: 1px solid #cbd5e1;
-          border-radius: 10px;
-          padding: 12px 16px;
-        }
-        .total-row {
+        .total-box {
+          background-color: #008bcd;
+          color: white;
+          padding: 20px 30px;
+          border-radius: 16px;
+          width: 320px;
           display: flex;
           justify-content: space-between;
           align-items: center;
+          box-shadow: 0 4px 6px -1px rgba(0, 139, 205, 0.2);
+        }
+        .total-label {
+          font-size: 12px;
+          font-weight: 800;
+          color: rgba(255,255,255,0.8);
+          text-transform: uppercase;
+          letter-spacing: 1px;
         }
         .total-amount {
-          font-size: 18px;
+          font-size: 24px;
           font-weight: 900;
-          color: #059669;
+          color: white;
         }
 
-        .footer {
-          margin-top: 40px;
+        .footer-section {
+          margin-top: 60px;
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-end;
+        }
+        .signature-box {
+          width: 250px;
           text-align: center;
-          font-size: 9px;
+        }
+        .signature-line {
+          border-top: 2px solid #cbd5e1;
+          margin-bottom: 10px;
+        }
+        .signature-text {
+          font-size: 11px;
+          font-weight: 700;
+          color: #475569;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+        }
+        .legal-text {
+          width: 50%;
+          font-size: 10px;
           color: #94a3b8;
-          border-top: 1px dashed #e2e8f0;
-          padding-top: 15px;
+          line-height: 1.6;
         }
       </style>
     </head>
     <body>
 
-
-      <div class="watermark-container">
-        <div class="watermark-text">CARMO DENTAL</div>
+      <!-- ENCABEZADO -->
+      <div class="header">
+        <div>
+          <div class="clinic-brand">CARMO DENTAL</div>
+          <div class="clinic-sub">Especialidades Odontológicas</div>
+          <div class="clinic-info">
+            RUC: 1719231696001<br/>
+            Quito, Ecuador<br/>
+            carmodental@gmail.com
+          </div>
+        </div>
+        <div class="receipt-box">
+          <div class="receipt-title">Comprobante de Pago</div>
+          <div class="receipt-number">${receiptNumber}</div>
+        </div>
       </div>
 
-      <div class="content">
-        <!-- HEADER DE LA CLÍNICA -->
-        <div class="header">
-          <div>
-            <div class="clinic-title">CARMO DENTAL</div>
-            <div class="clinic-subtitle">Clínica de Especialidades Odontológicas</div>
-            <div style="font-size: 10px; color: #64748b; margin-top: 4px;">RUC: 1719231696001 • Quito, Ecuador</div>
+      <!-- DATOS DEL PACIENTE -->
+      <div class="info-grid">
+        <div class="info-col">
+          <div class="info-item">
+            <span class="info-label">Paciente</span>
+            <span class="info-value">${patientName}</span>
           </div>
-          <div>
-            <div class="badge">Comprobante Oficial</div>
-            <div class="receipt-code">${receiptNumber}</div>
-          </div>
-        </div>
-
-        <!-- DATOS DEL PACIENTE Y FECHA -->
-        <div class="meta-grid">
-          <div>
-            <div class="meta-label">Paciente</div>
-            <div style="font-size: 13px; font-weight: 800;">${patientName}</div>
-            <div style="color: #64748b; font-size: 10px; margin-top: 2px;">CI / RUC: ${patientDocumentId}</div>
-          </div>
-          <div style="text-align: right;">
-            <div class="meta-label">Fecha de Emisión</div>
-            <div style="font-weight: 700;">${formattedDate}</div>
-            <div style="color: #64748b; font-size: 10px; margin-top: 2px;">Método: <b>${paymentMethod}</b></div>
+          <div class="info-item">
+            <span class="info-label">Identificación (CI/RUC)</span>
+            <span class="info-value" style="color: #475569;">${patientDocumentId}</span>
           </div>
         </div>
+        <div class="info-col" style="text-align: right;">
+          <div class="info-item">
+            <span class="info-label">Fecha de Emisión</span>
+            <span class="info-value">${formattedDate}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Método de Pago</span>
+            <span class="info-value" style="color: #008bcd;">${paymentMethod}</span>
+          </div>
+        </div>
+      </div>
 
-        <!-- TABLA DE PRESTACIONES Y PLANES ABONADOS -->
+      <!-- TABLA DE DETALLES -->
+      <div class="table-container">
         <table>
           <thead>
             <tr>
-              <th style="text-align: left;">Descripción de Prestación y Plan</th>
+              <th style="text-align: left;">Descripción del Tratamiento / Plan</th>
               <th style="text-align: center;">Pieza Dental</th>
               <th style="text-align: right;">Abono Registrado</th>
             </tr>
@@ -254,13 +277,13 @@ export function generateReceiptHTML({
                 ? items.map(item => `
                   <tr>
                     <td>
-                      <div style="font-weight: 700; color: #0f172a;">${item.name || item.procedureName || 'Tratamiento Dental'}</div>
-                      <div class="plan-tag">Plan: <b>${item.planName || 'Plan General'}</b></div>
+                      <div class="desc-title">${item.name || item.procedureName || 'Tratamiento Odontológico'}</div>
+                      <div class="desc-sub">Plan: ${item.planName || 'Plan General'}</div>
                     </td>
-                    <td style="text-align: center; font-weight: 700; color: #008bcd;">
+                    <td style="text-align: center; font-weight: 700; color: #64748b;">
                       ${item.toothLabel || (item.tooth ? 'Pieza ' + item.tooth : 'General')}
                     </td>
-                    <td style="text-align: right; font-weight: 800; color: #0f172a;">
+                    <td style="text-align: right; font-weight: 800;">
                       $${Number(item.itemDebt || item.appliedAmount || item.finalPrice || totalPaid).toFixed(2)}
                     </td>
                   </tr>
@@ -268,33 +291,39 @@ export function generateReceiptHTML({
                 : `
                   <tr>
                     <td>
-                      <div style="font-weight: 700; color: #0f172a;">Abono a Plan de Tratamiento</div>
-                      <div class="plan-tag">Plan: <b>Rehabilitación Oral</b></div>
+                      <div class="desc-title">Abono General a Tratamiento</div>
+                      <div class="desc-sub">Plan: Rehabilitación Odontológica</div>
                     </td>
-                    <td style="text-align: center; color: #94a3b8;">General</td>
+                    <td style="text-align: center; font-weight: 700; color: #64748b;">General</td>
                     <td style="text-align: right; font-weight: 800;">$${formattedAmount}</td>
                   </tr>
                 `
             }
           </tbody>
         </table>
+      </div>
 
-        <!-- TOTAL PAGADO -->
+      <!-- TOTAL -->
+      <div class="total-container">
         <div class="total-box">
-          <div class="total-card">
-            <div class="total-row">
-              <span style="font-size: 11px; font-weight: 800; color: #475569; text-transform: uppercase;">Total Pagado:</span>
-              <span class="total-amount">$${formattedAmount} USD</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- PIE DE PÁGINA (SIN FIRMAS) -->
-        <div class="footer">
-          Documento de control y soporte de pago clínico emitido por CARMO DENTAL.<br/>
-          Contacto: carmodental@gmail.com • Quito - Ecuador
+          <span class="total-label">Total Pagado</span>
+          <span class="total-amount">$${formattedAmount}</span>
         </div>
       </div>
+
+      <!-- PIE Y FIRMAS -->
+      <div class="footer-section">
+        <div class="legal-text">
+          Este documento es un comprobante de control interno para certificar la recepción del pago detallado. La atención oportuna y los controles son vitales para el éxito de su tratamiento.<br/><br/>
+          <b>¡Gracias por confiar su sonrisa en Carmo Dental!</b>
+        </div>
+        
+        <div class="signature-box">
+          <div class="signature-line"></div>
+          <div class="signature-text">Firma Autorizada - Caja</div>
+        </div>
+      </div>
+
     </body>
     </html>
   `

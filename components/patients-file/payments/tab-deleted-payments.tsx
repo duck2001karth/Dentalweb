@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react"
 import { 
   Trash2, Calendar, Receipt, ChevronLeft, ChevronRight, 
-  ChevronsLeft, ChevronsRight, Search, SlidersHorizontal, AlertCircle 
+  ChevronsLeft, ChevronsRight, Search, SlidersHorizontal, AlertCircle, ShieldAlert 
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -28,7 +28,7 @@ const formatPaymentMethod = (method?: string) => {
     case "CASH": case "EFECTIVO": return "Efectivo"
     case "CREDIT_CARD": case "TARJETA_CREDITO": return "Tarjeta de Crédito"
     case "DEBIT_CARD": case "TARJETA_DEBITO": return "Tarjeta de Débito"
-    case "TRANSFER": case "TRANSFERENCIA": case "NEQUI": return "Transferencia Bancaria"
+    case "TRANSFER": case "TRANSFERENCIA": case "DEUNA": return "Transferencia Bancaria"
     case "CHECK": case "CHEQUE": return "Cheque"
     default: return method
   }
@@ -112,6 +112,7 @@ export function DeletedPaymentsTab({
       setSelectedIds([...selectedIds, id])
     }
   }
+
   const executeHardDelete = async () => {
     const idsToDelete = singleDeleteId ? [singleDeleteId] : selectedIds
     if (idsToDelete.length === 0) return
@@ -137,42 +138,28 @@ export function DeletedPaymentsTab({
       setSelectedIds([])
       setSingleDeleteId(null)
       setShowConfirmDelete(false)
-      if (onRefresh) {
-        onRefresh()
-      }
+
+      if (onRefresh) onRefresh()
     } catch (error) {
       toast({ title: "Error", description: "Ocurrió un error al purgar los registros.", variant: "destructive" })
     } finally {
       setIsDeleting(false)
     }
   }
-
-  if (!payments || payments.length === 0) {
-    return (
-      <div className="py-20 px-4 text-center bg-card border border-border rounded-2xl shadow-xs space-y-3">
-        <div className="w-14 h-14 rounded-2xl bg-muted/40 flex items-center justify-center mx-auto text-muted-foreground/60 border border-border/70">
-          <Trash2 className="w-7 h-7 stroke-[1.5]" />
-        </div>
-        <div>
-          <h4 className="text-base font-bold text-foreground">Sin pagos eliminados</h4>
-          <p className="text-xs text-muted-foreground mt-0.5">No existen registros de auditoría para este paciente.</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6 font-sans antialiased animate-in fade-in duration-200">
-      {/* CABECERA */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border shadow-xs">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
+          <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <div className="bg-[#008bcd]/10 p-1.5 rounded-lg border border-[#008bcd]/20"> 
+              <ShieldAlert className="w-5 h-5 text-[#008bcd]" />
+            </div>
             Pagos Anulados y Auditoría
             <span className="text-xs font-bold bg-rose-500/10 text-rose-600 dark:text-rose-400 px-2.5 py-0.5 rounded-full border border-rose-500/20">
               {payments.length} {payments.length === 1 ? "registro" : "registros"}
             </span>
           </h2>
-          <p className="text-sm font-medium text-muted-foreground mt-1">
+          <p className="text-xs font-medium text-muted-foreground mt-0.5">
             Historial inalterable de auditoría con la justificación obligatoria ingresada por caja.
           </p>
         </div>
@@ -188,6 +175,7 @@ export function DeletedPaymentsTab({
               className="pl-9 bg-background border-border text-xs font-medium h-10 rounded-xl"
             />
           </div>
+
           <ExportDeletedPayments 
             data={filteredPayments} 
             patientFullName={patientFullName}
@@ -199,16 +187,16 @@ export function DeletedPaymentsTab({
           {canHardDelete && selectedIds.length > 0 && (
             <Button
               onClick={() => setShowConfirmDelete(true)}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-bold h-10 px-4 rounded-xl text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer"
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold h-10 px-4 rounded-xl text-xs flex items-center gap-2 shadow-xs transition-all cursor-pointer shrink-0"
             >
               <Trash2 className="w-4 h-4" />
-              Purgar Seleccionados ({selectedIds.length})
+              Purgar ({selectedIds.length})
             </Button>
           )}
         </div>
       </div>
 
-      {/* TABLA DE AUDITORÍA */}
+      {/*TABLA DE AUDITORÍA */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
@@ -238,7 +226,7 @@ export function DeletedPaymentsTab({
               {paginatedData.length === 0 ? (
                 <tr>
                   <td colSpan={canHardDelete ? 9 : 8} className="py-14 text-center text-muted-foreground font-medium">
-                    No se encontraron anulaciones en la búsqueda actual.
+                    No existen registros de auditoría o pagos eliminados para este paciente.
                   </td>
                 </tr>
               ) : (
@@ -380,7 +368,7 @@ export function DeletedPaymentsTab({
         )}
       </div>
 
-      {/* MODAL DE CONFIRMACIÓN */}
+      {/* MODAL CONFIRMACIÓN */}
       <AlertDialog open={showConfirmDelete} onOpenChange={(open) => {
         if (!open) {
           setShowConfirmDelete(false)
