@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useToast } from "@/hooks/use-toast"
 
-import { OdontogramaTab } from "@/components/patients-file/odontogram-tab"
+import { OdontogramaTab } from "@/components/patients-file/odontogram/odontogram-tab"
 import { TreatmentSidebar } from "./treatment-sidebar"
 import { TreatmentTable } from "./treatment-table"
 import { TreatmentPrintView } from "./treatment-print-view"

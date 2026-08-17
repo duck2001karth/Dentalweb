@@ -12,9 +12,9 @@ import { useToast } from "@/hooks/use-toast"
 
 import { useGetClinicalNotes, useCreateClinicalNote } from "@/hooks/clinical-notes"
 import { useGetPatient } from "@/hooks/patients"
-import { EvolutionCard } from "@/components/patients-file/evolutions-card"
-import { EvolutionModal } from "@/components/patients-file/evolutions-modal"
-import { EvolutionsPrint } from "@/components/patients-file/evolutions-print"
+import { EvolutionCard } from "@/components/patients-file/evolutions/evolutions-card"
+import { EvolutionModal } from "@/components/patients-file/evolutions/evolutions-modal"
+import { EvolutionsPrint } from "@/components/patients-file/evolutions/evolutions-print"
 
 import { treatmentStatuses } from "@/constants/status"
 

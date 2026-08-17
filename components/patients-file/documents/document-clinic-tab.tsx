@@ -27,7 +27,7 @@ import { cn } from "@/lib/utils"
 import { SignaturePad } from "@/components/patients-file/signature-pad" 
 import { documentStatuses } from "@/constants/status"
 import { ClinicalDocEditorModal } from "./document-editor-modal"
-import { ClinicalDocPrint } from "@/components/patients-file/document-print"
+import { ClinicalDocPrint } from "@/components/patients-file/documents/document-print"
 
 export function DocumentosClinicosTab({ patientId, patientData }: { patientId: string, patientData?: any }) {
   const { data: session } = useSession()

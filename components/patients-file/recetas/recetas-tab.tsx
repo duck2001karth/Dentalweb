@@ -256,9 +256,7 @@ export function RecetasTab({ patientId }: { patientId: string }) {
             )}
           </div>
         </DialogContent>
-      </Dialog> {/* 2. MODAL DE FIRMA */}
-     
-
+      </Dialog> 
       {/* CABECERA Y ACCIONES */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-5 bg-card p-5 rounded-2xl border border-border shadow-sm sticky top-0 z-20 print:hidden">
         

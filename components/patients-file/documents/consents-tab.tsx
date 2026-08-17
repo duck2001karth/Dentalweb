@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { cn } from "@/lib/utils"
 
 import { useGetPatient } from "@/hooks/patients"
-import { ClinicalDocPrint } from "@/components/patients-file/document-print"
+import { ClinicalDocPrint } from "@/components/patients-file/documents/document-print"
 const calculateAge = (birthDateString?: string | Date | null) => {
   if (!birthDateString) return ""
   const today = new Date()

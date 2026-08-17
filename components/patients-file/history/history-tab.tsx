@@ -15,10 +15,10 @@ import { useToast } from "@/hooks/use-toast"
 
 import { useGetClinicalNotes, useCreateClinicalNote } from "@/hooks/clinical-notes"
 import { HistorialPrint } from "./history-print"
-import { HistoryCard } from "@/components/patients-file/history-card"
-import { EvolutionModal } from "@/components/patients-file/evolutions-modal"
-import { QuickDocumentModal } from "@/components/patients-file/history-modal"
-import { QuickPrescriptionModal } from "@/components/patients-file/history-pmodal"
+import { HistoryCard } from "@/components/patients-file/history/history-card"
+import { EvolutionModal } from "@/components/patients-file/evolutions/evolutions-modal"
+import { QuickDocumentModal } from "@/components/patients-file/history/history-modal"
+import { QuickPrescriptionModal } from "@/components/patients-file/history/history-pmodal"
 import { treatmentStatuses } from "@/constants/status"
 
 export function HistorialTab({ patientId }: { patientId: string }) {
