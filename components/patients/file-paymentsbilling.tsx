@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { Loader2 } from "lucide-react"
 import { PaymentsTable } from "@/components/patients-file/payments/tab-payments"
 import { DeletedPaymentsTab } from "@/components/patients-file/payments/tab-deleted-payments"
@@ -21,11 +21,15 @@ export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData
   const [issuedDocsList, setIssuedDocsList] = useState<any[]>([])
   const [isLoadingPayments, setIsLoadingPayments] = useState<boolean>(false)
 
-  const fetchPaymentsAndDocs = async () => {
+  const fetchPaymentsAndDocs = useCallback(async () => {
     if (!patientId) return
     setIsLoadingPayments(true)
     try {
-      const resPayments = await fetch(`/api/payments?patientId=${patientId}`)
+      const [resPayments, resDocs] = await Promise.all([
+        fetch(`/api/payments?patientId=${patientId}`),
+        fetch(`/api/sri/invoices?patientId=${patientId}`)
+      ])
+
       if (resPayments.ok) {
         const data = await resPayments.json()
         const rawPayments = Array.isArray(data) ? data : (data.payments || data.data || [])
@@ -49,7 +53,6 @@ export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData
         setPaymentsList(formatted)
       }
 
-      const resDocs = await fetch(`/api/sri/invoices?patientId=${patientId}`)
       if (resDocs.ok) {
         const dataDocs = await resDocs.json()
         setIssuedDocsList(Array.isArray(dataDocs) ? dataDocs : (dataDocs.documents || dataDocs.taxDocuments || []))
@@ -59,50 +62,56 @@ export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData
     } finally {
       setIsLoadingPayments(false)
     }
-  }
-
+  }, [patientId])
   useEffect(() => {
     fetchPaymentsAndDocs()
-  }, [patientId, plans])
+  }, [fetchPaymentsAndDocs])
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     fetchPaymentsAndDocs()
     if (onRefreshData) onRefreshData()
-  }
+  }, [fetchPaymentsAndDocs, onRefreshData])
+  const eliminadosList = useMemo(() => {
+    return paymentsList.filter((p) => typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO"))
+  }, [paymentsList])
 
-  const eliminadosList = paymentsList.filter((p) => {
-    return typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO")
-  })
+  const devolucionesList = useMemo(() => {
+    return paymentsList.filter((p) => {
+      const isDeleted = typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO")
+      const isNC = Number(p.amount) < 0 || (typeof p.notes === "string" && p.notes.includes("NOTA DE CRÉDITO"))
+      return isNC && !isDeleted
+    })
+  }, [paymentsList])
 
-  const devolucionesList = paymentsList.filter((p) => {
-    const isDeleted = typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO")
-    const isNC = Number(p.amount) < 0 || (typeof p.notes === "string" && p.notes.includes("NOTA DE CRÉDITO"))
-    return isNC && !isDeleted
-  })
+  const pagosActivosList = useMemo(() => {
+    return paymentsList.filter((p) => {
+      const isDeleted = typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO")
+      const isNC = Number(p.amount) < 0 || (typeof p.notes === "string" && p.notes.includes("NOTA DE CRÉDITO"))
+      return !isDeleted && !isNC
+    })
+  }, [paymentsList])
 
-  const pagosActivosList = paymentsList.filter((p) => {
-    const isDeleted = typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO")
-    const isNC = Number(p.amount) < 0 || (typeof p.notes === "string" && p.notes.includes("NOTA DE CRÉDITO"))
-    return !isDeleted && !isNC
-  })
+  const totalCobrado = useMemo(() => {
+    return pagosActivosList
+      .filter((p) => Number(p.amount) > 0)
+      .reduce((acc, p) => acc + Number(p.amount), 0)
+  }, [pagosActivosList])
 
-  const totalCobrado = pagosActivosList
-    .filter((p) => Number(p.amount) > 0)
-    .reduce((acc, p) => acc + Number(p.amount), 0)
-
-  const totalDevuelto = Math.abs(
-    devolucionesList.reduce((acc, p) => acc + Number(p.amount), 0)
-  )
+  const totalDevuelto = useMemo(() => {
+    return Math.abs(devolucionesList.reduce((acc, p) => acc + Number(p.amount), 0))
+  }, [devolucionesList])
 
   const balanceNeto = totalCobrado - totalDevuelto
-  const totalPresupuesto = plans.reduce((acc, plan) => {
-    const planTotal = Number(plan.total || plan.cost || plan.price || 0)
-    return acc + planTotal
-  }, 0)
+  
+  const totalPresupuesto = useMemo(() => {
+    return plans.reduce((acc, plan) => {
+      const planTotal = Number(plan.total || plan.cost || plan.price || 0)
+      return acc + planTotal
+    }, 0)
+  }, [plans])
 
   return (
     <div className="space-y-6 font-sans antialiased">
-      {/* NAVEGACIÓN DE SUBPESTAÑAS */}
       <div className="flex items-center gap-1 border-b border-border/80 overflow-x-auto custom-scrollbar pb-px">
         {[
           { id: "pagos", label: "Pagos", count: pagosActivosList.length },
@@ -150,7 +159,7 @@ export function PayBillingLayout({ patientId, patient, plans = [], onRefreshData
             patient={patient} 
             onRefresh={handleRefresh}
           />
-       ) : activeSubTab === "documentos_emitidos" ? (
+        ) : activeSubTab === "documentos_emitidos" ? (
           <IssuedDocumentsView 
             documents={issuedDocsList} 
             patient={patient} 

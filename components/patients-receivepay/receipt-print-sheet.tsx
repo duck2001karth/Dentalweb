@@ -159,7 +159,6 @@ export function generateReceiptHTML({
         .desc-title { font-weight: 800; color: #0f172a; }
         .desc-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
 
-        /* 📍 TOTALES */
         .total-container {
           display: flex;
           justify-content: flex-end;

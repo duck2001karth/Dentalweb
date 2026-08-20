@@ -110,7 +110,6 @@ export function PaymentsTable({
 
   return (
     <div className="space-y-4 font-sans antialiased animate-in fade-in duration-200">
-      {/*CABECERA CON ÍCONO */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border/80 shadow-xs w-full">
         <div>
           <h2 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2.5">
@@ -133,8 +132,6 @@ export function PaymentsTable({
           Nuevo documento electrónico
         </Button>
       </div>
-
-      {/* 📍 TABLA */}
       <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -154,14 +151,8 @@ export function PaymentsTable({
             <tbody className="divide-y divide-border/60 text-sm font-normal">
               {paginatedPayments.length > 0 ? (
                 paginatedPayments.map((item: any, idx: number) => {
-                  
-                  // 📍 1. OBTENER NÚMERO CRUDO DE LA BASE DE DATOS
-                  const rawNumber = item.paymentNumber || item.receiptNumber || item.number || ""
-                  
-                  // 📍 2. DETECTOR INTELIGENTE DE FACTURAS SRI (ej: 001-001-123456)
-                  const isSriFormat = rawNumber.includes("-") && rawNumber.split("-").length >= 2
-
-                  // 📍 3. RESOLVER COLUMNA: # BOLETA / FACTURA
+                  const rawNumber = String(item.paymentNumber || item.receiptNumber || item.number || "")
+                  const isSriFormat = rawNumber.includes("-") && !rawNumber.toUpperCase().includes("REC")
                   const invoiceStr = 
                     item.invoiceNumber || 
                     item.sriDocument?.number || 
@@ -169,23 +160,17 @@ export function PaymentsTable({
                     item.taxDocument?.number || 
                     item.invoiceId || 
                     item.receiptNumberFiscal || 
-                    (isSriFormat ? rawNumber : null) || // Si era factura, lo asignamos aquí automáticamente
+                    (isSriFormat ? rawNumber : null) || 
                     (item.isFiscal ? "Factura Emitida" : null)
-
-                  // 📍 4. RESOLVER COLUMNA: # PAGO INTERNO
                   let displayPaymentNum = `#REC-${item.id?.slice(-6)?.toUpperCase() || idx + 1}`
                   if (!isSriFormat && rawNumber) {
                     displayPaymentNum = rawNumber.toUpperCase().startsWith("REC") || rawNumber.startsWith("#") 
                       ? rawNumber 
                       : `#REC-${rawNumber}`
                   }
-
-                  // Tratamiento Relacionado
                   const treatmentName = item.treatmentPlan?.name || item.treatmentName
                   const targetPlanId = item.treatmentPlanId || item.treatmentPlan?.id || item.planId
                   const isPlanDeleted = !treatmentName && !targetPlanId
-
-                  // Metadatos
                   const methodSpanish = formatPaymentMethod(item.method || item.paymentMethod)
                   const receiverStr = formatReceiverName(item.processedBy || item.user)
                   const rawAmount = Number(item.amount || item.paidAmount || 0)
@@ -203,8 +188,6 @@ export function PaymentsTable({
                           </span>
                         )}
                       </td>
-
-                      {/* COLUMNA TRATAMIENTO */}
                       <td className="py-4 px-5 align-middle">
                         {isPlanDeleted ? (
                           <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 italic">
@@ -223,16 +206,12 @@ export function PaymentsTable({
                           <span className="font-medium text-foreground text-sm">{treatmentName || "Rehabilitación Oral"}</span>
                         )}
                       </td>
-
-                      {/* COLUMNA MEDIO DE PAGO */}
                       <td className="py-4 px-5 align-middle space-y-0.5 whitespace-nowrap">
                         <p className="font-semibold text-foreground text-sm">{methodSpanish}</p>
                         <p className="text-[11px] text-muted-foreground font-normal">
                           Por: <b className="text-foreground/90 font-medium">{receiverStr}</b>
                         </p>
                       </td>
-
-                      {/* 📍 COLUMNA FACTURA SRI (El Badge Interactivo) */}
                       <td className="py-4 px-5 align-middle">
                         {invoiceStr ? (
                           <button
@@ -245,7 +224,7 @@ export function PaymentsTable({
                             <span>{invoiceStr}</span>
                           </button>
                         ) : (
-                          <span className="text-[11px] font-medium text-muted-foreground/70 italic bg-muted/50 px-2.5 py-1 rounded-md">
+                          <span className="text-[11px] font-medium text-muted-foreground/70 italic bg-muted/50 px-2.5 py-1 rounded-md border border-border">
                             Sin comprobante fiscal
                           </span>
                         )}
@@ -374,6 +353,8 @@ export function PaymentsTable({
           </div>
         )}
       </div>
+      
+      {/* Modales */}
       {selectedPaymentForReceipt && (
         <PaymentReceiptModal
           isOpen={isReceiptOpen}

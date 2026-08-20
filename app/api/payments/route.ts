@@ -10,18 +10,15 @@ const normalizePrismaPaymentMethod = (method?: string): any => {
     case "EFECTIVO":
     case "CASH":
       return "CASH"
-
     case "TARJETA_CREDITO":
     case "TARJETA_DE_CREDITO":
     case "CREDIT_CARD":
     case "TARJETA":
       return "CREDIT_CARD"
-
     case "TARJETA_DEBITO":
     case "TARJETA_DE_DEBITO":
     case "DEBIT_CARD":
       return "DEBIT_CARD"
-
     case "TRANSFERENCIA":
     case "TRANSFERENCIA_BANCARIA":
     case "TRANSFER":
@@ -32,11 +29,9 @@ const normalizePrismaPaymentMethod = (method?: string): any => {
     case "PRODUBANCO":
     case "QR":
       return "TRANSFER"
-
     case "CHEQUE":
     case "CHECK":
       return "CHECK"
-
     default:
       return "CASH"
   }
@@ -46,14 +41,35 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const patientId = searchParams.get("patientId")
+    const dateParam = searchParams.get("date") 
 
-    if (!patientId) {
-      return NextResponse.json({ error: "patientId es requerido" }, { status: 400 })
+    // Filtro base: Excluir pagos anulados para el conteo real
+    const whereClause: any = {
+      NOT: {
+        notes: { contains: "[PAGO ELIMINADO" }
+      }
+    }
+    if (patientId) {
+      whereClause.patientId = patientId
+    }
+
+    // Filtro de fecha para el Arqueo Diario
+    if (dateParam) {
+      const targetDate = new Date(dateParam)
+      const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0))
+      const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999))
+      whereClause.createdAt = {
+        gte: startOfDay,
+        lte: endOfDay,
+      }
     }
 
     const payments = await prisma.payment.findMany({
-      where: { patientId },
+      where: whereClause,
       include: {
+        patient: {
+          select: { id: true, firstName: true, lastName: true, ci: true }
+        },
         treatmentPlan: {
           select: { 
             id: true, 
@@ -106,6 +122,8 @@ export async function POST(request: Request) {
     }
 
     let targetItemIds: string[] = itemIds || []
+    
+    // LÓGICA DE DISTRIBUCIÓN AUTOMÁTICA EN PRESTACIONES
     if (targetItemIds.length === 0) {
       if (treatmentPlanId) {
         const planItems = await prisma.treatmentItem.findMany({
@@ -145,7 +163,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 2. Distribuir el dinero en los items seleccionados
+    // DISTRIBUIR EL DINERO
     const itemsToPay = await prisma.treatmentItem.findMany({
       where: { id: { in: targetItemIds } },
     })
@@ -190,7 +208,7 @@ export async function POST(request: Request) {
       remainingMoneyToDistribute -= moneyForThisItem
     }
 
-
+    //ACTUALIZAR ESTADO DEL PLAN (Total pagado)
     for (const planId of Array.from(planIdsToUpdate)) {
       const allPlanItems = await prisma.treatmentItem.findMany({
         where: { treatmentPlanId: planId },
@@ -218,7 +236,7 @@ export async function POST(request: Request) {
       })
     }
 
-
+    //CREAR EL REGISTRO FINAL DE CAJA
     const validMethod = normalizePrismaPaymentMethod(paymentMethod)
     const primaryPlanId = treatmentPlanId || (planIdsToUpdate.size > 0 ? Array.from(planIdsToUpdate)[0] : null)
     const currentUserId = (session?.user as any)?.id || null
@@ -235,8 +253,10 @@ export async function POST(request: Request) {
         notes: paidSnapshotItems.length > 0 
           ? JSON.stringify(paidSnapshotItems) 
           : `Abono directo al tratamiento: $${parsedAmount.toFixed(2)}`,
+        receiptNumber: body.receiptNumber || `#REC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
       },
       include: {
+        patient: { select: { id: true, firstName: true, lastName: true, ci: true } },
         treatmentPlan: { select: { id: true, name: true } },
         processedBy: { select: { id: true, name: true, specialty: true, role: true } }
       }

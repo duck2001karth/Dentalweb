@@ -23,8 +23,6 @@ export async function GET(
 ) {
   try {
     const { id: paymentId } = await params
-
-    // 📍 1. OBTENER PAGO CON SUS RELACIONES
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
       include: {
@@ -39,8 +37,6 @@ export async function GET(
     if (!payment) {
       return new NextResponse("Comprobante no encontrado o eliminado.", { status: 404 })
     }
-
-    // 📍 2. ASIGNACIÓN SEGURA DE VARIABLES TIPADAS
     const receiptNum = payment.receiptNumber || `#REC-${payment.id.slice(-6).toUpperCase()}`
     
     const patientFullName = payment.patient 
@@ -52,8 +48,6 @@ export async function GET(
     const formattedDate = format(new Date(payment.createdAt), "dd 'de' MMMM 'de' yyyy - HH:mm", { locale: es })
     const formattedAmount = Number(payment.amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })
     const cashierName = payment.processedBy?.name || "Caja / Administración"
-
-    // 📍 3. GENERAR FILAS DE DETALLES
     let itemsHtml = ""
     const planItems = payment.treatmentPlan?.items || []
 
@@ -92,7 +86,6 @@ export async function GET(
       `
     }
 
-    // 📍 4. PLANTILLA HTML PREMIUM PARA IMPRESIÓN Y PDF
     const htmlContent = `
       <!DOCTYPE html>
       <html lang="es">

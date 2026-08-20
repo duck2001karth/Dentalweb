@@ -48,7 +48,7 @@ const clinicaNavItems = [
 
 const adminNavItems = [
   { name: "Admin Center", href: "/admin", icon: Briefcase, roles: ["ADMIN"] },
-  { name: "Facturación", href: "/facturacion", icon: CreditCard, roles: ["ADMIN", "RECEPTIONIST"] },
+  { name: "Caja y Arqueo", href: "/cajas", icon: CreditCard, roles: ["ADMIN", "RECEPTIONIST"] },
   { name: "Inventario", href: "/inventario", icon: Box, roles: ["ADMIN", "RECEPTIONIST"] },
 ]
 
