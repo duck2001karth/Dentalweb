@@ -97,6 +97,7 @@ model User {
   role          UserRole  @default(DOCTOR)
   specialty     String?   
   isActive      Boolean   @default(true)
+  lastLogin  DateTime?
   
   accounts      Account[]
   sessions      Session[]
@@ -191,6 +192,7 @@ model Patient {
 
   taxDocuments TaxDocument[]
   payments          Payment[]
+  agreements Agreement[]
 
   isDeleted             Boolean   @default(false)
   createdAt             DateTime  @default(now())
@@ -371,6 +373,8 @@ model TreatmentPlan {
   patient     Patient  @relation(fields: [patientId], references: [id])
   doctorId    String?
   doctor      User?    @relation(fields: [doctorId], references: [id])
+  agreementId String?
+  agreement Agreement? @relation(fields: [agreementId], references: [id])
   
   collaborators String[] @default([])
 
@@ -702,4 +706,32 @@ model TaxDocument {
 
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+}
+enum DiscountType {
+  PERCENTAGE 
+  FIXED_AMOUNT
+}
+
+model Agreement {
+  id              String         @id @default(cuid())
+  name            String         
+  institutionName String         
+  contactPerson   String?       
+  contactPhone    String?
+  contactEmail    String?
+  discountType    DiscountType   @default(PERCENTAGE)
+  discountValue   Decimal        @db.Decimal(10, 2) 
+  isActive        Boolean        @default(true)
+  startDate       DateTime       @default(now())
+  endDate         DateTime?
+  notes           String?
+  
+  // Relaciones
+  treatmentPlans  TreatmentPlan[]
+  patients        Patient[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("agreements")
 }

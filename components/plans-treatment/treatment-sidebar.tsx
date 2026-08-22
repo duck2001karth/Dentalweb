@@ -3,15 +3,25 @@
 import React, { useState, useEffect, useMemo } from "react"
 import { format, addDays } from "date-fns"
 import { es } from "date-fns/locale"
-import { Edit2, User, Users, ClipboardList, Calendar, Clock, Loader2 } from "lucide-react"
+import { 
+  Edit2, User, Users, ClipboardList, Calendar, Clock, 
+  Loader2, Handshake, Percent, DollarSign, Check, X 
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
 
 const calcularDuracion = (start?: string, end?: string) => {
   if (!start || !end) return "30 min"
-  const [startH, startM] = start.split(':').map(Number)
-  const [endH, endM] = end.split(':').map(Number)
+  const [startH, startM] = start.split(":").map(Number)
+  const [endH, endM] = end.split(":").map(Number)
   if (isNaN(startH) || isNaN(endH)) return "30 min"
-  const diff = (endH * 60 + endM) - (startH * 60 + startM)
+  const diff = endH * 60 + endM - (startH * 60 + startM)
   return diff > 0 ? `${diff} min` : "30 min"
 }
 
@@ -49,10 +59,28 @@ export function TreatmentSidebar({
   setIsCollaboratorsOpen,
   collaborators,
   appointmentList = [],
-  planItems = []
+  planItems = [],
+  onApplyAgreement 
 }: any) {
   const [fetchedAppointments, setFetchedAppointments] = useState<any[]>([])
   const [isLoadingAppointments, setIsLoadingAppointments] = useState<boolean>(false)
+  const [agreements, setAgreements] = useState<any[]>([])
+  const [isLoadingAgreements, setIsLoadingAgreements] = useState<boolean>(false)
+  const [isAgreementModalOpen, setIsAgreementModalOpen] = useState<boolean>(false)
+  const [selectedAgreement, setSelectedAgreement] = useState<any>(null)
+
+  useEffect(() => {
+    setIsLoadingAgreements(true)
+    fetch("/api/agreements")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        const activeOnly = (Array.isArray(data) ? data : []).filter((ag: any) => ag.isActive)
+        setAgreements(activeOnly)
+      })
+      .catch((err) => console.error("Error al cargar convenios:", err))
+      .finally(() => setIsLoadingAgreements(false))
+  }, [])
+
   const activeCollaborators = useMemo(() => {
     const raw = collaborators || plan?.collaborators
     if (!raw) return []
@@ -74,7 +102,7 @@ export function TreatmentSidebar({
       if (isDone) {
         const cost = item.cost || 0
         const dscto = item.discount || 0
-        return acc + (cost - (cost * (dscto / 100)))
+        return acc + (cost - cost * (dscto / 100))
       }
       return acc
     }, 0)
@@ -83,12 +111,13 @@ export function TreatmentSidebar({
   const totalAbonado = totalPaid ?? planItems.reduce((acc: number, item: any) => acc + (item.paidAmount || 0), 0)
   const totalDebt = debt ?? Math.max(0, finalTotalCost - totalAbonado)
 
-  const convenioPortada = 
-    patient?.eps || 
-    patient?.convenio || 
-    plan?.patient?.eps || 
-    plan?.patient?.convenio || 
-    plan?.convenio || 
+  const convenioPortada =
+    selectedAgreement?.name ||
+    patient?.eps ||
+    patient?.convenio ||
+    plan?.patient?.eps ||
+    plan?.patient?.convenio ||
+    plan?.convenio ||
     "Particular / Sin convenio"
 
   const patientId = patient?.id || plan?.patientId
@@ -97,38 +126,66 @@ export function TreatmentSidebar({
     if (appointmentList && appointmentList.length > 0) return
     if (!patientId) return
 
+    let isMounted = true
     setIsLoadingAppointments(true)
+
     fetch(`/api/citas?patientId=${patientId}`)
-      .then(res => res.ok ? res.json() : [])
-      .then(json => {
-        const rawList = Array.isArray(json) ? json : (json.citas || json.appointments || json.data || [])
-        if (rawList.length > 0) setFetchedAppointments(rawList)
+      .then((res) => (res.ok ? res.json() : []))
+      .then((json) => {
+        if (!isMounted) return
+        const rawList = Array.isArray(json) ? json : json.citas || json.appointments || json.data || []
+        setFetchedAppointments(rawList)
       })
-      .catch(e => console.error("Error al cargar citas:", e))
-      .finally(() => setIsLoadingAppointments(false))
-  }, [patientId, appointmentList?.length])
+      .catch((e) => console.error("Error al cargar citas:", e))
+      .finally(() => {
+        if (isMounted) setIsLoadingAppointments(false)
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [patientId])
 
   const realAppointments = useMemo(() => {
-    const rawList = (appointmentList && appointmentList.length > 0) 
-      ? appointmentList 
-      : (patient?.appointments || patient?.citas || fetchedAppointments)
+    const rawList =
+      appointmentList && appointmentList.length > 0
+        ? appointmentList
+        : patient?.appointments || patient?.citas || fetchedAppointments
 
     if (!rawList || rawList.length === 0) return []
 
     return [...rawList].sort((a, b) => {
-      const dateAStr = a.date ? a.date.split('T')[0] : (a.fecha ? a.fecha.split('T')[0] : '1970-01-01')
-      const dateBStr = b.date ? b.date.split('T')[0] : (b.fecha ? b.fecha.split('T')[0] : '1970-01-01')
-      const timeA = a.startTime || a.hora || '00:00'
-      const timeB = b.startTime || b.hora || '00:00'
+      const dateAStr = a.date ? a.date.split("T")[0] : a.fecha ? a.fecha.split("T")[0] : "1970-01-01"
+      const dateBStr = b.date ? b.date.split("T")[0] : b.fecha ? b.fecha.split("T")[0] : "1970-01-01"
+      const timeA = a.startTime || a.hora || "00:00"
+      const timeB = b.startTime || b.hora || "00:00"
       return new Date(`${dateBStr}T${timeB}`).getTime() - new Date(`${dateAStr}T${timeA}`).getTime()
     })
   }, [appointmentList, patient?.appointments, patient?.citas, fetchedAppointments])
 
   const creationDate = plan?.createdAt ? new Date(plan.createdAt) : new Date()
   const expirationDate = addDays(creationDate, 30)
+  const handleSelectAgreement = (agreement: any) => {
+    if (selectedAgreement?.id === agreement.id) {
+      setSelectedAgreement(null)
+      if (setTempDiscount) setTempDiscount("0")
+      if (onApplyAgreement) onApplyAgreement(null)
+    } else {
+      setSelectedAgreement(agreement)
+      const discountVal = agreement.discountType === "PERCENTAGE" 
+        ? Number(agreement.discountValue).toString() 
+        : "0" 
+      
+      if (setTempDiscount) setTempDiscount(discountVal)
+      if (onApplyAgreement) onApplyAgreement(agreement)
+    }
+    setIsAgreementModalOpen(false)
+  }
 
   return (
     <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-5 sticky top-24 self-start select-none font-sans antialiased">
+      
+      {/* TARJETA PRINCIPAL DEL PLAN */}
       <div className="shadow-xs rounded-2xl overflow-hidden border border-border/80 bg-card transition-all duration-200">
         <div className="bg-[#008bcd] p-5 text-white rounded-t-2xl">
           <p className="text-[11px] font-semibold uppercase tracking-widest text-white/80 mb-1">
@@ -183,28 +240,39 @@ export function TreatmentSidebar({
             </div>
           </div>
 
-          <Button 
-            onClick={handleCotizarConvenio} 
-            className="w-full bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold rounded-xl h-10 text-xs shadow-xs transition-all cursor-pointer mt-2"
+          {/* BOTÓN COTIZAR CON MÚLTIPLES CONVENIOS */}
+          <Button
+            onClick={() => {
+              if (handleCotizarConvenio) {
+                handleCotizarConvenio()
+              } else {
+                setIsAgreementModalOpen(true)
+              }
+            }}
+            className="w-full bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold rounded-xl h-10 text-xs shadow-xs transition-all cursor-pointer mt-2 flex items-center justify-center gap-2"
           >
-            Cotizar con múltiples convenios
+            <Handshake className="w-4 h-4" />
+            {selectedAgreement ? `Convenio: ${selectedAgreement.name}` : "Cotizar con múltiples convenios"}
           </Button>
         </div>
       </div>
 
+      {/* VENCIMIENTO DE ARANCELES */}
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3.5 shadow-xs">
         <div className="p-2 bg-amber-500/15 rounded-xl shrink-0">
           <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
         </div>
         <div className="text-xs">
-          <p className="font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest text-[10px]">Vencimiento de Aranceles</p>
+          <p className="font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest text-[10px]">
+            Vencimiento de Aranceles
+          </p>
           <p className="text-foreground/80 font-medium mt-0.5 text-xs">
             Válido hasta: <b className="text-foreground font-bold">{format(expirationDate, "dd 'de' MMMM, yyyy", { locale: es })}</b>
           </p>
         </div>
       </div>
 
-      {/* PROFESIONAL Y CONVENIO */}
+      {/* PROFESIONAL, COLABORADORES Y CONVENIO */}
       <div className="bg-card border border-border/80 shadow-xs rounded-2xl p-4 space-y-3 text-xs font-medium">
         <div className="flex gap-3 items-center">
           <User className="w-4 h-4 text-[#008bcd] shrink-0" />
@@ -218,9 +286,8 @@ export function TreatmentSidebar({
           <Users className="w-4 h-4 text-[#008bcd] shrink-0 mt-0.5" />
           <div className="space-y-0.5">
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Colaboradores</p>
-            
-            <button 
-              onClick={() => setIsCollaboratorsOpen(true)} 
+            <button
+              onClick={() => setIsCollaboratorsOpen(true)}
               className="font-bold text-[#008bcd] hover:underline text-xs block cursor-pointer"
             >
               {activeCollaborators.length > 0 ? "Editar colaboradores" : "Asignar colaboradores"}
@@ -232,8 +299,8 @@ export function TreatmentSidebar({
                   const displayName = isUuid ? "Dr. Colaborador" : colabName
 
                   return (
-                    <span 
-                      key={idx} 
+                    <span
+                      key={idx}
                       className="inline-flex items-center text-[10px] font-bold bg-[#008bcd]/15 text-[#008bcd] dark:text-sky-300 px-2 py-0.5 rounded-md border border-[#008bcd]/30"
                     >
                       👨‍⚕️ {displayName}
@@ -256,6 +323,7 @@ export function TreatmentSidebar({
         </div>
       </div>
 
+      {/* HISTORIAL DE CITAS */}
       <div className="bg-card border border-border/80 shadow-xs rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between border-b border-border/60 pb-2">
           <div className="flex items-center gap-2 text-xs font-bold text-foreground">
@@ -279,8 +347,8 @@ export function TreatmentSidebar({
               const statusObj = formatStatus(cita.status || cita.estado)
 
               return (
-                <div 
-                  key={cita.id || idx} 
+                <div
+                  key={cita.id || idx}
                   className="p-2.5 bg-muted/20 border border-border/60 rounded-xl text-xs flex items-center justify-between hover:bg-muted/40 transition-colors"
                 >
                   <div className="space-y-0.5">
@@ -304,6 +372,101 @@ export function TreatmentSidebar({
           </p>
         )}
       </div>
+
+      {/*  MODAL SELECTOR DE CONVENIOS */}
+      <Dialog open={isAgreementModalOpen} onOpenChange={setIsAgreementModalOpen}>
+        <DialogContent className="sm:max-w-[550px] bg-card border-border rounded-[24px] p-0 overflow-hidden shadow-2xl">
+          <DialogHeader className="px-6 py-5 border-b border-border bg-[#008bcd]/5">
+            <DialogTitle className="text-lg font-black text-foreground flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#008bcd]/10 text-[#008bcd] flex items-center justify-center">
+                <Handshake className="w-4 h-4" />
+              </div>
+              Convenios y Tarifas Especiales
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-1">
+              Selecciona un convenio institucional para recalcular el descuento del presupuesto.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-6 max-h-[380px] overflow-y-auto space-y-3 custom-scrollbar">
+            {isLoadingAgreements ? (
+              <div className="flex flex-col items-center justify-center py-10">
+                <Loader2 className="w-6 h-6 animate-spin text-[#008bcd] mb-2" />
+                <p className="text-xs text-muted-foreground font-medium">Cargando convenios...</p>
+              </div>
+            ) : agreements.length === 0 ? (
+              <div className="text-center py-8">
+                <Handshake className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-xs font-bold text-foreground">No hay convenios activos</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Regístralos primero desde el módulo de administración.
+                </p>
+              </div>
+            ) : (
+              agreements.map((ag: any) => {
+                const isSelected = selectedAgreement?.id === ag.id
+
+                return (
+                  <div
+                    key={ag.id}
+                    onClick={() => handleSelectAgreement(ag)}
+                    className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-4 ${
+                      isSelected
+                        ? "border-[#008bcd] bg-[#008bcd]/10 shadow-xs"
+                        : "border-border hover:border-[#008bcd]/40 hover:bg-muted/30"
+                    }`}
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-bold text-xs text-foreground">{ag.name}</h4>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-[#008bcd]/15 text-[#008bcd]">
+                          {ag.discountType === "PERCENTAGE" ? (
+                            <><Percent className="w-2.5 h-2.5" /> {Number(ag.discountValue)}% OFF</>
+                          ) : (
+                            <><DollarSign className="w-2.5 h-2.5" /> ${Number(ag.discountValue)} OFF</>
+                          )}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground font-medium">{ag.institutionName}</p>
+                    </div>
+
+                    <div className="shrink-0">
+                      {isSelected ? (
+                        <div className="w-7 h-7 rounded-full bg-[#008bcd] text-white flex items-center justify-center">
+                          <Check className="w-4 h-4 stroke-[3]" />
+                        </div>
+                      ) : (
+                        <div className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-muted-foreground hover:border-[#008bcd]">
+                          <span className="text-[10px] font-bold">+</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
+
+          <div className="px-6 py-4 border-t border-border bg-muted/10 flex justify-between items-center">
+            {selectedAgreement ? (
+              <Button
+                variant="ghost"
+                onClick={() => handleSelectAgreement(selectedAgreement)}
+                className="text-xs font-bold text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 h-9 px-3 rounded-xl gap-1.5"
+              >
+                <X className="w-3.5 h-3.5" /> Quitar convenio
+              </Button>
+            ) : <div />}
+            <Button
+              variant="outline"
+              onClick={() => setIsAgreementModalOpen(false)}
+              className="text-xs font-bold rounded-xl h-9 px-5 border-border"
+            >
+              Cerrar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   )

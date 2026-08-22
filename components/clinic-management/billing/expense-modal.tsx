@@ -31,57 +31,62 @@ export function ExpenseModal({ isOpen, onClose, onSave }: { isOpen: boolean, onC
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[420px] bg-card border-border rounded-[24px] p-0 overflow-hidden shadow-2xl">
-        <DialogHeader className="px-6 py-5 border-b border-border bg-rose-500/5">
-          <DialogTitle className="text-xl font-black text-foreground flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-rose-500/10 text-rose-600 flex items-center justify-center">
-              <ArrowUpRight className="w-4 h-4" />
+      <DialogContent className="sm:max-w-[600px] bg-card border-border rounded-[24px] p-0 overflow-hidden shadow-2xl">
+        <DialogHeader className="px-8 py-6 border-b border-border bg-rose-500/5">
+          <DialogTitle className="text-xl font-black text-foreground flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-500 flex items-center justify-center">
+              <ArrowUpRight className="w-5 h-5 stroke-[2.5]" />
             </div>
             Registrar Egreso (Caja Chica)
           </DialogTitle>
         </DialogHeader>
 
-        <div className="p-6 space-y-4">
-          <div className="space-y-1.5">
+        <div className="p-8 space-y-6">
+          <div className="space-y-2">
             <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Concepto del Gasto *</Label>
             <Input 
               value={formData.concept} 
               onChange={e => setFormData({...formData, concept: e.target.value})} 
               placeholder="Ej: Compra de botellones de agua" 
-              className="h-11 bg-background border-border rounded-xl text-sm"
+              className="h-12 bg-background border-border rounded-xl text-sm focus-visible:ring-rose-500/20 focus-visible:border-rose-500/50"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-2">
               <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Monto a retirar ($) *</Label>
               <Input 
                 type="number" step="0.01" 
                 value={formData.amount} 
                 onChange={e => setFormData({...formData, amount: e.target.value})} 
                 placeholder="0.00" 
-                className="h-11 bg-background border-border font-mono text-base font-black text-rose-600 rounded-xl"
+                className="h-12 bg-background border-border font-mono text-lg font-black text-rose-500 rounded-xl focus-visible:ring-rose-500/20 focus-visible:border-rose-500/50"
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">N° Comprobante</Label>
               <Input 
                 value={formData.receiptNumber} 
                 onChange={e => setFormData({...formData, receiptNumber: e.target.value})} 
                 placeholder="Ej: FAC-998" 
-                className="h-11 bg-background border-border rounded-xl text-xs font-mono"
+                className="h-12 bg-background border-border rounded-xl text-sm font-mono focus-visible:ring-rose-500/20 focus-visible:border-rose-500/50"
               />
             </div>
           </div>
-          <p className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 bg-muted/50 p-3 rounded-xl border border-border">
-            <Receipt className="w-4 h-4 text-[#008bcd]" />
-            Este monto se descontará automáticamente del efectivo físico en caja.
-          </p>
+          
+          <div className="flex items-center gap-3 bg-muted/30 p-4 rounded-xl border border-border mt-2">
+            <div className="bg-[#008bcd]/10 p-2 rounded-lg">
+              <Receipt className="w-5 h-5 text-[#008bcd]" />
+            </div>
+            <p className="text-xs text-muted-foreground font-medium leading-relaxed">
+              Este monto se descontará automáticamente del <strong className="text-foreground">efectivo físico en caja</strong>. Asegúrate de guardar el comprobante para la auditoría.
+            </p>
+          </div>
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t border-border bg-muted/20 flex gap-2">
-          <Button variant="outline" onClick={onClose} className="rounded-xl text-xs font-bold h-10 border-border">Cancelar</Button>
-          <Button onClick={handleSubmit} disabled={isSaving || !formData.amount || !formData.concept} className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold h-10 px-6">
+        <DialogFooter className="px-8 py-5 border-t border-border bg-muted/10 flex gap-3">
+          <Button variant="outline" onClick={onClose} className="rounded-xl text-xs font-bold h-11 px-6 border-border hover:bg-accent">Cancelar</Button>
+          <Button onClick={handleSubmit} disabled={isSaving || !formData.amount || !formData.concept} className="bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold h-11 px-8 transition-all">
             {isSaving && <Loader2 className="w-4 h-4 animate-spin mr-2" />} Registrar Salida
           </Button>
         </DialogFooter>

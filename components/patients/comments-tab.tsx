@@ -14,8 +14,6 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 export function ComentariosTab({ patientId }: { patientId: string }) {
   const { data: session } = useSession()
   const { toast } = useToast()
-  
-  // --- REGLAS DE ROL ---
   const currentUser = session?.user as any
   const canDelete = currentUser?.role === "ADMIN" || currentUser?.role === "DOCTOR"
 
@@ -36,7 +34,7 @@ export function ComentariosTab({ patientId }: { patientId: string }) {
     try {
       await fetch(`/api/patient-comments/${id}`, { method: "DELETE" })
       toast({ title: "Comentario eliminado", variant: "success" })
-      window.location.reload() // O usa el refetch() de tu hook si lo tienes
+      window.location.reload() 
     } catch (error) {
       toast({ title: "Error al eliminar", variant: "destructive" })
     }
@@ -88,7 +86,6 @@ export function ComentariosTab({ patientId }: { patientId: string }) {
                     <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground"><User className="w-3.5 h-3.5" /> {com.author?.name || "Usuario"}</div>
                     <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"><Clock className="w-3.5 h-3.5" /> {formatDistanceToNow(new Date(com.createdAt), { addSuffix: true, locale: es })}</div>
                   </div>
-                  {/* BOTÓN ELIMINAR PROTEGIDO */}
                   {canDelete && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>

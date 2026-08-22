@@ -35,12 +35,9 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
   const { updateTreatmentPlan, isLoading: isSavingComment } = useUpdateTreatmentPlan()
 
   useEffect(() => {
-    if (urlPlanId) {
-      setSelectedPlanId(urlPlanId)
-    } else {
-      setSelectedPlanId(null)
-    }
-  }, [urlPlanId])
+  const target = urlPlanId || null
+  setSelectedPlanId((prev) => (prev !== target ? target : prev))
+}, [urlPlanId])
 
   const selectedPlan = plans.find((p: any) => p.id === selectedPlanId)
 

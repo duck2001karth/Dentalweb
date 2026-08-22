@@ -1,5 +1,3 @@
-// lib/auth.ts
-
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
@@ -17,6 +15,7 @@ export const authOptions: NextAuthOptions = {
           ...data,
           role: UserRole.DOCTOR,
           isActive: true,
+          lastLogin: new Date(), 
         },
       });
     },
@@ -30,6 +29,21 @@ export const authOptions: NextAuthOptions = {
     }),
   ],
 
+  events: {
+    async signIn({ user }) {
+      if (user?.email) {
+        try {
+          await prisma.user.update({
+            where: { email: user.email },
+            data: { lastLogin: new Date() },
+          });
+        } catch (error) {
+          console.error("Error al actualizar lastLogin en evento signIn:", error);
+        }
+      }
+    },
+  },
+
   callbacks: {
     async jwt({ token, user, trigger }) {
       if (user) {
@@ -42,13 +56,14 @@ export const authOptions: NextAuthOptions = {
           },
           select: {
             id: true,
-            role: true,        
-            isActive: true,     
+            role: true,
+            isActive: true,
             phoneNumber: true,
             specialty: true,
             image: true,
             email: true,
             name: true,
+            lastLogin: true,
           },
         });
 
