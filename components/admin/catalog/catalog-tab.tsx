@@ -2,16 +2,15 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { 
-  Plus, Search, Edit2, Trash2, Loader2, Info, Download, RefreshCw, Wand2
+  Plus, Search, Edit2, Trash2, Loader2, Info, RefreshCw, Wand2
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
-
+import { cn } from "@/lib/utils" 
 import { CatalogStats } from "@/components/admin/catalog/catalog-stats"
-import { CategoryFilterChips } from "@/components/admin/catalog/category-filter-chips"
 import { ProcedureModal } from "@/components/admin/catalog/procedure-modal"
 import { ProcedureDeleteDialog } from "@/components/admin/catalog/procedure-delete-dialog"
 import { BulkImportModal } from "@/components/admin/catalog/bulk-import-modal"
@@ -30,7 +29,7 @@ export function CatalogoPrecios() {
   const [items, setItems] = useState<Procedure[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("ALL")
+  const [selectedCategory, setSelectedCategory] = useState("TODAS")
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false)
@@ -39,18 +38,18 @@ export function CatalogoPrecios() {
   const [isSaving, setIsSaving] = useState(false)
 
   const categories = [
-  "DIAGNÓSTICO", 
-  "PREVENCIÓN",  
-  "OPERATORIA", 
-  "ORTOPEDIA", 
-  "ORTODONCIA", 
-  "ENDODONCIA", 
-  "ESTÉTICA", 
-  "IMPLANTOLOGIA", 
-  "REHABILITACIÓN ORAL", 
-  "ODONTOPEDIATRIA", 
-  "CIRUGÍA ORAL"
-]
+    "DIAGNÓSTICO", 
+    "PREVENCIÓN",  
+    "OPERATORIA", 
+    "ORTOPEDIA", 
+    "ORTODONCIA", 
+    "ENDODONCIA", 
+    "ESTÉTICA", 
+    "IMPLANTOLOGIA", 
+    "REHABILITACIÓN ORAL", 
+    "ODONTOPEDIATRIA", 
+    "CIRUGÍA ORAL"
+  ]
 
   const fetchCatalog = useCallback(async () => {
     setIsLoading(true)
@@ -65,11 +64,11 @@ export function CatalogoPrecios() {
   }, [toast])
 
   useEffect(() => { fetchCatalog() }, [fetchCatalog])
-
-  const itemsCountByCategory = useMemo(() => {
-    const counts: Record<string, number> = {}
-    items.forEach((i) => {
-      counts[i.category] = (counts[i.category] || 0) + 1
+  const dynamicCategories = useMemo(() => {
+    const counts: Record<string, number> = { "TODAS": items.length }
+    items.forEach(item => {
+      const cat = item.category ? item.category.toUpperCase() : "OTROS"
+      counts[cat] = (counts[cat] || 0) + 1
     })
     return counts
   }, [items])
@@ -77,11 +76,14 @@ export function CatalogoPrecios() {
   const filteredItems = useMemo(() => {
     const q = searchTerm.toLowerCase()
     return items.filter((item) => {
-      const matchesCategory = selectedCategory === "ALL" || item.category === selectedCategory
+      const itemCat = item.category ? item.category.toUpperCase() : "OTROS"
+      const matchesCategory = selectedCategory === "TODAS" || itemCat === selectedCategory
+      
       const matchesSearch = 
         item.name.toLowerCase().includes(q) || 
         item.category.toLowerCase().includes(q) ||
         (item.code && item.code.toLowerCase().includes(q))
+        
       return matchesCategory && matchesSearch
     })
   }, [items, searchTerm, selectedCategory])
@@ -155,6 +157,8 @@ export function CatalogoPrecios() {
 
   return (
     <div className="w-full space-y-6 font-sans antialiased animate-in fade-in duration-200">
+      
+      {/* CABECERA */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -163,7 +167,7 @@ export function CatalogoPrecios() {
             </span>
           </div>
           <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight mt-1">
-            Catálogo de Prestaciones y Aranceles
+            Catálogo de Prestaciones
           </h1>
           <p className="text-xs text-muted-foreground mt-0.5 font-medium">
             Define procedimientos, consultas y valores base para presupuestos y odontograma.
@@ -202,15 +206,33 @@ export function CatalogoPrecios() {
       </div>
 
       <CatalogStats items={items} />
-      <CategoryFilterChips
-        categories={categories}
-        selectedCategory={selectedCategory}
-        onSelectCategory={setSelectedCategory}
-        itemsCountByCategory={itemsCountByCategory}
-      />
 
+      {/* 5. FILTROS DINÁMICOS IMPLEMENTADOS */}
+      <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-2 mb-6">
+        {Object.entries(dynamicCategories).map(([cat, count]) => (
+          <button
+            key={cat}
+            onClick={() => setSelectedCategory(cat)}
+            className={cn(
+              "px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 border",
+              selectedCategory === cat 
+                ? "bg-[#008bcd] text-white border-[#008bcd] shadow-md shadow-[#008bcd]/20" 
+                : "bg-card text-muted-foreground border-border hover:bg-muted/60"
+            )}
+          >
+            {cat}
+            <span className={cn(
+              "px-1.5 py-0.5 rounded-md text-[10px] font-black",
+              selectedCategory === cat ? "bg-white/20 text-white" : "bg-muted-foreground/10 text-muted-foreground"
+            )}>
+              {count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* TABLA DE PROCEDIMIENTOS */}
       <div className="bg-card border border-border rounded-[24px] shadow-xs overflow-hidden flex flex-col">
-
         <div className="p-4 border-b border-border bg-muted/20 flex flex-col sm:flex-row justify-between items-center gap-3">
           <div className="relative w-full sm:w-80">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -226,7 +248,7 @@ export function CatalogoPrecios() {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto min-h-[400px]">
           <table className="w-full text-left text-xs whitespace-nowrap">
             <thead className="bg-muted/30 border-b border-border text-[11px] uppercase text-muted-foreground font-black">
               <tr>

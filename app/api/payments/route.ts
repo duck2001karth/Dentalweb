@@ -112,7 +112,8 @@ export async function POST(request: Request) {
       reference, 
       itemIds, 
       receiptImage, 
-      treatmentPlanId 
+      treatmentPlanId,
+      receiptNumber 
     } = body
 
     const parsedAmount = parseFloat(amount || 0)
@@ -122,7 +123,6 @@ export async function POST(request: Request) {
     }
 
     let targetItemIds: string[] = itemIds || []
-    
     // LÓGICA DE DISTRIBUCIÓN AUTOMÁTICA EN PRESTACIONES
     if (targetItemIds.length === 0) {
       if (treatmentPlanId) {
@@ -208,7 +208,7 @@ export async function POST(request: Request) {
       remainingMoneyToDistribute -= moneyForThisItem
     }
 
-    //ACTUALIZAR ESTADO DEL PLAN (Total pagado)
+    // ACTUALIZAR ESTADO DEL PLAN (Total pagado)
     for (const planId of Array.from(planIdsToUpdate)) {
       const allPlanItems = await prisma.treatmentItem.findMany({
         where: { treatmentPlanId: planId },
@@ -235,8 +235,13 @@ export async function POST(request: Request) {
         },
       })
     }
-
-    //CREAR EL REGISTRO FINAL DE CAJA
+    let finalReceiptNumber = receiptNumber?.trim()
+    
+    if (!finalReceiptNumber) {
+      const totalPaymentsCount = await prisma.payment.count()
+      const nextSequence = totalPaymentsCount + 1
+      finalReceiptNumber = `REC-${nextSequence.toString().padStart(5, "0")}`
+    }
     const validMethod = normalizePrismaPaymentMethod(paymentMethod)
     const primaryPlanId = treatmentPlanId || (planIdsToUpdate.size > 0 ? Array.from(planIdsToUpdate)[0] : null)
     const currentUserId = (session?.user as any)?.id || null
@@ -253,7 +258,7 @@ export async function POST(request: Request) {
         notes: paidSnapshotItems.length > 0 
           ? JSON.stringify(paidSnapshotItems) 
           : `Abono directo al tratamiento: $${parsedAmount.toFixed(2)}`,
-        receiptNumber: body.receiptNumber || `#REC-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        receiptNumber: finalReceiptNumber,
       },
       include: {
         patient: { select: { id: true, firstName: true, lastName: true, ci: true } },

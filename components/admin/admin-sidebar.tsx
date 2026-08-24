@@ -11,7 +11,8 @@ import {
   ShieldCheck, 
   ChevronLeft,
   Handshake,
-  Sparkles
+  Sparkles,
+  Database 
 } from "lucide-react"
 
 const adminLinks = [
@@ -20,6 +21,7 @@ const adminLinks = [
   { name: "Catálogo de Precios", href: "/admin/catalogo", icon: ListTree },
   { name: "Gestión de Usuarios", href: "/admin/usuarios", icon: Users },
   { name: "Auditoría de Sistema", href: "/admin/auditoria", icon: History },
+  { name: "Respaldos y Seguridad", href: "/admin/respaldos", icon: Database },
 ]
 
 export default function AdminSidebar() {
