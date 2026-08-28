@@ -45,8 +45,8 @@ const adminNavItems: NavItemConfig[] = [
 ]
 
 const configNavItems: NavItemConfig[] = [
-  { name: "Ajustes de Clínica", href: "/configuracion", icon: Sliders, roles: ["ADMIN"] },
-  { name: "Plantillas Clínicas", href: "/configuracion/documentos", icon: FileCode, roles: ["ADMIN"] },
+  { name: "Ajustes de Clínica", href: "/ajustes", icon: Sliders, roles: ["ADMIN"] },
+  { name: "Plantillas Clínicas", href: "/ajustes/documentos", icon: FileCode, roles: ["ADMIN"] },
 ]
 
 // ============================================================================
