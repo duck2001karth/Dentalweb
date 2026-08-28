@@ -2,18 +2,18 @@
 
 import * as React from "react"
 import Link from "next/link"
-import Image from "next/image"
 import { usePathname } from "next/navigation"
 import { useSession } from "next-auth/react" 
 import {
   Calendar, ChevronDown, Home, Users, Settings, LucideIcon,
   Stethoscope, CreditCard, FileText, Activity, Box, Briefcase,
-  Globe, Tag, FileCode, Image as ImageIcon, Sliders
+  FileCode, Sliders
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Collapsible, CollapsibleContent } from "./ui/collapsible"
 import { ScrollArea } from "./ui/scroll-area"
+import { useClinicSettings } from "@/config/clinic-settings"
 
 // ============================================================================
 // 1. CONFIGURACIÓN DE RUTAS Y ROLES
@@ -45,11 +45,8 @@ const adminNavItems: NavItemConfig[] = [
 ]
 
 const configNavItems: NavItemConfig[] = [
-  { name: "Ajustes Generales", href: "/configuracion", icon: Sliders, roles: ["ADMIN"] },
-  { name: "Agenda Online", href: "/configuracion/agenda-online", icon: Globe, roles: ["ADMIN"] },
-  { name: "Arancel de Precios", href: "/configuracion/aranceles", icon: Tag, roles: ["ADMIN"] },
-  { name: "Documentos Clínicos", href: "/configuracion/documentos", icon: FileCode, roles: ["ADMIN"] },
-  { name: "Logotipo & Marca", href: "/configuracion/logotipo", icon: ImageIcon, roles: ["ADMIN"] },
+  { name: "Ajustes de Clínica", href: "/configuracion", icon: Sliders, roles: ["ADMIN"] },
+  { name: "Plantillas Clínicas", href: "/configuracion/documentos", icon: FileCode, roles: ["ADMIN"] },
 ]
 
 // ============================================================================
@@ -63,6 +60,9 @@ export const Nav = () => {
   
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role || "DOCTOR"
+
+  // 🌟 Extraemos los ajustes de la clínica
+  const { settings } = useClinicSettings()
   
   const visibleAdminItems = adminNavItems.filter(item => !item.roles || item.roles.includes(userRole))
   const visibleConfigItems = configNavItems.filter(item => !item.roles || item.roles.includes(userRole))
@@ -92,25 +92,41 @@ export const Nav = () => {
     >
       <Link 
         href="/"
-        className="h-[88px] flex items-center justify-center shrink-0 transition-all duration-300 border-b border-border/40 hover:bg-muted/20 relative overflow-hidden"
+        className="h-[88px] flex items-center justify-center shrink-0 transition-all duration-300 border-b border-border/40 hover:bg-muted/20 relative overflow-hidden px-4"
       >
         {isHovered ? (
-          <div className="flex items-center justify-center w-full px-4 animate-in fade-in duration-300">
-            <Image 
-              src="/iconode.png" 
-              alt="Logo Carmo Dental"
-              width={220} 
-              height={75}  
-              className="object-contain w-full h-auto max-h-[75px] scale-110 origin-center"
-              priority
-            />
+          <div className="flex items-center justify-center w-full animate-in fade-in duration-300">
+            {/* 🌟 LOGO DINÁMICO EXPANDIDO */}
+            {settings?.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img 
+                src={settings.logoUrl} 
+                alt={settings?.clinicName || "Logo Clínica"}
+                className="object-contain w-full h-auto max-h-[65px]"
+              />
+            ) : (
+              <span className="font-black text-lg text-foreground text-center tracking-tight leading-tight">
+                {settings?.clinicName || "Carmo Dental"}
+              </span>
+            )}
           </div>
         ) : (
-          <div className="h-11 w-11 flex items-center justify-center rounded-2xl bg-gradient-to-tr from-[#008bcd] to-blue-400 shadow-md text-white animate-in zoom-in duration-300">
-            <Stethoscope className="h-6 w-6" />
+          <div className="flex items-center justify-center w-full animate-in zoom-in duration-300">
+             {/* 🌟 LOGO DINÁMICO CONTRAÍDO */}
+            {settings?.logoUrl ? (
+              <div className="h-11 w-11 flex items-center justify-center rounded-xl bg-background border shadow-sm p-1">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              </div>
+            ) : (
+              <div className="h-11 w-11 flex items-center justify-center rounded-2xl bg-gradient-to-tr from-[#008bcd] to-blue-400 shadow-md text-white">
+                <span className="font-black text-xl">{settings?.clinicName?.charAt(0) || "C"}</span>
+              </div>
+            )}
           </div>
         )}
       </Link>
+      
       <ScrollArea className="flex-1 w-full py-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
         <div className="flex flex-col gap-1 px-3">
           
@@ -118,7 +134,6 @@ export const Nav = () => {
             <NavItem key={item.name} item={item} isExpanded={isHovered} />
           ))}
 
-          {/* Margen reducido de mt-8 mb-3 a mt-5 mb-2 */}
           <div className="mt-5 mb-2">
             <div className={cn("flex items-center text-muted-foreground transition-all overflow-hidden", isHovered ? "px-4" : "justify-center")}>
               {isHovered ? (
@@ -165,7 +180,7 @@ export const NavItem = ({ item, isSubItem, isExpanded }: { item: NavItemConfig, 
       <Link
         href={item.href}
         className={cn(
-          "relative flex items-center rounded-xl py-2.5 transition-all duration-200 outline-none overflow-hidden", // py-3 cambiado a py-2.5
+          "relative flex items-center rounded-xl py-2.5 transition-all duration-200 outline-none overflow-hidden",
           !isExpanded ? "justify-center w-14 mx-auto" : "justify-start px-4 w-full gap-3",
           isActive 
             ? "bg-gradient-to-r from-[#008bcd]/15 to-transparent text-[#008bcd] font-bold" 
@@ -209,11 +224,11 @@ export const NavItem = ({ item, isSubItem, isExpanded }: { item: NavItemConfig, 
 
 const NavSection = ({ title, icon: Icon, isExpanded, isOpen, onToggle, children }: { title: string, icon: LucideIcon, isExpanded: boolean, isOpen: boolean, onToggle: () => void, children: React.ReactNode }) => {
   return (
-    <Collapsible open={isOpen} className="mt-1"> {/* mt-2 cambiado a mt-1 */}
+    <Collapsible open={isOpen} className="mt-1"> 
       <div 
         onClick={onToggle}
         className={cn(
-          "flex items-center w-full rounded-xl py-2.5 transition-all duration-200 group cursor-pointer select-none relative", // py-3 cambiado a py-2.5
+          "flex items-center w-full rounded-xl py-2.5 transition-all duration-200 group cursor-pointer select-none relative",
           "hover:bg-muted/40",
           !isExpanded ? "justify-center w-14 mx-auto" : "justify-between px-4"
         )}

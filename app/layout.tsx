@@ -11,6 +11,7 @@ import { TailwindIndicator } from "@/components/tailwind-indicator";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/toaster";
 import { NextAuthProvider } from "@/components/providers/session-provider";
+import { ClinicSettingsProvider } from "@/config/clinic-settings"; 
 
 const inter = Inter({
   subsets: ["latin"],
@@ -56,13 +57,15 @@ export default function RootLayout({ children }: RootLayoutProps) {
         <NextAuthProvider>
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <ClientProvider>
-              <div className="relative flex min-h-screen flex-col">
-                <div className="flex-1">{children}</div>
-                <div className="print:hidden">
-                  <Toaster />
+              <ClinicSettingsProvider>
+                <div className="relative flex min-h-screen flex-col">
+                  <div className="flex-1">{children}</div>
+                  <div className="print:hidden">
+                    <Toaster />
+                  </div>
                 </div>
-              </div>
-              <TailwindIndicator />
+                <TailwindIndicator />
+              </ClinicSettingsProvider>
             </ClientProvider>
           </ThemeProvider>
         </NextAuthProvider>
