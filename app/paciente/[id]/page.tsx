@@ -303,7 +303,7 @@ export default function FichaClinicaPage() {
             </div>
             <div className="flex items-center gap-2 py-2 shrink-0">
               <button 
-                onClick={() => router.push(`/agendavand?patientId=${patientId}`)} 
+                onClick={() => router.push(`/agenda-global?patientId=${patientId}`)} 
                 className="px-4 h-10 text-[#008bcd] dark:text-blue-400 hover:bg-blue-500/10 font-bold text-xs whitespace-nowrap flex items-center gap-2 transition-colors rounded-xl border border-transparent cursor-pointer"
               >
                 <CalendarIcon size={15} /> Agendar Cita

@@ -4,7 +4,8 @@ import React, { useState, useEffect } from "react"
 import { format, subDays, startOfDay } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
-  RefreshCw, Clock, User, Loader2, Search, CheckCircle2, CreditCard, AlignLeft, CalendarIcon 
+  RefreshCw, Clock, User, Loader2, Search, CheckCircle2, 
+  CreditCard, AlignLeft, CalendarIcon, MapPin 
 } from "lucide-react"
 
 import { 
@@ -23,6 +24,9 @@ import { useToast } from "@/hooks/use-toast"
 import { useRescheduleAppointment } from "@/hooks/appointments"
 import { cn } from "@/lib/utils"
 
+import { useClinicSettings } from "@/config/clinic-settings"
+import { appointmentStatuses } from "@/constants/status"
+
 interface RescheduleModalProps {
   isOpen: boolean
   onClose: () => void
@@ -38,11 +42,14 @@ export function RescheduleModal({
 }: RescheduleModalProps) {
   const { toast } = useToast()
   const { rescheduleAppointment: reschedule, isLoading: isPending } = useRescheduleAppointment()
+  const { settings } = useClinicSettings()
+
   const [targetAppointment, setTargetAppointment] = useState<any>(null)
   
   const [newDateObj, setNewDateObj] = useState<Date | undefined>(undefined)
   const [newTime, setNewTime] = useState("")
   const [duration, setDuration] = useState("30")
+  const [selectedBox, setSelectedBox] = useState("")
   
   const [reasonCategory, setReasonCategory] = useState("PATIENT_REQUEST")
   const [customReasonNote, setCustomReasonNote] = useState("")
@@ -50,6 +57,10 @@ export function RescheduleModal({
   const [searchTerm, setSearchTerm] = useState("")
   const [appointmentsList, setAppointmentsList] = useState<any[]>([])
   const [isSearching, setIsSearching] = useState(false)
+
+  const availableBoxes = settings?.availableBoxes && settings.availableBoxes.length > 0 
+    ? settings.availableBoxes 
+    : ["Box 1 (Principal)", "Box 2 (Ortodoncia)", "Box 3 (Cirugía)"]
 
   const calculateEndTime = (startTime: string, durationMinutes: string) => {
     if (!startTime) return ""
@@ -65,16 +76,14 @@ export function RescheduleModal({
   useEffect(() => {
     if (selectedAppointment) {
       setTargetAppointment(selectedAppointment)
-      if (selectedAppointment.startTime) {
-        setNewTime(selectedAppointment.startTime)
-      }
-      if (selectedAppointment.date) {
-        setNewDateObj(new Date(selectedAppointment.date))
-      }
+      if (selectedAppointment.startTime) setNewTime(selectedAppointment.startTime)
+      if (selectedAppointment.date) setNewDateObj(new Date(selectedAppointment.date))
+      setSelectedBox(selectedAppointment.box || availableBoxes[0] || "Box 1")
     } else {
       setTargetAppointment(null)
+      setSelectedBox(availableBoxes[0] || "Box 1")
     }
-  }, [selectedAppointment, isOpen])
+  }, [selectedAppointment, isOpen, availableBoxes])
 
   useEffect(() => {
     if (isOpen && !selectedAppointment) {
@@ -96,7 +105,6 @@ export function RescheduleModal({
     }
   }, [isOpen, selectedAppointment])
 
-  // FILTRAR CITAS DESDE HACE 15 DÍAS HASTA EL FUTURO Y ORDENAR
   const fifteenDaysAgo = startOfDay(subDays(new Date(), 15))
   
   const filteredAppointments = appointmentsList
@@ -115,6 +123,7 @@ export function RescheduleModal({
     setNewDateObj(undefined)
     setNewTime("")
     setDuration("30")
+    setSelectedBox("")
     setSearchTerm("")
     setReasonCategory("PATIENT_REQUEST")
     setCustomReasonNote("")
@@ -164,6 +173,7 @@ export function RescheduleModal({
       newDate: formattedDate,
       newTime,
       endTime: computedEndTime,
+      box: selectedBox || targetAppointment.box || availableBoxes[0],
       reason: finalReason,
       sendWhatsapp: false,
     }, {
@@ -171,7 +181,6 @@ export function RescheduleModal({
         toast({
           title: "Cita Reprogramada",
           description: `Nueva cita asignada de ${newTime} a ${computedEndTime} hs.`,
-          variant: "success"
         })
         if (onSuccessCallback) onSuccessCallback()
         handleClose()
@@ -199,7 +208,7 @@ export function RescheduleModal({
             Reprogramación de Cita
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground font-semibold mt-1">
-            Seleccione el paciente por C.I. o Nombre y configure el nuevo horario de atención.
+            Seleccione el paciente por C.I. o Nombre y configure el nuevo horario y sillón de atención.
           </DialogDescription>
         </DialogHeader>
 
@@ -243,6 +252,7 @@ export function RescheduleModal({
                               setTargetAppointment(app)
                               if (app.startTime) setNewTime(app.startTime)
                               if (app.date) setNewDateObj(new Date(app.date))
+                              if (app.box) setSelectedBox(app.box)
                               setSearchTerm("")
                             }}
                             className={`p-2.5 text-xs flex items-center justify-between cursor-pointer transition-colors ${
@@ -303,13 +313,13 @@ export function RescheduleModal({
             )}
           </div>
 
-          {/* COLUMNA DERECHA: CAMPOS OBLIGATORIOS MARCADOS CON ASTERISCO */}
+          {/* COLUMNA DERECHA: CAMPOS DE REPROGRAMACIÓN */}
           <div className="space-y-4 md:border-l md:border-border/80 md:pl-6">
             <Label className="text-[11px] font-black uppercase text-[#008bcd] tracking-widest block">
-              2. Nuevo Horario y Detalle
+              2. Nuevo Horario, Box y Detalle
             </Label>
             
-            {/* NUEVA FECHA OBLIGATORIA */}
+            {/* NUEVA FECHA */}
             <div className="space-y-1.5">
               <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
                 <CalendarIcon className="w-3.5 h-3.5 text-[#008bcd]" /> Nueva Fecha <span className="text-red-500">*</span>
@@ -331,6 +341,7 @@ export function RescheduleModal({
               </Popover>
             </div>
 
+            {/* HORA Y DURACIÓN */}
             <div className="grid grid-cols-2 gap-3 bg-muted/20 p-3 rounded-xl border border-border/80">
               <div className="space-y-1">
                 <span className="text-[11px] font-bold text-muted-foreground">Hora Inicio <span className="text-red-500">*</span></span>
@@ -361,7 +372,26 @@ export function RescheduleModal({
               </div>
             </div>
 
-            {/* CATEGORÍA OBLIGATORIA */}
+            {/* 🌟 SELECTOR DINÁMICO DE SILLÓN / BOX */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-[#008bcd]" /> Sillón / Box Asignado
+              </Label>
+              <Select value={selectedBox} onValueChange={setSelectedBox}>
+                <SelectTrigger className="bg-background border-border/80 h-10 text-xs font-semibold rounded-xl focus:ring-[#008bcd]">
+                  <SelectValue placeholder="Seleccione el Box..." />
+                </SelectTrigger>
+                <SelectContent className="bg-card border-border/80 rounded-xl text-xs font-semibold">
+                  {availableBoxes.map((boxName, index) => (
+                    <SelectItem key={index} value={boxName}>
+                      {boxName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* CATEGORÍA DEL MOTIVO */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
                 Categoría del Motivo <span className="text-red-500">*</span>
@@ -380,7 +410,7 @@ export function RescheduleModal({
               </Select>
             </div>
 
-            {/* DESGLOSE OBLIGATORIO CUANDO ES CUSTOM */}
+            {/* DETALLE TÉCNICO SI ES PERSONALIZADO */}
             {reasonCategory === "CUSTOM" && (
               <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
                 <Label className="text-xs font-bold text-[#008bcd] flex items-center gap-1.5">
@@ -399,6 +429,7 @@ export function RescheduleModal({
             )}
           </div>
         </div>
+
         {/* PIE DE PÁGINA */}
         <DialogFooter className="px-6 py-4 border-t border-border/80 bg-muted/20 flex flex-row items-center justify-end gap-3">
           <Button

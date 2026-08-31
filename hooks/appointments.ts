@@ -3,7 +3,8 @@ import { format } from "date-fns"
 import { 
   AppointmentWithDetails, 
   AppointmentInput, 
-  UpdateAppointmentInput 
+  UpdateAppointmentInput,
+  RescheduleAppointmentInput 
 } from "@/types/appointments"
 
 interface UseGetAppointmentsParams {
@@ -84,7 +85,6 @@ export function useGetAppointment(id: string) {
   }
 }
 
-// 3. CREAR CITA
 export function useCreateAppointment() {
   const queryClient = useQueryClient()
 
@@ -119,7 +119,6 @@ export function useCreateAppointment() {
   }
 }
 
-// 4. ACTUALIZAR CITA (Ideal para cambiar estados a En Progreso, Atendido, etc)
 export function useUpdateAppointment() {
   const queryClient = useQueryClient()
 
@@ -169,7 +168,6 @@ export function useUpdateAppointment() {
   }
 }
 
-// 5. ELIMINAR / CANCELAR CITA
 export function useDeleteAppointment() {
   const queryClient = useQueryClient()
 
@@ -197,14 +195,6 @@ export function useDeleteAppointment() {
     isSuccess
   }
 }
-export interface RescheduleAppointmentInput {
-  appointmentId: string
-  newDate: string  
-  newTime: string
-  endTime?: string  
-  reason?: string
-  sendWhatsapp?: boolean
-}
 
 export function useRescheduleAppointment() {
   const queryClient = useQueryClient()
@@ -218,14 +208,15 @@ export function useRescheduleAppointment() {
       appointmentId,
       newDate,
       newTime,
-      endTime, 
+      endTime,
+      box,
       reason,
       sendWhatsapp,
     }: RescheduleAppointmentInput) => {
       const response = await fetch(`/api/citas/${appointmentId}/reschedule`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newDate, newTime, endTime, reason, sendWhatsapp }), // <-- Y enviarlo al body
+        body: JSON.stringify({ newDate, newTime, endTime, box, reason, sendWhatsapp }),
       })
 
       if (!response.ok) {

@@ -40,7 +40,7 @@ export function QuickActions() {
         <DropdownMenuSeparator className="my-1 bg-border/60" />
 
         <DropdownMenuItem 
-          onClick={() => router.push("/agendavand")} 
+          onClick={() => router.push("/agenda-global")} 
           className="cursor-pointer font-semibold text-xs p-2.5 rounded-xl flex items-center gap-3 hover:bg-blue-500/10 focus:bg-blue-500/10 transition-colors group"
         >
           <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-[#008bcd] flex items-center justify-center shrink-0 border border-blue-500/20 group-hover:scale-105 transition-transform">

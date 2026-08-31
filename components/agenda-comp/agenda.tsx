@@ -5,7 +5,10 @@ import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { CalendarCheck, RefreshCcw, Phone, AlertCircle, Clock, MapPin, User, CheckCircle2, Tags, Plus } from "lucide-react"
+import { 
+  CalendarCheck, RefreshCcw, Phone, AlertCircle, Clock, 
+  MapPin, User, CheckCircle2, Tags, HelpCircle 
+} from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -17,17 +20,8 @@ import { useGetAppointments } from "@/hooks/appointments"
 import { NewAppointmentModal } from "@/components/agenda-comp/new-appointment"
 import { PrintAgendaModal } from "@/components/agenda-comp/print"
 import { RescheduleModal } from "@/components/agenda-comp/reschedule" 
-
-const getStatusConfig = (status: string) => {
-  switch(status) {
-    case "SCHEDULED": return { text: "Agendada", dot: "bg-blue-500", badge: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" };
-    case "WAITING": return { text: "En Sala", dot: "bg-amber-500", badge: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" };
-    case "IN_PROGRESS": return { text: "En Box", dot: "bg-purple-500", badge: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" };
-    case "COMPLETED": return { text: "Atendido", dot: "bg-emerald-500", badge: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" };
-    case "CANCELLED": return { text: "Anulada", dot: "bg-red-500", badge: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20" };
-    default: return { text: status, dot: "bg-slate-500", badge: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20" };
-  }
-}
+import { appointmentStatuses } from "@/constants/status" 
+import { useClinicSettings } from "@/config/clinic-settings"
 
 const getReasonLabel = (reason?: string) => {
   if (!reason) return "Consulta General"
@@ -50,6 +44,8 @@ export function DashboardAgenda() {
   const { data: session } = useSession()
   const currentUser = session?.user as any
   const isAdminOrStaff = currentUser?.role === "ADMIN" || currentUser?.role === "RECEPTIONIST"
+  const { settings } = useClinicSettings()
+
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [selectedDoctor, setSelectedDoctor] = useState("all")
   const [doctorsList, setDoctorsList] = useState<any[]>([])
@@ -79,8 +75,6 @@ export function DashboardAgenda() {
 
   return (
     <div className="flex-1 w-full animate-in fade-in duration-500">
-
-      {/* --- ENCABEZADO Y BARRA DE ACCIONES --- */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4 border-b border-border/80 pb-4">
         <div>
           <h3 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
@@ -110,9 +104,8 @@ export function DashboardAgenda() {
           )}
         </div>
         
-        {/* BARRA DE BOTONES DE ACCIÓN (TAMAÑO AUMENTADO h-11 / text-sm font-bold Y MODAL REINTEGRADO) */}
-      <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
-          {/* 1. REPROGRAMAR */}
+        {/* BARRA DE ACCIONES */}
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
           <Button 
             variant="ghost" 
             onClick={() => {
@@ -125,8 +118,7 @@ export function DashboardAgenda() {
             <span>Reprogramar</span>
           </Button>
           
-          {/* 2. AGENDA GLOBAL */}
-          <Link href="/agendavand" className="flex-1 md:flex-none">
+          <Link href="/agenda-global" className="flex-1 md:flex-none">
             <Button 
               variant="ghost" 
               className="w-full bg-transparent border border-border/80 text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 hover:border-[#008bcd]/30 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
@@ -136,18 +128,21 @@ export function DashboardAgenda() {
             </Button>
           </Link>
 
-          {/* SEPARADOR VERTICAL */}
           <div className="hidden sm:block w-[1px] h-6 bg-border/80 mx-1" />
 
-          {/* 3. IMPRIMIR */}
-          <PrintAgendaModal date={date} citas={citasActivas} />
-
-          {/* 4. MODAL DE NUEVA CITA (+ DAR CITA) REINTEGRADO CON EL NUEVO DISEÑO */}
+          {/* COMPONENTE DE IMPRESIÓN */}
+          <PrintAgendaModal 
+            date={date || new Date()} 
+            appointments={citasActivas}
+            citas={citasActivas}
+            doctors={doctorsList}
+          />
+          
           <NewAppointmentModal />
-
         </div>
       </div>
-      {/* --- CONTENIDO PRINCIPAL DE LA AGENDA --- */}
+
+      {/* --- CONTENIDO DE LA AGENDA --- */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
         <div className="xl:col-span-1 space-y-6">
           <div className="bg-card rounded-2xl border border-border/80 shadow-xs overflow-hidden">
@@ -176,7 +171,7 @@ export function DashboardAgenda() {
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: LISTADO DE CITAS ACTIVAS CON HOVER HOMOGÉNEO */}
+        {/* LISTADO DE CITAS */}
         <div className="xl:col-span-3">
           
           {isLoading && (
@@ -212,7 +207,13 @@ export function DashboardAgenda() {
           {!isLoading && citasActivas.length > 0 && (
             <div className="space-y-3.5 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 pb-6 custom-scrollbar">
               {citasActivas.map((cita: any) => {
-                const statusInfo = getStatusConfig(cita.status);
+                const statusInfo = appointmentStatuses[cita.status] || {
+                  label: cita.status,
+                  color: "text-slate-600 dark:text-slate-400",
+                  bg: "bg-slate-100 dark:bg-slate-800",
+                  icon: HelpCircle
+                };
+                const StatusIcon = statusInfo.icon;
 
                 return (
                   <div 
@@ -221,9 +222,9 @@ export function DashboardAgenda() {
                   >
                     
                     {/* BARRA LATERAL DE ESTADO */}
-                    <div className={cn("absolute left-0 top-0 bottom-0 w-1.5 transition-colors", statusInfo.dot)}></div>
+                    <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", statusInfo.bg.split(" ")[0])} />
 
-                    {/* COLUMNA DE HORARIO */}
+                    {/* HORARIO */}
                     <div className="flex md:flex-col items-center justify-between md:justify-center px-5 py-3.5 md:py-5 bg-muted/20 md:w-32 md:border-r border-b md:border-b-0 border-border/80 shrink-0 ml-1.5">
                       <div className="flex items-center gap-2 md:hidden text-muted-foreground font-bold text-[10px] uppercase tracking-wider mb-0.5">
                         <Clock className="w-3.5 h-3.5 text-[#008bcd]" /> Horario
@@ -236,7 +237,7 @@ export function DashboardAgenda() {
                       </div>
                     </div>
 
-                    {/* DETALLES DEL PACIENTE */}
+                    {/* DETALLES */}
                     <div className="flex-1 p-4 md:px-6 flex flex-col justify-center gap-2.5">
                       
                       <div className="flex justify-between items-start gap-4">
@@ -258,9 +259,9 @@ export function DashboardAgenda() {
                         </div>
 
                         <div className="hidden md:flex flex-col items-end gap-1">
-                          <span className={cn("px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5", statusInfo.badge)}>
-                            <span className={cn("w-1.5 h-1.5 rounded-full", statusInfo.dot)}></span>
-                            {statusInfo.text}
+                          <span className={cn("px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5", statusInfo.bg, statusInfo.color)}>
+                            <StatusIcon className="w-3.5 h-3.5" />
+                            {statusInfo.label}
                           </span>
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mt-0.5">
                             <User className="w-3.5 h-3.5 text-[#008bcd]" /> {cita.doctor?.name || "Dr. Asignado"}
@@ -273,7 +274,10 @@ export function DashboardAgenda() {
                           <Phone className="w-3.5 h-3.5 text-muted-foreground/80" /> {cita.patient?.phone || "Sin contacto"}
                         </span>
                         <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
-                          <MapPin className="w-3.5 h-3.5 text-[#008bcd]" /> Box: <span className="font-bold text-foreground">{cita.box || "N/A"}</span>
+                          <MapPin className="w-3.5 h-3.5 text-[#008bcd]" /> Sillón / Box:{" "}
+                          <span className="font-bold text-foreground">
+                            {cita.box || (settings?.availableBoxes?.[0] ?? "Box 1")}
+                          </span>
                         </span>
                         
                         {cita.situation && (
@@ -299,7 +303,6 @@ export function DashboardAgenda() {
                         </Link>
                       )}
 
-                      {/* BOTÓN REPROGRAMAR INDIVIDUAL POR CITA */}
                       <Button 
                         variant="ghost" 
                         onClick={() => {
@@ -331,3 +334,7 @@ export function DashboardAgenda() {
     </div>
   )
 }
+
+// Exportaciones compatibles
+export { DashboardAgenda as Agenda }
+export default DashboardAgenda

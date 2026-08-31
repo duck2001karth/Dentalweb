@@ -35,7 +35,7 @@ export default withAuth(
       "/pacientes",
       "/paciente",
       "/agenda",
-      "/agendavand",
+      "/agenda-global",
       "/dashboard",
       "/historia-clinica",
       "/odontograma",
@@ -78,7 +78,7 @@ export const config = {
     "/paciente/:path*",
 
     "/agenda/:path*",
-    "/agendavand/:path*",
+    "/agenda-global/:path*",
 
     "/historia-clinica/:path*",
     "/odontograma/:path*",

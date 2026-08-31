@@ -42,7 +42,7 @@ export function usePageContext(): PageContext {
   }
 
   // 3. LÓGICA PARA LA AGENDA
-  if (root === "agenda" || root === "agendavand") {
+  if (root === "agenda" || root === "agenda-global") {
     return {
       entity: "agenda",
       id: pathSegments[1] || null, 

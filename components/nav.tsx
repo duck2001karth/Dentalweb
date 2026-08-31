@@ -11,8 +11,7 @@ import {
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Collapsible, CollapsibleContent } from "./ui/collapsible"
-import { ScrollArea } from "./ui/scroll-area"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { useClinicSettings } from "@/config/clinic-settings"
 
 // ============================================================================
@@ -28,7 +27,7 @@ type NavItemConfig = {
 
 const mainNavItems: NavItemConfig[] = [
   { name: "Panel de Inicio", href: "/", icon: Home },
-  { name: "Agenda de Citas", href: "/agendavand", icon: Calendar },
+  { name: "Agenda de Citas", href: "/agenda-global", icon: Calendar },
   { name: "Pacientes", href: "/pacientes", icon: Users },
 ]
 
@@ -49,6 +48,8 @@ const configNavItems: NavItemConfig[] = [
   { name: "Plantillas Clínicas", href: "/ajustes/documentos", icon: FileCode, roles: ["ADMIN"] },
 ]
 
+type ModuleKey = "clinica" | "admin" | "config"
+
 // ============================================================================
 // 2. COMPONENTE PRINCIPAL: NAV
 // ============================================================================
@@ -56,53 +57,81 @@ const configNavItems: NavItemConfig[] = [
 export const Nav = () => {
   const pathname = usePathname()
   const [isHovered, setIsHovered] = React.useState(false)
-  const [openModule, setOpenModule] = React.useState<"clinica" | "admin" | "config" | null>(null)
+  const [activeOpenModule, setActiveOpenModule] = React.useState<ModuleKey | null>(null)
   
   const { data: session } = useSession()
-  const userRole = (session?.user as any)?.role || "DOCTOR"
-
-  // 🌟 Extraemos los ajustes de la clínica
+  const userRole = (session?.user as any)?.role || "ADMIN"
   const { settings } = useClinicSettings()
   
-  const visibleAdminItems = adminNavItems.filter(item => !item.roles || item.roles.includes(userRole))
-  const visibleConfigItems = configNavItems.filter(item => !item.roles || item.roles.includes(userRole))
+  // Memoización para no recrear arrays en cada render
+  const visibleAdminItems = React.useMemo(() => {
+    return adminNavItems.filter(item => !item.roles || item.roles.includes(userRole))
+  }, [userRole])
+
+  const visibleConfigItems = React.useMemo(() => {
+    return configNavItems.filter(item => !item.roles || item.roles.includes(userRole))
+  }, [userRole])
   
   const showAdminModule = visibleAdminItems.length > 0
   const showConfigModule = visibleConfigItems.length > 0
 
+  const [logoScale, setLogoScale] = React.useState(100)
+
+  React.useEffect(() => {
+    const updateScale = () => {
+      const saved = localStorage.getItem("clinic_logo_scale")
+      if (saved) setLogoScale(Number(saved))
+      else if (settings?.logoScale) setLogoScale(settings.logoScale)
+    }
+    updateScale()
+    window.addEventListener("logoScaleUpdated", updateScale)
+    return () => window.removeEventListener("logoScaleUpdated", updateScale)
+  }, [settings?.logoScale])
+
+  // Abre automáticamente el módulo correspondiente si la ruta coincide al cargar
   React.useEffect(() => {
     if (!pathname) return
-    if (clinicaNavItems.some(i => pathname.startsWith(i.href))) setOpenModule("clinica")
-    else if (visibleAdminItems.some(i => pathname.startsWith(i.href))) setOpenModule("admin")
-    else if (visibleConfigItems.some(i => pathname.startsWith(i.href))) setOpenModule("config")
-  }, [pathname, visibleAdminItems, visibleConfigItems])
 
-  const handleToggle = (moduleKey: "clinica" | "admin" | "config") => {
-    setOpenModule(prev => (prev === moduleKey ? null : moduleKey))
+    if (clinicaNavItems.some(i => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
+      setActiveOpenModule("clinica")
+    } else if (visibleAdminItems.some(i => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
+      setActiveOpenModule("admin")
+    } else if (visibleConfigItems.some(i => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
+      setActiveOpenModule("config")
+    }
+  }, [pathname])
+
+  const toggleModule = (moduleKey: ModuleKey) => {
+    setActiveOpenModule(prev => (prev === moduleKey ? null : moduleKey))
   }
+
+  const scaleRatio = logoScale / 100
 
   return (
     <nav
       className={cn(
-        "flex flex-col h-screen bg-card transition-all duration-300 ease-in-out z-40 border-r border-border/60 select-none relative shadow-[4px_0_24px_rgba(0,0,0,0.02)]",
+        "flex flex-col h-screen bg-card transition-all duration-300 ease-in-out z-40 border-r border-border/60 select-none relative shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0",
         isHovered ? "w-[260px]" : "w-[80px]"
       )}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {/* CABECERA DE LOGOTIPO DINÁMICO */}
       <Link 
         href="/"
-        className="h-[88px] flex items-center justify-center shrink-0 transition-all duration-300 border-b border-border/40 hover:bg-muted/20 relative overflow-hidden px-4"
+        className={cn(
+          "flex items-center justify-center shrink-0 border-b border-border/40 hover:bg-muted/10 transition-all duration-300 relative overflow-hidden",
+          isHovered ? "h-28 w-full px-3 py-2" : "h-20 w-full p-2"
+        )}
       >
         {isHovered ? (
-          <div className="flex items-center justify-center w-full animate-in fade-in duration-300">
-            {/* 🌟 LOGO DINÁMICO EXPANDIDO */}
+          <div className="flex items-center justify-center w-full h-full animate-in fade-in duration-200 overflow-hidden">
             {settings?.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img 
                 src={settings.logoUrl} 
-                alt={settings?.clinicName || "Logo Clínica"}
-                className="object-contain w-full h-auto max-h-[65px]"
+                alt={settings?.clinicName || "Logo Clínica"} 
+                style={{ transform: `scale(${scaleRatio})` }}
+                className="w-full h-full max-h-24 max-w-[210px] object-contain drop-shadow-md transition-transform duration-200"
               />
             ) : (
               <span className="font-black text-lg text-foreground text-center tracking-tight leading-tight">
@@ -111,23 +140,26 @@ export const Nav = () => {
             )}
           </div>
         ) : (
-          <div className="flex items-center justify-center w-full animate-in zoom-in duration-300">
-             {/* 🌟 LOGO DINÁMICO CONTRAÍDO */}
+          <div className="flex items-center justify-center w-full h-full animate-in zoom-in duration-200">
             {settings?.logoUrl ? (
-              <div className="h-11 w-11 flex items-center justify-center rounded-xl bg-background border shadow-sm p-1">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+              <div className="h-12 w-12 flex items-center justify-center rounded-xl bg-background/50 border border-border/60 p-1 shadow-xs overflow-hidden">
+                <img 
+                  src={settings.logoUrl} 
+                  alt="Logo" 
+                  className="w-full h-full object-contain" 
+                />
               </div>
             ) : (
-              <div className="h-11 w-11 flex items-center justify-center rounded-2xl bg-gradient-to-tr from-[#008bcd] to-blue-400 shadow-md text-white">
-                <span className="font-black text-xl">{settings?.clinicName?.charAt(0) || "C"}</span>
+              <div className="h-11 w-11 flex items-center justify-center rounded-2xl bg-gradient-to-tr from-[#008bcd] to-sky-400 shadow-md text-white font-black text-xl">
+                {settings?.clinicName?.charAt(0) || "C"}
               </div>
             )}
           </div>
         )}
       </Link>
       
-      <ScrollArea className="flex-1 w-full py-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+      {/* LISTADO DE NAVEGACIÓN */}
+      <ScrollArea className="flex-1 w-full py-4">
         <div className="flex flex-col gap-1 px-3">
           
           {mainNavItems.map((item) => (
@@ -137,26 +169,53 @@ export const Nav = () => {
           <div className="mt-5 mb-2">
             <div className={cn("flex items-center text-muted-foreground transition-all overflow-hidden", isHovered ? "px-4" : "justify-center")}>
               {isHovered ? (
-                <span className="text-xs font-black uppercase tracking-widest opacity-60">Módulos del Sistema</span>
+                <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Módulos del Sistema</span>
               ) : (
                 <div className="h-[2px] w-8 bg-border/80 rounded-full" />
               )}
             </div>
           </div>
 
-          <NavSection title="Área Clínica" icon={Stethoscope} isExpanded={isHovered} isOpen={openModule === "clinica"} onToggle={() => handleToggle("clinica")}>
-            {clinicaNavItems.map((item) => <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />)}
+          {/* MÓDULO CLÍNICO */}
+          <NavSection 
+            title="Área Clínica" 
+            icon={Stethoscope} 
+            isExpanded={isHovered} 
+            isOpen={activeOpenModule === "clinica"} 
+            onToggle={() => toggleModule("clinica")}
+          >
+            {clinicaNavItems.map((item) => (
+              <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
+            ))}
           </NavSection>
 
+          {/* MÓDULO ADMINISTRACIÓN */}
           {showAdminModule && (
-            <NavSection title="Administración" icon={Briefcase} isExpanded={isHovered} isOpen={openModule === "admin"} onToggle={() => handleToggle("admin")}>
-              {visibleAdminItems.map((item) => <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />)}
+            <NavSection 
+              title="Administración" 
+              icon={Briefcase} 
+              isExpanded={isHovered} 
+              isOpen={activeOpenModule === "admin"} 
+              onToggle={() => toggleModule("admin")}
+            >
+              {visibleAdminItems.map((item) => (
+                <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
+              ))}
             </NavSection>
           )}
 
+          {/* MÓDULO CONFIGURACIÓN */}
           {showConfigModule && (
-            <NavSection title="Configuración" icon={Settings} isExpanded={isHovered} isOpen={openModule === "config"} onToggle={() => handleToggle("config")}>
-              {visibleConfigItems.map((item) => <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />)}
+            <NavSection 
+              title="Configuración" 
+              icon={Settings} 
+              isExpanded={isHovered} 
+              isOpen={activeOpenModule === "config"} 
+              onToggle={() => toggleModule("config")}
+            >
+              {visibleConfigItems.map((item) => (
+                <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
+              ))}
             </NavSection>
           )}
 
@@ -176,11 +235,11 @@ export const NavItem = ({ item, isSubItem, isExpanded }: { item: NavItemConfig, 
   const Icon = item.icon
 
   return (
-    <div className="relative group/navitem">
+    <div className="relative group/navitem w-full">
       <Link
         href={item.href}
         className={cn(
-          "relative flex items-center rounded-xl py-2.5 transition-all duration-200 outline-none overflow-hidden",
+          "relative flex items-center rounded-xl py-2.5 transition-all duration-200 outline-none cursor-pointer z-10",
           !isExpanded ? "justify-center w-14 mx-auto" : "justify-start px-4 w-full gap-3",
           isActive 
             ? "bg-gradient-to-r from-[#008bcd]/15 to-transparent text-[#008bcd] font-bold" 
@@ -191,7 +250,7 @@ export const NavItem = ({ item, isSubItem, isExpanded }: { item: NavItemConfig, 
           <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#008bcd] rounded-r-full shadow-[1px_0_8px_rgba(0,139,205,0.5)]" />
         )}
 
-        <div className="flex items-center justify-center shrink-0 relative z-10">
+        <div className="flex items-center justify-center shrink-0">
           <Icon className={cn(
             "transition-transform duration-300",
             isActive ? "text-[#008bcd] stroke-[2.5]" : "text-muted-foreground group-hover/navitem:text-foreground",
@@ -200,16 +259,15 @@ export const NavItem = ({ item, isSubItem, isExpanded }: { item: NavItemConfig, 
           )} />
         </div>
 
-        <span className={cn(
-          "whitespace-nowrap transition-all duration-300 text-sm tracking-tight relative z-10",
-          isExpanded ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 hidden"
-        )}>
-          {item.name}
-        </span>
+        {isExpanded && (
+          <span className="whitespace-nowrap transition-all duration-300 text-sm tracking-tight">
+            {item.name}
+          </span>
+        )}
       </Link>
 
       {!isExpanded && (
-        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 px-3 py-1.5 bg-foreground text-background text-sm font-bold rounded-md opacity-0 pointer-events-none group-hover/navitem:opacity-100 transition-opacity duration-200 z-50 whitespace-nowrap shadow-xl">
+        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 px-3 py-1.5 bg-foreground text-background text-xs font-bold rounded-md opacity-0 pointer-events-none group-hover/navitem:opacity-100 transition-opacity duration-200 z-50 whitespace-nowrap shadow-xl">
           {item.name}
           <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-foreground" />
         </div>
@@ -219,34 +277,50 @@ export const NavItem = ({ item, isSubItem, isExpanded }: { item: NavItemConfig, 
 }
 
 // ============================================================================
-// 4. COMPONENTE: SECCIÓN COLAPSABLE
+// 4. COMPONENTE: SECCIÓN COLAPSABLE TIPO ACORDEÓN
 // ============================================================================
 
-const NavSection = ({ title, icon: Icon, isExpanded, isOpen, onToggle, children }: { title: string, icon: LucideIcon, isExpanded: boolean, isOpen: boolean, onToggle: () => void, children: React.ReactNode }) => {
+const NavSection = ({ 
+  title, 
+  icon: Icon, 
+  isExpanded, 
+  isOpen, 
+  onToggle, 
+  children 
+}: { 
+  title: string
+  icon: LucideIcon
+  isExpanded: boolean
+  isOpen: boolean
+  onToggle: () => void
+  children: React.ReactNode 
+}) => {
   return (
-    <Collapsible open={isOpen} className="mt-1"> 
-      <div 
+    <div className="mt-1 w-full"> 
+      <button
+        type="button"
         onClick={onToggle}
         className={cn(
-          "flex items-center w-full rounded-xl py-2.5 transition-all duration-200 group cursor-pointer select-none relative",
-          "hover:bg-muted/40",
+          "flex items-center w-full rounded-xl py-2.5 transition-all duration-200 group cursor-pointer select-none relative outline-none",
+          "hover:bg-muted/40 active:scale-[0.98]",
           !isExpanded ? "justify-center w-14 mx-auto" : "justify-between px-4"
         )}
       >
         <div className="flex items-center gap-3 overflow-hidden">
           <Icon className={cn(
             "h-5 w-5 shrink-0 transition-colors duration-300",
-            isOpen ? "text-foreground stroke-[2.5]" : "text-muted-foreground group-hover:text-foreground",
+            isOpen ? "text-[#008bcd] stroke-[2.5]" : "text-muted-foreground group-hover:text-foreground",
             isExpanded && "hidden" 
           )} />
 
-          <span className={cn(
-            "text-xs font-black uppercase tracking-wider transition-all duration-300 whitespace-nowrap",
-            isOpen ? "text-foreground" : "text-muted-foreground group-hover:text-foreground",
-            isExpanded ? "opacity-100" : "opacity-0 w-0 hidden"
-          )}>
-            {title}
-          </span>
+          {isExpanded && (
+            <span className={cn(
+              "text-xs font-black uppercase tracking-wider transition-all duration-300 whitespace-nowrap",
+              isOpen ? "text-foreground font-extrabold" : "text-muted-foreground group-hover:text-foreground"
+            )}>
+              {title}
+            </span>
+          )}
         </div>
 
         {isExpanded && (
@@ -255,13 +329,13 @@ const NavSection = ({ title, icon: Icon, isExpanded, isOpen, onToggle, children 
             isOpen && "rotate-180 text-foreground"
           )} />
         )}
-      </div>
+      </button>
 
-      <CollapsibleContent className="transition-all data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down overflow-hidden">
-        <div className="flex flex-col gap-0.5 mt-1 relative before:absolute before:left-7 before:top-0 before:bottom-0 before:w-[1px] before:bg-border/50">
+      {isOpen && (
+        <div className="flex flex-col gap-0.5 mt-1 relative before:pointer-events-none before:absolute before:left-7 before:top-0 before:bottom-0 before:w-[1px] before:bg-border/50 animate-in fade-in duration-200">
           {children}
         </div>
-      </CollapsibleContent>
-    </Collapsible>
+      )}
+    </div>
   )
 }

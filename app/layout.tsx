@@ -1,5 +1,5 @@
 import "@/styles/globals.css";
-import { Metadata } from "next";
+import { Metadata, Viewport } from "next";
 import { Analytics } from "@vercel/analytics/react";
 import { Inter } from "next/font/google";
 
@@ -30,10 +30,9 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport = {
+export const viewport: Viewport = {
   initialScale: 1,
   width: "device-width",
-  height: "device-height",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "white" },
     { media: "(prefers-color-scheme: dark)", color: "black" },
@@ -55,7 +54,13 @@ export default function RootLayout({ children }: RootLayoutProps) {
         )}
       >
         <NextAuthProvider>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ThemeProvider 
+            attribute="class" 
+            defaultTheme="system" 
+            enableSystem
+            disableTransitionOnChange
+            enableColorScheme={false}
+          >
             <ClientProvider>
               <ClinicSettingsProvider>
                 <div className="relative flex min-h-screen flex-col">

@@ -15,6 +15,7 @@ export async function GET() {
         data: {
           id: SETTINGS_ID,
           clinicName: "Carmo Dental",
+          slogan: "CLÍNICA DE ESPECIALIDADES ODONTOLÓGICAS",
           currency: "USD",
           taxRate: 0,
           estabCode: "001",
@@ -36,52 +37,51 @@ export async function PATCH(req: Request) {
   try {
     const body = await req.json()
 
+    const updateData: any = {
+      clinicName: body.clinicName || "Carmo Dental",
+      slogan: body.slogan ?? null,
+      ruc: body.ruc ?? null,
+      razonSocial: body.razonSocial ?? null,
+      estabCode: body.estabCode || "001",
+      ptoEmiCode: body.ptoEmiCode || "001",
+      obligadoContab: Boolean(body.obligadoContab),
+      taxRate: parseFloat(body.taxRate) || 0,
+      currency: body.currency || "USD",
+      address: body.address ?? null,
+      phone: body.phone ?? null,
+      whatsappNumber: body.whatsappNumber ?? null,
+      email: body.email ?? null,
+      website: body.website ?? null,
+      availableBoxes: Array.isArray(body.availableBoxes) ? body.availableBoxes : ["Box 1"],
+      footerText: body.footerText ?? null,
+      logoUrl: body.logoUrl ?? null,
+      watermarkUrl: body.watermarkUrl ?? null
+    }
+
+    if (body.logoScale !== undefined) {
+      updateData.logoScale = Number(body.logoScale) || 100
+    }
+
+    if (body.watermarkOpacity !== undefined) {
+      updateData.watermarkOpacity = Number(body.watermarkOpacity) || 14
+    }
+
+    if (body.watermarkScale !== undefined) {
+      updateData.watermarkScale = Number(body.watermarkScale) || 100
+    }
+
     const updated = await prisma.clinicSettings.upsert({
       where: { id: SETTINGS_ID },
-      update: {
-        clinicName: body.clinicName || "Carmo Dental",
-        ruc: body.ruc || null,
-        razonSocial: body.razonSocial || null,
-        estabCode: body.estabCode || "001",
-        ptoEmiCode: body.ptoEmiCode || "001",
-        obligadoContab: Boolean(body.obligadoContab),
-        taxRate: parseFloat(body.taxRate || 0),
-        currency: body.currency || "USD",
-        address: body.address || null,
-        phone: body.phone || null,
-        whatsappNumber: body.whatsappNumber || null,
-        email: body.email || null,
-        website: body.website || null,
-        availableBoxes: body.availableBoxes || ["Box 1"],
-        footerText: body.footerText || null,
-        logoUrl: body.logoUrl || null,
-        watermarkUrl: body.watermarkUrl || null
-      },
+      update: updateData,
       create: {
         id: SETTINGS_ID,
-        clinicName: body.clinicName || "Carmo Dental",
-        ruc: body.ruc || null,
-        razonSocial: body.razonSocial || null,
-        estabCode: body.estabCode || "001",
-        ptoEmiCode: body.ptoEmiCode || "001",
-        obligadoContab: Boolean(body.obligadoContab),
-        taxRate: parseFloat(body.taxRate || 0),
-        currency: body.currency || "USD",
-        address: body.address || null,
-        phone: body.phone || null,
-        whatsappNumber: body.whatsappNumber || null,
-        email: body.email || null,
-        website: body.website || null,
-        availableBoxes: body.availableBoxes || ["Box 1"],
-        footerText: body.footerText || null,
-        logoUrl: body.logoUrl || null,
-        watermarkUrl: body.watermarkUrl || null
+        ...updateData
       }
     })
 
     return NextResponse.json(updated)
-  } catch (error) {
-    console.error("Error al actualizar ClinicSettings:", error)
-    return NextResponse.json({ error: "Error guardando ajustes" }, { status: 500 })
+  } catch (error: any) {
+    console.error("Error al actualizar ClinicSettings:", error?.message || error)
+    return NextResponse.json({ error: error?.message || "Error guardando ajustes" }, { status: 500 })
   }
 }

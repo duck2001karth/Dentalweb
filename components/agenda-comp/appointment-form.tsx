@@ -1,11 +1,11 @@
 "use client"
 
-import React from "react"
-import { format, isToday } from "date-fns"
+import React, { useEffect } from "react"
+import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
-  CalendarIcon, Clock, User, Stethoscope, 
-  MapPin, AlignLeft, Activity, Tags
+  CalendarIcon, Clock, User, 
+  MapPin, AlignLeft
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -16,6 +16,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { PatientSelector } from "./patient-selector"
+import { useClinicSettings } from "@/config/clinic-settings"
 
 interface AppointmentFormProps {
   formData: any
@@ -40,10 +41,19 @@ export function AppointmentForm({
   currentUser,
   validInitialStatuses
 }: AppointmentFormProps) {
+  const { settings, isLoading: isLoadingSettings } = useClinicSettings()
+
+  const availableBoxes = settings?.availableBoxes && settings.availableBoxes.length > 0 
+  ? settings.availableBoxes 
+  : ["Box 1"]
+  useEffect(() => {
+  if (!formData.box && availableBoxes.length > 0) {
+    setFormData((prev: any) => ({ ...prev, box: availableBoxes[0] }))
+  }
+}, [availableBoxes, formData.box, setFormData])
 
   const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedTime = e.target.value
-    // Lógica para auto-sumar 30 mins (se puede mejorar a futuro según el tratamiento)
     const [h, m] = selectedTime.split(':').map(Number)
     const d = new Date()
     d.setHours(h, m + 30, 0)
@@ -54,7 +64,7 @@ export function AppointmentForm({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-5">
-      {/* --- SECCIÓN 1: PACIENTE Y DOCTOR --- */}
+      {/* SECCIÓN 1: DETALLES CLÍNICOS */}
       <div className="space-y-5">
         <h3 className="text-[11px] font-black uppercase tracking-widest text-[#008bcd] border-b border-border/80 pb-2 flex items-center gap-2">
           <User className="w-3.5 h-3.5" /> 1. Detalles Clínicos
@@ -73,7 +83,7 @@ export function AppointmentForm({
         <div className="space-y-2">
           <Label className="text-foreground font-bold text-xs">Especialista Asignado *</Label>
           <Select 
-            value={formData.doctorId} 
+            value={formData.doctorId || ""} 
             onValueChange={(id) => setFormData({ ...formData, doctorId: id })} 
             disabled={isLoadingDoctors}
           >
@@ -114,7 +124,7 @@ export function AppointmentForm({
                     <SelectItem key={s.value} value={s.value} className="rounded-lg my-0.5 cursor-pointer">
                       <div className="flex items-center gap-2 py-0.5">
                         <Icon className="w-4 h-4 text-[#008bcd]" />
-                        <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border", s.badgeClass)}>
+                        <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border", s.badgeClass || s.bg)}>
                           {s.label}
                         </span>
                       </div>
@@ -142,6 +152,7 @@ export function AppointmentForm({
         </div>
       </div>
 
+      {/* SECCIÓN 2: HORARIO Y UBICACIÓN */}
       <div className="space-y-5">
         <h3 className="text-[11px] font-black uppercase tracking-widest text-[#008bcd] border-b border-border/80 pb-2 flex items-center gap-2">
           <CalendarIcon className="w-3.5 h-3.5" /> 2. Horario y Ubicación
@@ -196,22 +207,28 @@ export function AppointmentForm({
         </div>
 
         <div className="grid grid-cols-2 gap-3.5">
-          <div className="space-y-2">
-            <Label className="text-foreground font-bold text-xs flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-muted-foreground" /> Box / Sala
-            </Label>
-            <Select value={formData.box} onValueChange={(val) => setFormData({ ...formData, box: val })}>
-              <SelectTrigger className="bg-background border-border/80 h-11 font-semibold text-xs text-foreground rounded-xl">
-                <SelectValue placeholder="Seleccionar Box..." />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/80 shadow-xl">
-                <SelectItem value="Box 1" className="text-xs font-semibold">Box 1 (General)</SelectItem>
-                <SelectItem value="Box 2" className="text-xs font-semibold">Box 2 (Ortodoncia)</SelectItem>
-                <SelectItem value="Box 3" className="text-xs font-semibold">Box 3 (Cirugía)</SelectItem>
-                <SelectItem value="Pabellon" className="text-xs font-semibold">Pabellón Principal</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {/* SELECTOR CONECTADO CON LOS BOXES */}
+                <div className="space-y-2">
+          <Label className="text-foreground font-bold text-xs flex items-center gap-1.5">
+            <MapPin className="w-3.5 h-3.5 text-[#008bcd]" /> Sillón / Box
+          </Label>
+          <Select 
+            value={formData.box || (availableBoxes.length > 0 ? availableBoxes[0] : "")} 
+            onValueChange={(val) => setFormData({ ...formData, box: val })}
+            disabled={isLoadingSettings}
+          >
+            <SelectTrigger className="bg-background border-border/80 h-11 font-semibold text-xs text-foreground rounded-xl">
+              <SelectValue placeholder={isLoadingSettings ? "Cargando sillones..." : "Seleccionar Box..."} />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl border-border/80 shadow-xl">
+              {availableBoxes.map((boxName: string, index: number) => (
+                <SelectItem key={index} value={boxName} className="text-xs font-semibold cursor-pointer">
+                  {boxName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
           <div className="space-y-2">
             <Label className="text-foreground font-bold text-xs flex items-center gap-1.5">

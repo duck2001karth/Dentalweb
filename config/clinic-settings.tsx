@@ -6,6 +6,7 @@ export interface ClinicSettings {
   id: string
   clinicName: string
   ruc: string | null
+  slogan?: string
   razonSocial: string | null
   estabCode: string | null
   ptoEmiCode: string | null
@@ -20,7 +21,10 @@ export interface ClinicSettings {
   availableBoxes: string[]
   footerText: string | null
   logoUrl: string | null
+  logoScale?: number 
   watermarkUrl: string | null
+  watermarkOpacity?: number
+  watermarkScale?: number
 }
 
 interface ClinicSettingsContextType {

@@ -1,6 +1,5 @@
 import { z } from "zod"
 
-
 export const AppointmentStatusEnum = z.enum(["SCHEDULED", "WAITING", "IN_PROGRESS", "COMPLETED", "CANCELLED", "NO_SHOW"])
 export const PaymentStatusEnum = z.enum(["UP_TO_DATE", "DEBT", "EVALUATION"])
 
@@ -22,7 +21,6 @@ export const appointmentSchema = z.object({
 })
 export type Appointment = z.infer<typeof appointmentSchema>
 
-// Definición de Paciente Básico (Para anidarlo en la cita)
 export const patientBasicSchema = z.object({
   id: z.string(),
   firstName: z.string(),
@@ -31,21 +29,18 @@ export const patientBasicSchema = z.object({
   phone: z.string().nullable().optional(),
 })
 
-// Definición de Doctor Básico (Para anidarlo en la cita)
 export const doctorBasicSchema = z.object({
   id: z.string(),
   name: z.string().nullable().optional(),
 })
 
-// Cita Completa (Lo que enviamos a la Interfaz con los datos del paciente y doctor)
 export const appointmentWithDetailsSchema = appointmentSchema.extend({
   patient: patientBasicSchema.optional(),
   doctor: doctorBasicSchema.optional(),
 })
 export type AppointmentWithDetails = z.infer<typeof appointmentWithDetailsSchema>
 
-
-// --- 2. INPUTS PARA CREAR/EDITAR ---
+// --- 2. INPUTS PARA CREAR/EDITAR/REPROGRAMAR ---
 
 export const appointmentInputSchema = z.object({
   date: z.string().or(z.date()), 
@@ -68,3 +63,15 @@ export const updateAppointmentInputSchema = z.object({
   endTime: z.string().optional(),
 })
 export type UpdateAppointmentInput = z.infer<typeof updateAppointmentInputSchema>
+
+// 🌟 ESQUEMA Y TIPO PARA REPROGRAMACIÓN
+export const rescheduleAppointmentInputSchema = z.object({
+  appointmentId: z.string(),
+  newDate: z.string(),
+  newTime: z.string(),
+  endTime: z.string().optional(),
+  box: z.string().optional(),
+  reason: z.string().optional(),
+  sendWhatsapp: z.boolean().optional(),
+})
+export type RescheduleAppointmentInput = z.infer<typeof rescheduleAppointmentInputSchema>

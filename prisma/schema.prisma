@@ -603,7 +603,8 @@ model ClinicSettings {
   id              String   @id @default("default-clinic-settings")
   clinicName      String   @default("Carmo Dental") // Nombre comercial
   
-  ruc             String?  
+  ruc             String? 
+  slogan          String? 
   razonSocial     String?  
   estabCode       String?  @default("001") 
   ptoEmiCode      String?  @default("001") 
@@ -613,6 +614,7 @@ model ClinicSettings {
   currency        String   @default("USD")
  
   logoUrl         String?  @db.Text
+  logoScale       Int?     @default(100)
   watermarkUrl    String?  @db.Text
   
  
@@ -621,7 +623,9 @@ model ClinicSettings {
   whatsappNumber  String? 
   email           String?
   website         String?
-  
+  watermarkOpacity Int?     @default(15)  
+  watermarkScale   Int?     @default(100)
+
   availableBoxes  String[] @default(["Box 1", "Box 2", "Box 3"]) // Sillones habilitados
   footerText      String?  @db.Text // Descargo legal en recetas y RIDE
 

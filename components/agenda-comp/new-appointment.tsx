@@ -12,7 +12,8 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useGetPatients } from "@/hooks/patients"
 import { useCreateAppointment } from "@/hooks/appointments"
-import { appointmentStatuses } from "@/constants/status"
+import { appointmentStatuses } from "@/constants/status" 
+import { useClinicSettings } from "@/config/clinic-settings" 
 import { AppointmentForm } from "./appointment-form"
 
 interface NewAppointmentModalProps {
@@ -26,6 +27,7 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
   const [open, setOpen] = useState(false)
   const { data: session } = useSession()
   const { toast } = useToast()
+  const { settings } = useClinicSettings()
   
   const currentUser = session?.user as any
   const isAdminOrStaff = currentUser?.role === "ADMIN" || currentUser?.role === "RECEPTIONIST"
@@ -36,10 +38,12 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
   const [doctorsList, setDoctorsList] = useState<any[]>([])
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(false)
 
+  const defaultBox = settings?.availableBoxes?.[0] || "Box 1"
+
   const [formData, setFormData] = useState({
     patientId: "",
     doctorId: defaultDoctorId || "",
-    box: "Box 1",
+    box: defaultBox,
     reason: "",
     status: appointmentStatuses.SCHEDULED.value,
     situation: "Primera Consulta",
@@ -59,6 +63,7 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
       const nowTime = format(new Date(), "HH:mm")
       setFormData(prev => ({
         ...prev,
+        box: prev.box || settings?.availableBoxes?.[0] || "Box 1",
         date: defaultDate || new Date(),
         doctorId: defaultDoctorId || (isAdminOrStaff ? "" : currentUser?.id),
         startTime: defaultStartTime || nowTime,
@@ -76,7 +81,7 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
           .finally(() => setIsLoadingDoctors(false))
       }
     }
-  }, [open, defaultDate, defaultDoctorId, currentUser, isAdminOrStaff])
+  }, [open, defaultDate, defaultDoctorId, currentUser, isAdminOrStaff, settings?.availableBoxes, doctorsList.length, toast])
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -104,7 +109,7 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         {customTrigger ? customTrigger : (
-          <Button variant="ghost" className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 hover:border-[#008bcd]/30 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 shadow-none group">
+          <Button variant="ghost" className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 hover:border-[#008bcd]/30 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 shadow-none group cursor-pointer">
             <Plus className="h-5 w-5 mr-1.5 text-muted-foreground group-hover:text-[#008bcd] transition-colors stroke-[2.5]" />
             <span>Dar cita</span>
           </Button>
@@ -128,7 +133,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
         </div>
 
         <form onSubmit={handleSubmit}>
-          
           <AppointmentForm 
             formData={formData}
             setFormData={setFormData}
