@@ -45,17 +45,30 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
     doctorId: defaultDoctorId || "",
     box: defaultBox,
     reason: "",
-    status: appointmentStatuses.SCHEDULED.value,
+    status: "SCHEDULED",
     situation: "Primera Consulta",
     date: defaultDate || new Date(),
     startTime: defaultStartTime || "09:00",
     endTime: "09:30"
   })
 
+
   const validInitialStatuses = [
-    { ...appointmentStatuses.SCHEDULED, badgeClass: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20" },
-    { ...appointmentStatuses.IN_WAITING_ROOM, badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20" },
-    { ...appointmentStatuses.IN_PROGRESS, badgeClass: "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" }
+    { 
+      value: "SCHEDULED", 
+      ...appointmentStatuses.SCHEDULED, 
+      badgeClass: appointmentStatuses.SCHEDULED?.badgeColor || "bg-blue-500/10 text-blue-600 border-blue-500/20" 
+    },
+    { 
+      value: "WAITING", 
+      ...(appointmentStatuses.WAITING || appointmentStatuses.SCHEDULED), 
+      badgeClass: appointmentStatuses.WAITING?.badgeColor || "bg-amber-500/10 text-amber-600 border-amber-500/20" 
+    },
+    { 
+      value: "IN_PROGRESS", 
+      ...appointmentStatuses.IN_PROGRESS, 
+      badgeClass: appointmentStatuses.IN_PROGRESS?.badgeColor || "bg-purple-500/10 text-purple-600 border-purple-500/20" 
+    }
   ]
 
   useEffect(() => {
@@ -96,7 +109,6 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
       toast({
         title: "¡Cita Agendada!",
         description: `Reservada exitosamente para las ${formData.startTime}.`,
-        variant: "default", 
       })
       setOpen(false) 
       setFormData(prev => ({ ...prev, patientId: "", reason: "" })) 
@@ -146,10 +158,10 @@ export function NewAppointmentModal({ customTrigger, defaultDate, defaultStartTi
           />
 
           <div className="px-6 py-4 border-t border-border/80 bg-muted/10 flex justify-end items-center gap-3">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="hover:bg-muted text-muted-foreground font-bold rounded-xl h-10 px-5 text-xs transition-colors">
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)} className="hover:bg-muted text-muted-foreground font-bold rounded-xl h-10 px-5 text-xs transition-colors cursor-pointer">
               Cancelar
             </Button>
-            <Button type="submit" disabled={isSaving} className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold h-10 px-6 shadow-md shadow-[#008bcd]/20 rounded-xl text-xs transition-all duration-200">
+            <Button type="submit" disabled={isSaving} className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold h-10 px-6 shadow-md shadow-[#008bcd]/20 rounded-xl text-xs transition-all duration-200 cursor-pointer">
               {isSaving ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando reserva...</>
               ) : (
