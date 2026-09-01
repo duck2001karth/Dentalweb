@@ -2,24 +2,43 @@
 
 import { useState } from "react"
 import { format } from "date-fns"
-import { es } from "date-fns/locale"
-import { Loader2, CalendarIcon, Clock, Printer, Trash2, User } from "lucide-react"
+import { Loader2, CalendarIcon, Clock, Trash2, User, Stethoscope } from "lucide-react"
 import { useSession } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
+import { appointmentStatuses, getReasonLabel } from "@/constants/status"
+import { PrintPatientAppointmentsModal } from "@/components/patients/print-appointments"
 import { cn } from "@/lib/utils"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogContent, 
+  AlertDialogDescription, 
+  AlertDialogFooter, 
+  AlertDialogHeader, 
+  AlertDialogTitle, 
+  AlertDialogTrigger 
+} from "@/components/ui/alert-dialog"
 
 const calcularDuracion = (start: string, end: string) => {
   if (!start || !end) return "30 min"
-  const [startH, startM] = start.split(':').map(Number)
-  const [endH, endM] = end.split(':').map(Number)
+  const [startH, startM] = start.split(":").map(Number)
+  const [endH, endM] = end.split(":").map(Number)
   const diff = (endH * 60 + endM) - (startH * 60 + startM)
   return diff > 0 ? `${diff} min` : "30 min"
 }
 
-export function AppointmentsHistory({ appointments, isLoading }: { appointments: any[], isLoading: boolean }) {
+export function AppointmentsHistory({ 
+  appointments, 
+  isLoading, 
+  patient 
+}: { 
+  appointments: any[]
+  isLoading: boolean
+  patient?: any 
+}) {
   const { data: session } = useSession()
   const { toast } = useToast()
   const [isDeleting, setIsDeleting] = useState(false)
@@ -28,10 +47,10 @@ export function AppointmentsHistory({ appointments, isLoading }: { appointments:
   const canDelete = currentUser?.role === "ADMIN" || currentUser?.role === "RECEPTIONIST"
 
   const sortedAppointments = [...(appointments || [])].sort((a, b) => {
-    const dateA = new Date(`${a.date.split('T')[0]}T${a.startTime || '00:00'}`).getTime();
-    const dateB = new Date(`${b.date.split('T')[0]}T${b.startTime || '00:00'}`).getTime();
-    return dateB - dateA;
-  });
+    const dateA = new Date(`${a.date.split("T")[0]}T${a.startTime || "00:00"}`).getTime()
+    const dateB = new Date(`${b.date.split("T")[0]}T${b.startTime || "00:00"}`).getTime()
+    return dateB - dateA
+  })
 
   const handleDelete = async (id: string) => {
     if (!canDelete) return
@@ -39,8 +58,8 @@ export function AppointmentsHistory({ appointments, isLoading }: { appointments:
     try {
       const res = await fetch(`/api/appointments/${id}`, { method: "DELETE" })
       if (!res.ok) throw new Error()
-      toast({ title: "Cita eliminada del historial", variant: "success" })
-      window.location.reload() 
+      toast({ title: "Cita eliminada del historial" })
+      window.location.reload()
     } catch (error) {
       toast({ title: "Error al eliminar", variant: "destructive" })
     } finally {
@@ -51,65 +70,76 @@ export function AppointmentsHistory({ appointments, isLoading }: { appointments:
   return (
     <div className="animate-in fade-in duration-300">
       
-      {/* Encabezado */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 bg-card p-4 rounded-xl border border-border shadow-sm sticky top-0 z-10">
+      {/* Encabezado Superior */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 bg-card p-4 rounded-2xl border border-border/80 shadow-xs">
         <div>
-          <h2 className="text-xl font-bold text-foreground flex items-center gap-3">
+          <h2 className="text-xl font-bold text-foreground flex items-center gap-2.5">
+            <Stethoscope className="w-5 h-5 text-[#008bcd]" />
             Historial de Citas
           </h2>
-          <p className="text-sm text-muted-foreground mt-1">Registro de todas las consultas del paciente con cualquier especialista.</p>
+          <p className="text-sm text-muted-foreground mt-0.5 font-medium">
+            Registro de todas las consultas del paciente con cualquier especialista.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => window.print()} className="bg-background text-foreground hover:bg-accent border-border shadow-sm rounded-xl font-bold">
-            <Printer className="w-4 h-4 mr-2" /> Imprimir historial
-          </Button>
-        </div>
+        
+        {/* Modal Desacoplado de Visualización e Impresión */}
+        <PrintPatientAppointmentsModal 
+          patient={patient} 
+          appointments={sortedAppointments} 
+        />
       </div>
 
-      <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
+      {/* Tabla del Historial en UI */}
+      <div className="bg-card rounded-2xl shadow-xs border border-border/80 overflow-hidden">
         <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse min-w-[900px]">
-            <thead className="bg-muted/50 border-b border-border">
+          <table className="w-full text-left border-collapse min-w-[900px] text-xs">
+            
+            <thead className="bg-muted/40 border-b border-border/80">
               <tr className="text-muted-foreground text-xs font-bold uppercase tracking-wider">
-                <th className="px-6 py-4"># Tratamiento</th>
-                <th className="px-6 py-4">Doctor Asignado</th>
-                <th className="px-6 py-4">Fecha y Hora</th>
-                <th className="px-6 py-4">Box</th>
-                <th className="px-6 py-4">Motivo / Tto.</th>
-                <th className="px-6 py-4 text-center">Estado</th>
-                {/* Oculta la columna a los doctores */}
-                {canDelete && <th className="px-6 py-4 text-center">Acciones</th>}
+                <th className="px-5 py-3.5 w-16"># Trat.</th>
+                <th className="px-5 py-3.5">Doctor Asignado</th>
+                <th className="px-5 py-3.5">Fecha y Hora</th>
+                <th className="px-5 py-3.5">Box</th>
+                <th className="px-5 py-3.5">Motivo / Tto.</th>
+                <th className="px-5 py-3.5 text-center">Estado</th>
+                {canDelete && <th className="px-5 py-3.5 text-center">Acciones</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+
+            <tbody className="divide-y divide-border/70">
               {isLoading ? (
                 <tr>
                   <td colSpan={7} className="p-8 text-center">
-                    <Loader2 className="animate-spin h-6 w-6 mx-auto text-[#008bcd] dark:text-blue-400" />
+                    <Loader2 className="animate-spin h-6 w-6 mx-auto text-[#008bcd]" />
                   </td>
                 </tr>
               ) : sortedAppointments.length > 0 ? (
                 sortedAppointments.map((cita: any, index: number) => {
-                  const isMyAppointment = cita.doctorId === currentUser?.id;
+                  const isMyAppointment = cita.doctorId === currentUser?.id
+                  const statusConfig = appointmentStatuses[cita.status] || {
+                    label: cita.status,
+                    badgeColor: "text-slate-600 bg-slate-100 border-slate-200",
+                  }
 
                   return (
                     <tr key={cita.id} className="hover:bg-muted/30 transition-colors group">
                       
                       {/* # Tratamiento */}
-                      <td className="px-6 py-4">
-                        <span className="font-bold text-foreground text-base">
-                          {(sortedAppointments.length - index).toString().padStart(2, '0')}
+                      <td className="px-5 py-3.5 align-middle">
+                        <span className="font-bold text-foreground text-sm font-mono">
+                          {(sortedAppointments.length - index).toString().padStart(2, "0")}
                         </span>
                       </td>
 
-                      {/* Profesional (Diseño Suave Premium) */}
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col items-start gap-1">
-                          <span className={cn("font-bold text-sm", isMyAppointment ? "text-[#008bcd] dark:text-blue-400" : "text-foreground")}>
-                            {cita.doctor?.name || "Dr. Asignado"}
+                      {/* Doctor Asignado */}
+                      <td className="px-5 py-3.5 align-middle">
+                        <div className="flex flex-col items-start gap-0.5">
+                          <span className={cn("font-bold text-sm", isMyAppointment ? "text-[#008bcd]" : "text-foreground")}>
+                            {cita.doctor?.name || cita.doctorName || "Dr. Asignado"}
                           </span>
+                          
                           {isMyAppointment ? (
-                            <span className="text-[10px] font-semibold bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 px-2 py-0.5 rounded-md uppercase tracking-wider border border-blue-100 dark:border-blue-800">
+                            <span className="text-[10px] font-semibold bg-[#008bcd]/10 text-[#008bcd] px-2 py-0.5 rounded-md uppercase tracking-wider border border-[#008bcd]/20">
                               Atendido por ti
                             </span>
                           ) : (
@@ -121,84 +151,91 @@ export function AppointmentsHistory({ appointments, isLoading }: { appointments:
                       </td>
 
                       {/* Fecha y Hora */}
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3.5 align-middle">
                         <div className="flex flex-col">
                           <span className="font-bold text-foreground text-sm">
                             {format(new Date(cita.date), "dd/MM/yyyy")}
                           </span>
                           <span className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5 font-medium">
-                            <Clock className="w-3 h-3"/> {cita.startTime} <span className="opacity-60 ml-0.5">({calcularDuracion(cita.startTime, cita.endTime)})</span>
+                            <Clock className="w-3 h-3 text-[#008bcd]"/> 
+                            {cita.startTime} <span className="opacity-70">({calcularDuracion(cita.startTime, cita.endTime)})</span>
                           </span>
                         </div>
                       </td>
 
                       {/* Box */}
-                      <td className="px-6 py-4 text-sm text-muted-foreground font-medium">
-                        {cita.box || "Box 1"}
+                      <td className="px-5 py-3.5 align-middle text-sm text-muted-foreground font-medium">
+                        <span className="inline-block px-2 py-0.5 rounded border text-xs font-bold bg-muted/40 border-border/80">
+                          {cita.box || "Box 1"}
+                        </span>
                       </td>
 
                       {/* Motivo */}
-                      <td className="px-6 py-4 text-sm text-foreground font-medium max-w-[200px] truncate" title={cita.reason || "Consulta General"}>
-                        {cita.reason || "Consulta General"}
+                      <td className="px-5 py-3.5 align-middle text-sm text-foreground font-medium max-w-[220px] truncate" title={getReasonLabel(cita.reason)}>
+                        {getReasonLabel(cita.reason)}
                       </td>
 
                       {/* Estado */}
-                      <td className="px-6 py-4 text-center">
-                        <span className={cn("text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider border", 
-                          cita.status === "COMPLETED" ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" :
-                          cita.status === "SCHEDULED" ? "bg-muted text-foreground border-border" :
-                          cita.status === "IN_PROGRESS" ? "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20" :
-                          "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
-                        )}>
-                          {cita.status === "SCHEDULED" ? "Agendada" : 
-                           cita.status === "WAITING" ? "En Sala" : 
-                           cita.status === "IN_PROGRESS" ? "En Box" : 
-                           cita.status === "COMPLETED" ? "Atendida" : cita.status}
+                      <td className="px-5 py-3.5 align-middle text-center">
+                        <span className={cn("text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wider border", statusConfig.badgeColor)}>
+                          {statusConfig.label}
                         </span>
                       </td>
 
                       {/* Acciones */}
                       {canDelete && (
-                        <td className="px-6 py-4 text-center">
+                        <td className="px-5 py-3.5 align-middle text-center">
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
-                              <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8 rounded-lg opacity-50 group-hover:opacity-100 transition-opacity">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0 rounded-xl opacity-60 group-hover:opacity-100 transition-opacity cursor-pointer"
+                              >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
                             </AlertDialogTrigger>
-                            <AlertDialogContent className="bg-background border-border">
+                            <AlertDialogContent className="bg-card border-border rounded-2xl">
                               <AlertDialogHeader>
-                                <AlertDialogTitle className="text-red-600">¿Eliminar Cita?</AlertDialogTitle>
-                                <AlertDialogDescription>Esta acción borrará este registro del historial general de citas. No se puede deshacer.</AlertDialogDescription>
+                                <AlertDialogTitle className="text-destructive font-black text-lg">¿Eliminar Cita?</AlertDialogTitle>
+                                <AlertDialogDescription className="text-xs text-muted-foreground">
+                                  Esta acción borrará permanentemente este registro del historial de citas del paciente.
+                                </AlertDialogDescription>
                               </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className="border-border rounded-xl">Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDelete(cita.id)} className="bg-red-600 text-white hover:bg-red-700 rounded-xl">
-                                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin"/> : "Eliminar"}
+                              <AlertDialogFooter className="mt-4 gap-2">
+                                <AlertDialogCancel className="border-border rounded-xl text-xs font-bold cursor-pointer">Cancelar</AlertDialogCancel>
+                                <AlertDialogAction 
+                                  onClick={() => handleDelete(cita.id)} 
+                                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl text-xs font-bold cursor-pointer"
+                                >
+                                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin"/> : "Sí, Eliminar"}
                                 </AlertDialogAction>
                               </AlertDialogFooter>
                             </AlertDialogContent>
                           </AlertDialog>
                         </td>
                       )}
+
                     </tr>
                   )
                 })
               ) : (
                 <tr>
                   <td colSpan={7} className="px-6 py-16 text-center text-muted-foreground">
-                    <div className="bg-muted/30 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 border border-border">
-                      <CalendarIcon className="w-8 h-8 opacity-50" />
+                    <div className="bg-muted/30 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-border/70">
+                      <CalendarIcon className="w-8 h-8 text-[#008bcd] opacity-60" />
                     </div>
-                    <p className="font-bold text-lg text-foreground">Sin citas registradas</p>
-                    <p className="text-sm mt-1">Este paciente aún no tiene citas en su historial general.</p>
+                    <p className="font-bold text-base text-foreground">Sin citas registradas</p>
+                    <p className="text-xs mt-1">Este paciente aún no tiene citas en su historial.</p>
                   </td>
                 </tr>
               )}
             </tbody>
+
           </table>
         </div>
       </div>
+
     </div>
   )
 }

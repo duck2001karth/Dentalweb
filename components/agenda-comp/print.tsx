@@ -20,7 +20,6 @@ export interface PrintAgendaModalProps {
   trigger?: React.ReactNode
 }
 
-// Traducción de motivos
 const formatReason = (reason?: string) => {
   if (!reason) return "Consulta General"
   switch (reason) {
@@ -37,7 +36,6 @@ const formatReason = (reason?: string) => {
   }
 }
 
-// Traducción y estilo de badges de estado
 const formatStatus = (status?: string) => {
   if (!status) return { label: "AGENDADA", color: "text-[#008bcd] bg-[#008bcd]/10 border-[#008bcd]/20" }
 
@@ -175,19 +173,19 @@ export function PrintAgendaModal({
                     />
                   ) : (
                     <div className="font-black text-2xl text-[#008bcd] tracking-tight">
-                      {settings?.clinicName || "CARMO DENTAL"}
+                      {settings?.clinicName || "Clinica"}
                     </div>
                   )}
 
                   <div className="space-y-0.5">
                     <h1 className="text-xl font-black text-[#008bcd] tracking-tight uppercase leading-tight">
-                      {settings?.clinicName || "CARMO DENTAL"}
+                      {settings?.clinicName || "Clinica"}
                     </h1>
                     <p className="text-[10px] font-black uppercase text-slate-700 tracking-wider">
-                      {settings?.slogan || "CLÍNICA DE ESPECIALIDADES ODONTOLÓGICAS"}
+                      {settings?.slogan || "Clinica en endo..."}
                     </p>
                     <p className="text-[11px] text-neutral-600 font-medium">
-                      RUC: {settings?.ruc || "1719231696001"} | {settings?.address || "Solanda, Quito - Ecuador"}
+                      RUC: {settings?.ruc || "1900000001"} | {settings?.address || "Av. Solanda"}
                     </p>
                   </div>
                 </div>

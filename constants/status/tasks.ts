@@ -1,19 +1,18 @@
-import { Circle, CheckCircle2 } from "lucide-react";
-import { StatusConfig } from "./types";
+import { CheckCircle2, Clock } from "lucide-react"
 
-export const taskStatuses: Record<string, StatusConfig> = {
+export const taskStatuses = {
   PENDING: {
-    value: "PENDING",
     label: "Pendiente",
-    color: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-500/15 border-amber-500/20",
-    icon: Circle,
+    color: "text-amber-600 dark:text-amber-400",
+    bg: "bg-amber-500/10",
+    badgeColor: "text-amber-700 bg-amber-50 border-amber-200 dark:border-amber-800",
+    icon: Clock,
   },
   COMPLETED: {
-    value: "COMPLETED",
     label: "Completada",
-    color: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-500/15 border-emerald-500/20",
+    color: "text-emerald-600 dark:text-emerald-400",
+    bg: "bg-emerald-500/10",
+    badgeColor: "text-emerald-700 bg-emerald-50 border-emerald-200 dark:border-emerald-800",
     icon: CheckCircle2,
   },
-};
+}

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Edit, Save, Loader2, Trash2, MoreVertical } from "lucide-react"
+import { Edit, Save, Loader2, Trash2, MoreVertical, FileText } from "lucide-react"
 import { useSession } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
@@ -16,8 +16,17 @@ import { AppointmentsHistory } from "./appointments-history"
 import { ComentariosTab } from "./comments-tab" 
 import { TareasTab } from "./tasks-tab"
 import { PatientInformationForm } from "./patient-information-form"
+import { PrintPatientInfoModal } from "./print-info"
 
-export function DatosPersonalesTab({ patient, patientId, onDeleteRequest }: { patient: any, patientId: string, onDeleteRequest: () => void }) {
+export function DatosPersonalesTab({ 
+  patient, 
+  patientId, 
+  onDeleteRequest 
+}: { 
+  patient: any
+  patientId: string
+  onDeleteRequest: () => void 
+}) {
   const { data: session } = useSession()
   const { toast } = useToast()
   
@@ -26,7 +35,7 @@ export function DatosPersonalesTab({ patient, patientId, onDeleteRequest }: { pa
   const canDeletePatient = currentUser?.role === "ADMIN" || currentUser?.role === "DOCTOR"
 
   const { updatePatient } = useUpdatePatient()
-  const { appointments: patientAppointments, isLoading: isLoadingAppointments } = useGetAppointments({ patientId })
+  const { appointments: patientAppointments = [], isLoading: isLoadingAppointments } = useGetAppointments({ patientId })
 
   const [activeSubTab, setActiveSubTab] = useState("personales")
   const [isEditing, setIsEditing] = useState(false)
@@ -38,7 +47,7 @@ export function DatosPersonalesTab({ patient, patientId, onDeleteRequest }: { pa
     const file = e.target.files?.[0]
     if (file) {
       setPhotoPreview(URL.createObjectURL(file))
-      toast({ title: "Foto previsualizada", description: "Guarda los cambios para confirmar.", variant: "default" })
+      toast({ title: "Foto previsualizada", description: "Guarda los cambios para confirmar." })
     }
   }
 
@@ -78,7 +87,7 @@ export function DatosPersonalesTab({ patient, patientId, onDeleteRequest }: { pa
 
     try {
       await updatePatient({ id: patientId, input: updatedData })
-      toast({ title: "Datos Actualizados", description: `El perfil ha sido modificado con éxito.`, variant: "default" })
+      toast({ title: "Datos Actualizados", description: "El perfil ha sido modificado con éxito." })
       setIsEditing(false) 
     } catch (error) {
       toast({ title: "Error al actualizar", description: "Revisa tu conexión o los datos ingresados.", variant: "destructive" })
@@ -92,17 +101,61 @@ export function DatosPersonalesTab({ patient, patientId, onDeleteRequest }: { pa
       
       {/* Navegación de Sub-pestañas */}
       <div className="flex gap-2 mb-8 overflow-x-auto custom-scrollbar pb-2">
-        <button onClick={() => setActiveSubTab("personales")} className={cn("px-5 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap border", activeSubTab === "personales" ? "bg-[#008bcd]/10 border-[#008bcd]/30 text-[#008bcd] shadow-sm" : "bg-card text-muted-foreground hover:bg-accent border-border")}>
+        <button 
+          type="button"
+          onClick={() => setActiveSubTab("personales")} 
+          className={cn(
+            "px-5 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap border cursor-pointer", 
+            activeSubTab === "personales" 
+              ? "bg-[#008bcd]/10 border-[#008bcd]/30 text-[#008bcd] shadow-xs" 
+              : "bg-card text-muted-foreground hover:bg-accent border-border/80"
+          )}
+        >
           Datos Clínicos
         </button>
-        <button onClick={() => setActiveSubTab("citas")} className={cn("px-5 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap flex items-center gap-2 border", activeSubTab === "citas" ? "bg-[#008bcd]/10 border-[#008bcd]/30 text-[#008bcd] shadow-sm" : "bg-card text-muted-foreground hover:bg-accent border-border")}>
+
+        <button 
+          type="button"
+          onClick={() => setActiveSubTab("citas")} 
+          className={cn(
+            "px-5 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap flex items-center gap-2 border cursor-pointer", 
+            activeSubTab === "citas" 
+              ? "bg-[#008bcd]/10 border-[#008bcd]/30 text-[#008bcd] shadow-xs" 
+              : "bg-card text-muted-foreground hover:bg-accent border-border/80"
+          )}
+        >
           Historial Citas 
-          <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-black", activeSubTab === "citas" ? "bg-[#008bcd]/20 text-[#008bcd]" : "bg-muted text-muted-foreground")}>{patientAppointments.length}</span>
+          <span className={cn(
+            "px-2 py-0.5 rounded-md text-[10px] font-black", 
+            activeSubTab === "citas" ? "bg-[#008bcd]/20 text-[#008bcd]" : "bg-muted text-muted-foreground"
+          )}>
+            {patientAppointments.length}
+          </span>
         </button>
-        <button onClick={() => setActiveSubTab("comentarios")} className={cn("px-5 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap border", activeSubTab === "comentarios" ? "bg-[#008bcd]/10 border-[#008bcd]/30 text-[#008bcd] shadow-sm" : "bg-card text-muted-foreground hover:bg-accent border-border")}>
+
+        <button 
+          type="button"
+          onClick={() => setActiveSubTab("comentarios")} 
+          className={cn(
+            "px-5 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap border cursor-pointer", 
+            activeSubTab === "comentarios" 
+              ? "bg-[#008bcd]/10 border-[#008bcd]/30 text-[#008bcd] shadow-xs" 
+              : "bg-card text-muted-foreground hover:bg-accent border-border/80"
+          )}
+        >
           Comentarios
         </button>
-        <button onClick={() => setActiveSubTab("tareas")} className={cn("px-5 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap border", activeSubTab === "tareas" ? "bg-[#008bcd]/10 border-[#008bcd]/30 text-[#008bcd] shadow-sm" : "bg-card text-muted-foreground hover:bg-accent border-border")}>
+
+        <button 
+          type="button"
+          onClick={() => setActiveSubTab("tareas")} 
+          className={cn(
+            "px-5 py-2 rounded-full font-bold text-sm transition-all whitespace-nowrap border cursor-pointer", 
+            activeSubTab === "tareas" 
+              ? "bg-[#008bcd]/10 border-[#008bcd]/30 text-[#008bcd] shadow-xs" 
+              : "bg-card text-muted-foreground hover:bg-accent border-border/80"
+          )}
+        >
           Tareas 
         </button>
       </div>
@@ -111,44 +164,68 @@ export function DatosPersonalesTab({ patient, patientId, onDeleteRequest }: { pa
       {activeSubTab === "personales" && (
         <div className="animate-in fade-in duration-300">
           
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 bg-card/60 p-4 rounded-[20px] border border-border shadow-sm sticky top-0 z-10 backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 bg-card/60 p-4 rounded-[20px] border border-border/80 shadow-xs sticky top-0 z-10 backdrop-blur-md">
             <div>
-              <h2 className="text-xl font-black text-foreground tracking-tight">Ficha Clínica del Paciente</h2>
+              <h2 className="text-xl font-black text-foreground tracking-tight flex items-center gap-2">
+                <FileText className="w-5 h-5 text-[#008bcd]" />
+                Ficha Clínica del Paciente
+              </h2>
               <p className="text-sm text-muted-foreground font-medium mt-0.5">Información demográfica y antecedentes médicos.</p>
             </div>
             
             <div className="flex items-center gap-3 mt-4 sm:mt-0 w-full sm:w-auto">
+              {/* Botón de Visualización e Impresión de la Ficha Clínica */}
+              {!isEditing && (
+                <PrintPatientInfoModal patient={patient} />
+              )}
+
               {isEditing ? (
                 <>
-                  <Button type="button" variant="outline" onClick={() => setIsEditing(false)} className="border-border text-foreground hover:bg-muted font-bold rounded-xl h-10 px-5 w-full sm:w-auto">
+                  <Button 
+                    type="button" 
+                    variant="outline" 
+                    onClick={() => setIsEditing(false)} 
+                    className="border-border/80 text-foreground hover:bg-muted font-bold rounded-xl h-10 px-5 w-full sm:w-auto cursor-pointer"
+                  >
                     Cancelar
                   </Button>
-                  <Button type="submit" form="patient-update-form" disabled={isSaving} className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 px-6 border-none rounded-xl h-10 w-full sm:w-auto">
-                    {isSaving ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</> : <><Save className="mr-2 h-4 w-4 stroke-[2.5]" /> Guardar Cambios</>}
+                  <Button 
+                    type="submit" 
+                    form="patient-update-form" 
+                    disabled={isSaving} 
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-md shadow-emerald-600/20 px-6 border-none rounded-xl h-10 w-full sm:w-auto cursor-pointer"
+                  >
+                    {isSaving ? (
+                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...</>
+                    ) : (
+                      <><Save className="mr-2 h-4 w-4 stroke-[2.5]" /> Guardar Cambios</>
+                    )}
                   </Button>
                 </>
               ) : (
                 canEditPatient && (
                   <Popover open={isMenuOpen} onOpenChange={setIsMenuOpen}>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" className="border-border bg-background text-foreground hover:bg-muted font-bold shadow-sm rounded-xl h-10 px-5 w-full sm:w-auto">
+                      <Button variant="outline" className="border-border/80 bg-background text-foreground hover:bg-muted font-bold shadow-xs rounded-xl h-10 px-5 w-full sm:w-auto cursor-pointer">
                         <Edit className="w-4 h-4 mr-2 text-[#008bcd]" /> Gestionar <MoreVertical className="w-4 h-4 ml-1 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent align="end" className="w-56 p-1 border-border shadow-xl rounded-xl bg-card">
+                    <PopoverContent align="end" className="w-56 p-1 border-border/80 shadow-xl rounded-xl bg-card">
                       <button 
+                        type="button"
                         onClick={() => { setIsEditing(true); setIsMenuOpen(false); }} 
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-foreground hover:bg-[#008bcd]/10 hover:text-[#008bcd] rounded-lg transition-colors"
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-foreground hover:bg-[#008bcd]/10 hover:text-[#008bcd] rounded-lg transition-colors cursor-pointer"
                       >
                         <Edit size={16} /> Activar Edición
                       </button>
                       
                       {canDeletePatient && (
                         <>
-                          <div className="h-px bg-border my-1 mx-2"></div>
+                          <div className="h-px bg-border/60 my-1 mx-2"></div>
                           <button 
+                            type="button"
                             onClick={() => { onDeleteRequest(); setIsMenuOpen(false); }} 
-                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors"
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-bold text-rose-600 hover:bg-rose-500/10 rounded-lg transition-colors cursor-pointer"
                           >
                             <Trash2 size={16} /> Eliminar Paciente
                           </button>
@@ -166,12 +243,12 @@ export function DatosPersonalesTab({ patient, patientId, onDeleteRequest }: { pa
               <Edit className="w-5 h-5 text-[#008bcd] shrink-0 mt-0.5 stroke-[2.5]" />
               <div>
                 <p className="font-black text-[#008bcd] text-sm">Modo Edición Activado</p>
-                <p className="text-xs text-[#008bcd]/80 mt-0.5 font-medium">Modifica los campos necesarios. No olvides presionar "Guardar Cambios" en la barra superior al finalizar.</p>
+                <p className="text-xs text-[#008bcd]/80 mt-0.5 font-medium">Modifica los campos necesarios. No olvides presionar &quot;Guardar Cambios&quot; en la barra superior al finalizar.</p>
               </div>
             </div>
           )}
 
-          {/* COMPONENTE HIJO DESGLOSADO */}
+          {/* Formulario Desglosado */}
           <PatientInformationForm 
             patient={patient}
             isEditing={isEditing}
@@ -183,10 +260,31 @@ export function DatosPersonalesTab({ patient, patientId, onDeleteRequest }: { pa
         </div>
       )}
 
-      {/* VISTAS RESTANTES */}
-      {activeSubTab === "citas" && <AppointmentsHistory appointments={patientAppointments} isLoading={isLoadingAppointments} />}
-      {activeSubTab === "comentarios" && <ComentariosTab patientId={patientId} />}
-      {activeSubTab === "tareas" && <TareasTab patientId={patientId} />}
+      {/* VISTA 2: HISTORIAL DE CITAS */}
+      {activeSubTab === "citas" && (
+        <AppointmentsHistory 
+          patient={patient}
+          appointments={patientAppointments} 
+          isLoading={isLoadingAppointments} 
+        />
+      )}
+
+      {/* VISTA 3: COMENTARIOS INTERNOS */}
+      {activeSubTab === "comentarios" && (
+        <ComentariosTab 
+          patient={patient}
+          patientId={patientId} 
+        />
+      )}
+
+      {/* VISTA 4: GESTOR DE TAREAS */}
+      {activeSubTab === "tareas" && (
+        <TareasTab 
+          patient={patient}
+          patientId={patientId} 
+        />
+      )}
+
     </div>
   )
 }
