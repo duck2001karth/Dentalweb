@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { headers } from "next/headers";
+import { Prisma } from "@prisma/client";
 
 export async function DELETE(
   req: Request,
@@ -40,6 +41,7 @@ export async function DELETE(
       ? forwardedFor.split(",")[0].trim()
       : headersList.get("x-real-ip") || "127.0.0.1";
     const userAgent = headersList.get("user-agent") || "Desconocido";
+
     await prisma.$transaction(async (tx) => {
       const previous = await tx.odontogramRecord.findUnique({
         where: { id },
@@ -69,7 +71,7 @@ export async function DELETE(
             isEvolution: previous.isEvolution,
             authorId: previous.authorId,
           },
-          newData: null,
+          newData: Prisma.JsonNull,
           ipAddress,
           userAgent,
         },
