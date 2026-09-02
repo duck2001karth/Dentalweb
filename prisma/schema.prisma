@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  //directUrl = env("DIRECT_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -25,16 +25,29 @@ enum LogLevel {
 }
 
 model AuditLog {
-  id        String   @id @default(uuid())
-  action    String   
-  details   String?  
-  ipAddress String?  
-  userAgent String?  
+  id          String   @id @default(uuid())
+  action      String   
+  entity      String?   
+  entityId    String?   
   
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  details     String?  
+  oldData     Json?    
+  newData     Json?    
   
-  createdAt DateTime @default(now())
+  ipAddress   String?  
+  userAgent   String?  
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  patientId   String?
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+
+  @@index([patientId])
+  @@index([entity, entityId])
+  @@index([userId])
 }
 
 model SystemLog {
@@ -193,6 +206,7 @@ model Patient {
   taxDocuments TaxDocument[]
   payments          Payment[]
   agreements Agreement[]
+  auditLogs       AuditLog[]
 
   isDeleted             Boolean   @default(false)
   createdAt             DateTime  @default(now())
@@ -619,6 +633,8 @@ model ClinicSettings {
   
  
   address         String?
+  city              String? 
+  country           String?
   phone           String?
   whatsappNumber  String? 
   email           String?
@@ -626,6 +642,7 @@ model ClinicSettings {
   watermarkOpacity Int?     @default(15)  
   watermarkScale   Int?     @default(100)
 
+  defaultPrintMode  String?  @default("color")
   availableBoxes  String[] @default(["Box 1", "Box 2", "Box 3"]) // Sillones habilitados
   footerText      String?  @db.Text // Descargo legal en recetas y RIDE
 

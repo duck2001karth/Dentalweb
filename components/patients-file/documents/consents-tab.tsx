@@ -1,18 +1,19 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
-import { Loader2, FileText, CheckCircle2, XCircle, Eye, Printer, X, ShieldCheck, AlertCircle } from "lucide-react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
+import { Loader2, FileText, CheckCircle2, Eye, Printer, X, ShieldCheck, AlertCircle, Search } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { useSession } from "next-auth/react"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { cn } from "@/lib/utils"
 
 import { useGetPatient } from "@/hooks/patients"
 import { ClinicalDocPrint } from "@/components/patients-file/documents/document-print"
+
 const calculateAge = (birthDateString?: string | Date | null) => {
   if (!birthDateString) return ""
   const today = new Date()
@@ -32,23 +33,47 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
   const [documents, setDocuments] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDoc, setSelectedDoc] = useState<any>(null)
-  const patientFullName = patient ? `${patient.firstName} ${patient.lastName}` : "Paciente Registrado"
+  const [searchTerm, setSearchTerm] = useState("")
+
+  const patientFullName = patient ? `${patient.firstName} ${patient.lastName}`.trim() : "Paciente Registrado"
   const patientDocId = patient?.ci || "No registrado"
   const patientAge = calculateAge(patient?.birthDate)
 
   const fetchDocs = useCallback(async () => {
     try {
       const res = await fetch(`/api/clinical-documents?patientId=${patientId}`)
+      if (!res.ok) throw new Error("Error en la respuesta")
       const data = await res.json()
-      setDocuments((data || []).filter((d: any) => !d.isVoided))
-    } catch (e) { 
-      toast({ title: "Error", description: "No se pudo cargar el historial", variant: "destructive" }) 
+      
+      const consentList = (Array.isArray(data) ? data : [])
+        .filter((d: any) => !d.isVoided)
+        .filter((d: any) => 
+          d.title?.toLowerCase().includes("consentimiento") || 
+          d.title?.toLowerCase().includes("autorización") ||
+          d.title?.toLowerCase().includes("acuerdo")
+        )
+
+      setDocuments(consentList)
+    } catch { 
+      toast({ title: "Error", description: "No se pudo cargar el historial de consentimientos", variant: "destructive" }) 
     } finally { 
       setIsLoading(false) 
     }
   }, [patientId, toast])
 
-  useEffect(() => { fetchDocs() }, [fetchDocs])
+  useEffect(() => { 
+    fetchDocs() 
+  }, [fetchDocs])
+
+  const filteredDocs = useMemo(() => {
+    if (!searchTerm) return documents
+    const term = searchTerm.toLowerCase()
+    return documents.filter(doc => 
+      doc.title?.toLowerCase().includes(term) ||
+      doc.specialistName?.toLowerCase().includes(term)
+    )
+  }, [documents, searchTerm])
+
   const SignatureBadge = ({ isSigned, label }: { isSigned: boolean, label: string }) => {
     if (isSigned) {
       return (
@@ -70,7 +95,7 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
     return (
       <div className="flex flex-col items-center justify-center py-32 text-[#008bcd]">
         <Loader2 className="w-10 h-10 animate-spin mb-4" />
-        <p className="font-semibold text-muted-foreground">Cargando historial de consentimientos...</p>
+        <p className="font-semibold text-muted-foreground">Cargando auditoría de consentimientos...</p>
       </div>
     )
   }
@@ -78,7 +103,7 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
   return (
     <div className="animate-in fade-in duration-300 pb-20">
       
-      {/*CABECERA PREMIUM */}
+      {/* CABECERA */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-card p-5 rounded-2xl border border-border shadow-sm sticky top-0 z-20 print:hidden">
         <div>
           <div className="flex items-center gap-3">
@@ -91,58 +116,69 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
             </span>
           </div>
           <p className="text-sm font-medium text-muted-foreground mt-1">
-            Registro inmutable de acuerdos y documentos clínicos firmados por el paciente.
+            Registro inmutable de acuerdos y procedimientos autorizados por el paciente o tutor.
           </p>
+        </div>
+
+        <div className="relative w-full sm:w-[260px]">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input 
+            type="text" 
+            placeholder="Buscar consentimiento..." 
+            value={searchTerm} 
+            onChange={(e) => setSearchTerm(e.target.value)} 
+            className="pl-9 bg-background border-border text-sm font-medium focus-visible:ring-[#008bcd] w-full h-11 rounded-xl" 
+          />
         </div>
       </div>
 
-      {/*TABLA MODERNA DE AUDITORÍA */}
+      {/* TABLA DE AUDITORÍA */}
       <div className="bg-card border border-border/80 rounded-2xl shadow-sm overflow-hidden print:hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm text-left">
             <thead className="bg-muted/30 border-b border-border/70 text-muted-foreground">
               <tr>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider w-16">Nº</th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Documento Legal</th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Profesional</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Consentimiento Legal</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Especialista</th>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider">Emisión</th>
-                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">Estado de Firmas</th>
+                <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-center">Firmas Registradas</th>
                 <th className="px-6 py-4 font-bold text-xs uppercase tracking-wider text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {documents.length === 0 ? (
+              {filteredDocs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="p-12 text-center text-muted-foreground">
                     <div className="flex flex-col items-center justify-center">
                       <FileText className="w-12 h-12 opacity-20 mb-3" />
-                      <p className="font-bold text-lg text-foreground">Sin documentos legales</p>
-                      <p className="text-sm">No existen consentimientos firmados o pendientes para este paciente.</p>
+                      <p className="font-bold text-lg text-foreground">Sin consentimientos registrados</p>
+                      <p className="text-sm">No existen consentimientos informados firmados o pendientes para este paciente.</p>
                     </div>
                   </td>
                 </tr>
               ) : (
-                documents.map((doc, index) => (
+                filteredDocs.map((doc, index) => (
                   <tr key={doc.id} className="hover:bg-muted/10 transition-colors group">
                     <td className="px-6 py-4 font-bold text-muted-foreground/70">
-                      {(documents.length - index).toString().padStart(2, '0')}
+                      {(filteredDocs.length - index).toString().padStart(2, '0')}
                     </td>
                     <td className="px-6 py-4">
                       <p className="font-bold text-foreground line-clamp-1">{doc.title}</p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5">
-                        ID: {doc.id.substring(0, 8).toUpperCase()}
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider mt-0.5 font-mono">
+                        REF: {doc.id.substring(0, 8).toUpperCase()}
                       </p>
                     </td>
                     <td className="px-6 py-4 font-medium text-foreground">
-                      {doc.specialistName || "No especificado"}
+                      {doc.specialistName || doc.author?.name || "Profesional Asignado"}
                     </td>
                     <td className="px-6 py-4 font-medium text-muted-foreground whitespace-nowrap">
                       {format(new Date(doc.createdAt), "dd MMM yyyy", { locale: es })}
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex flex-col gap-1.5 items-center justify-center">
-                        <SignatureBadge isSigned={!!doc.patientSignature} label="Paciente" />
-                        <SignatureBadge isSigned={!!doc.doctorSignature} label="Doctor" />
+                        <SignatureBadge isSigned={Boolean(doc.patientSignature)} label="Paciente" />
+                        <SignatureBadge isSigned={Boolean(doc.doctorSignature)} label="Doctor" />
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
@@ -163,19 +199,19 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
         </div>
       </div>
 
-      {/* INYECCIÓN DEL COMPONENTE OFICIAL DE IMPRESIÓN */}
+      {/* COMPONENTE DE IMPRESIÓN */}
       {selectedDoc && (
         <ClinicalDocPrint 
           document={selectedDoc} 
           patientFullName={patientFullName}
           patientAge={patientAge}
           patientDocId={patientDocId}
-          doctorSpecialty={currentUser?.specialty || "Odontología General"}
+          doctorSpecialty={selectedDoc.author?.specialty || currentUser?.specialty || "Odontología Integral"}
         />
       )}
 
-      {/*VISOR MODAL TIPO PDF */}
-      <Dialog open={!!selectedDoc} onOpenChange={(open) => !open && setSelectedDoc(null)}>
+      {/* VISOR TIPO AUDITORÍA */}
+      <Dialog open={Boolean(selectedDoc)} onOpenChange={(open) => !open && setSelectedDoc(null)}>
         <DialogContent className="max-w-[95vw] md:max-w-4xl h-[90vh] flex flex-col bg-card border-border overflow-hidden p-0 rounded-[24px] shadow-2xl [&>button]:hidden print:hidden">
           
           <DialogHeader className="shrink-0 flex flex-row justify-between items-center px-6 py-4 border-b border-border/70 bg-muted/15">
@@ -184,7 +220,7 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
                 <ShieldCheck className="w-5 h-5 text-emerald-500" /> Auditoría de Consentimiento
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground">
-                Visualización de solo lectura. Para imprimir, utiliza el botón correspondiente.
+                Visualización legal inmutable y verificación de firmas.
               </DialogDescription>
             </div>
             <div className="flex gap-2">
@@ -199,11 +235,8 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
 
           {selectedDoc && (
             <div className="flex-1 overflow-y-auto custom-scrollbar p-0 bg-muted/20">
-              
-              {/* Simulador de hoja A4 en pantalla */}
               <div className="max-w-[210mm] mx-auto bg-white dark:bg-slate-50 my-8 p-12 rounded-lg shadow-sm border border-border/40 text-slate-900 font-sans relative">
                 
-                {/* Marca de agua simulada */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04] z-0">
                   <ShieldCheck className="w-96 h-96" />
                 </div>
@@ -212,7 +245,7 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
                   <div className="text-center mb-8 border-b-2 border-emerald-500/20 pb-6">
                     <h1 className="text-2xl font-black uppercase text-slate-800 tracking-tight">{selectedDoc.title}</h1>
                     <p className="text-slate-500 text-xs font-bold mt-2 tracking-wider">
-                      DOCUMENTO CLÍNICO LEGAL • {format(new Date(selectedDoc.createdAt), "dd/MM/yyyy HH:mm")}
+                      CONSENTIMIENTO INFORMADO • EMISIÓN: {format(new Date(selectedDoc.createdAt), "dd/MM/yyyy HH:mm")}
                     </p>
                   </div>
 
@@ -244,14 +277,14 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
                           <span className="text-[10px] text-red-500 font-bold tracking-widest bg-red-500/10 px-3 py-1 rounded-md">PENDIENTE DE FIRMA</span>
                         )}
                       </div>
-                      <p className="text-xs font-bold text-slate-800 mt-2 uppercase">{selectedDoc.specialistName || "Profesional Asignado"}</p>
-                      <p className="text-[10px] text-slate-500">Especialista Tratante</p>
+                      <p className="text-xs font-bold text-slate-800 mt-2 uppercase">{selectedDoc.specialistName || selectedDoc.author?.name || "Profesional Asignado"}</p>
+                      <p className="text-[10px] text-slate-500">{selectedDoc.author?.specialty || "Especialista Tratante"}</p>
                       <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-wider">Firma del Profesional</p>
                     </div>
                   </div>
                 </div>
-              </div>
 
+              </div>
             </div>
           )}
         </DialogContent>

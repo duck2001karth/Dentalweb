@@ -14,6 +14,8 @@ export interface ClinicSettings {
   taxRate: number
   currency: string
   address: string | null
+  city?: string      
+  country?: string
   phone: string | null
   whatsappNumber: string | null
   email: string | null

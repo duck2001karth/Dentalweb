@@ -2,7 +2,7 @@
 
 import React from "react"
 import { 
-  CalendarIcon, User, MoreVertical, Edit, Trash2, 
+  User, MoreVertical, Edit, Trash2, 
   ImageIcon, ZoomIn, Check, CheckSquare, Pill, Clock, FileText 
 } from "lucide-react"
 import { format } from "date-fns"
@@ -45,8 +45,6 @@ export function HistoryCard({
 
   const StatusIcon = statusConfig.icon
   const codeId = `#${note.id?.slice(-4).toUpperCase() || "REG"}`
-
-  // Parsear contenido si viene como JSON estructurado (ej. recetas)
   const renderContent = () => {
     if (isPrescription) {
       try {
@@ -95,19 +93,20 @@ export function HistoryCard({
   }
 
   return (
-    <div className="relative flex flex-col md:flex-row items-start mb-8 group">
+    <div className="relative flex flex-col md:flex-row items-start mb-6 group">
       
-      {/* Columna Fecha Timeline */}
-      <div className="md:w-[110px] text-left md:text-right pr-6 pt-2 pb-1 pl-8 md:pl-0 font-bold text-muted-foreground text-xs uppercase tracking-wider">
-        {format(new Date(note.createdAt), "MMM. dd, yyyy", { locale: es })}
+      {/* Columna Fecha Timeline alineada al margen izquierdo */}
+      <div className="md:w-[95px] shrink-0 text-left pt-2 pb-1 font-bold text-muted-foreground text-[11px] uppercase tracking-wider leading-snug select-none">
+        <p className="font-black text-foreground">{format(new Date(note.createdAt), "MMM. dd", { locale: es })}</p>
+        <p className="text-[10px] text-muted-foreground/70">{format(new Date(note.createdAt), "yyyy")}</p>
       </div>
 
       {/* Punto Conector en la Línea */}
-      <div className="absolute left-0 md:left-[116px] top-3 w-4 h-4 rounded-full bg-card border-2 border-[#008bcd] z-10 group-hover:scale-125 transition-transform" />
+      <div className="absolute left-0 md:left-[102px] top-3.5 w-3.5 h-3.5 rounded-full bg-card border-2 border-[#008bcd] z-10 group-hover:scale-125 transition-transform" />
       
       {/* Tarjeta Principal */}
-      <div className="ml-8 md:ml-10 flex-1 w-full">
-        <div className="bg-card rounded-2xl border border-border shadow-xs overflow-hidden hover:border-[#008bcd]/40 hover:shadow-md transition-all">
+      <div className="ml-6 md:ml-8 flex-1 w-full">
+        <div className="bg-card rounded-2xl border border-border/80 shadow-xs overflow-hidden hover:border-[#008bcd]/40 hover:shadow-md transition-all">
           
           {/* Cabecera Tarjeta */}
           <div className="bg-muted/15 border-b border-border/70 px-5 py-3 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
@@ -169,7 +168,7 @@ export function HistoryCard({
                 {(canEdit || canDelete) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground">
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer">
                         <MoreVertical className="w-4 h-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -210,7 +209,7 @@ export function HistoryCard({
               </div>
             )}
 
-            {/* Firmas Digitales con Contenedor Claro Seguro */}
+            {/* Firmas Digitales */}
             {(note.professionalSignature || note.patientSignature) && (
               <div className="mt-4 pt-3 border-t border-dashed border-border/70 flex flex-wrap gap-4">
                 {note.professionalSignature && (

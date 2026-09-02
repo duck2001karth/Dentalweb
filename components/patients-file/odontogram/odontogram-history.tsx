@@ -1,58 +1,208 @@
 "use client"
+
 import React, { useState } from "react"
 import { format } from "date-fns"
-import { Search, Calendar, FilterX, MessageSquare, AlertTriangle, CheckCircle, Trash2 } from "lucide-react"
+import { es } from "date-fns/locale"
+import { 
+  Search, Calendar, FilterX, MessageSquare, 
+  CheckCircle, Trash2, Edit3, Loader2 
+} from "lucide-react"
+
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
+import { 
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
+} from "@/components/ui/dialog"
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, 
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter, 
+  AlertDialogHeader, AlertDialogTitle 
+} from "@/components/ui/alert-dialog"
 import { odontogramStatuses } from "@/constants/status"
+import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
-export function OdontogramHistory({ records, view, canEdit, currentUser, confirmDeleteRecord, getStatusLabel }: any) {
+const getSurfaceLabel = (surface: string, toothNumber: number): string => {
+  const low = surface?.toLowerCase()?.trim() || ""
+
+  if (low === "center" || low === "middle") return "Oclusal / Incisal"
+  if (low === "top") return "Vestibular"
+  if (low === "bottom") {
+    return toothNumber >= 31 && toothNumber <= 48 ? "Lingual" : "Palatino"
+  }
+  if (low === "left") {
+    const quadrant = Math.floor(toothNumber / 10)
+    return quadrant === 1 || quadrant === 4 ? "Distal" : "Mesial"
+  }
+  if (low === "right") {
+    const quadrant = Math.floor(toothNumber / 10)
+    return quadrant === 1 || quadrant === 4 ? "Mesial" : "Distal"
+  }
+  if (low === "mesial") return "Mesial"
+  if (low === "distal") return "Distal"
+  if (low === "vestibular") return "Vestibular"
+  if (low === "lingual") return "Lingual"
+  if (low === "palatino" || low === "palatina") return "Palatino"
+  if (low === "oclusal") return "Oclusal"
+  if (low === "incisal") return "Incisal"
+
+  return surface
+}
+
+export function OdontogramHistory({ 
+  records = [], 
+  view, 
+  canEdit, 
+  currentUser, 
+  confirmDeleteRecord, 
+  getStatusLabel,
+  onRecordUpdated 
+}: any) {
+  const { toast } = useToast()
   const [historySearch, setHistorySearch] = useState("")
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [selectedRecordForDetail, setSelectedRecordForDetail] = useState<any>(null)
+  const [isEditingNote, setIsEditingNote] = useState(false)
+  const [editedNote, setEditedNote] = useState("")
+  const [isSavingNote, setIsSavingNote] = useState(false)
   const [recordToDelete, setRecordToDelete] = useState<any>(null)
 
   const canUserDeleteRecord = (record: any) => {
-    if (!canEdit) return false;
-    if (currentUser?.role === "ADMIN") return true;
-    return record.authorId === currentUser?.id || record.author?.id === currentUser?.id;
+    if (!canEdit) return false
+    if (currentUser?.role === "ADMIN") return true
+    return record.authorId === currentUser?.id || record.author?.id === currentUser?.id
   }
 
   const filteredHistoryRecords = records.filter((r: any) => {
     const query = historySearch.toLowerCase().trim()
-    const matchesSearch = !query || r.toothNumber?.toString().includes(query) || getStatusLabel(r.status).toLowerCase().includes(query) || r.author?.name?.toLowerCase().includes(query)
+    const matchesSearch = !query || 
+      r.toothNumber?.toString().includes(query) || 
+      getStatusLabel(r.status).toLowerCase().includes(query) || 
+      r.author?.name?.toLowerCase().includes(query) ||
+      r.notes?.toLowerCase().includes(query)
+      
     const recordDate = new Date(r.createdAt)
     const matchesFrom = !dateFrom || recordDate >= new Date(dateFrom)
     const matchesTo = !dateTo || recordDate <= new Date(dateTo + "T23:59:59")
     return matchesSearch && matchesFrom && matchesTo
   })
+  const handleSaveObservation = async () => {
+    if (!selectedRecordForDetail) return
+    setIsSavingNote(true)
+    try {
+      const res = await fetch(`/api/odontogram`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: selectedRecordForDetail.id,
+          notes: editedNote
+        })
+      })
+
+      if (!res.ok) throw new Error()
+
+      // 1. Notificación verde de éxito
+      toast({
+        title: "Observación actualizada",
+        description: "Se guardó la nota clínica para la pieza #" + selectedRecordForDetail.toothNumber,
+        variant: "success" as any
+      })
+
+      setIsEditingNote(false)
+      setSelectedRecordForDetail(null)
+      if (onRecordUpdated) onRecordUpdated()
+    } catch {
+      toast({
+        title: "Error al actualizar",
+        description: "No se pudo guardar la observación clínica.",
+        variant: "destructive"
+      })
+    } finally {
+      setIsSavingNote(false)
+    }
+  }
+
+  const renderSurfacesBadges = (surfaces: string[] | string, toothNumber: number) => {
+    const list = Array.isArray(surfaces) ? surfaces : [surfaces]
+    const isTotal = list.length === 0 || list.includes("TODA_LA_PIEZA") || list.includes("all")
+
+    if (isTotal) {
+      return (
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-muted/70 text-muted-foreground border border-border/80">
+          Toda la pieza
+        </span>
+      )
+    }
+
+    return (
+      <div className="flex flex-wrap gap-1">
+        {list.map((surface, idx) => (
+          <span 
+            key={idx}
+            className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#008bcd]/10 text-[#008bcd] border border-[#008bcd]/20"
+          >
+            {getSurfaceLabel(surface, toothNumber)}
+          </span>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div className="mt-8 space-y-4">
-      <div className="bg-card border border-border rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+        
         {/* HEADER Y FILTROS */}
-        <div className="p-5 border-b border-border bg-muted/30 flex flex-col lg:flex-row gap-4 justify-between lg:items-center">
+        <div className="p-5 border-b border-border/70 bg-muted/15 flex flex-col lg:flex-row gap-4 justify-between lg:items-center">
           <div>
-            <h3 className="font-black text-foreground text-lg tracking-tight">DETALLE DE HALLAZGOS CLÍNICOS</h3>
-            <p className="text-xs text-muted-foreground font-medium mt-0.5">Historial acumulado de registros e impresiones diagnósticas</p>
+            <h3 className="font-black text-foreground text-base tracking-tight uppercase">
+              Detalle de Hallazgos Clínicos
+            </h3>
+            <p className="text-xs text-muted-foreground font-medium mt-0.5">
+              Historial cronológico de patologías, tratamientos e impresiones diagnósticas.
+            </p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 items-center">
-            <div className="relative w-full sm:w-60">
+          
+          <div className="flex flex-col sm:flex-row gap-2.5 items-center w-full lg:w-auto">
+            <div className="relative w-full sm:w-56">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
-              <Input placeholder="Buscar pieza, hallazgo..." value={historySearch} onChange={(e) => setHistorySearch(e.target.value)} className="pl-9 h-10 text-xs bg-background border-border rounded-xl focus-visible:ring-[#008bcd]" />
+              <Input 
+                placeholder="Buscar pieza, hallazgo..." 
+                value={historySearch} 
+                onChange={(e) => setHistorySearch(e.target.value)} 
+                className="pl-9 h-9 text-xs bg-background border-border/80 rounded-xl focus-visible:ring-1 focus-visible:ring-[#008bcd]" 
+              />
             </div>
-            <div className="flex items-center gap-1.5 bg-background border border-border rounded-xl p-1">
-              <Calendar className="w-4 h-4 text-muted-foreground ml-2 shrink-0" />
-              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="bg-transparent text-xs font-semibold text-foreground outline-none p-1"/>
-              <span className="text-muted-foreground font-bold">-</span>
-              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="bg-transparent text-xs font-semibold text-foreground outline-none p-1"/>
+
+            <div className="flex items-center gap-1.5 bg-background border border-border/80 rounded-xl px-2 h-9 w-full sm:w-auto">
+              <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <input 
+                type="date" 
+                value={dateFrom} 
+                onChange={(e) => setDateFrom(e.target.value)} 
+                className="bg-transparent text-[11px] font-semibold text-foreground outline-none cursor-pointer"
+                title="Fecha desde"
+              />
+              <span className="text-muted-foreground font-bold text-xs">-</span>
+              <input 
+                type="date" 
+                value={dateTo} 
+                onChange={(e) => setDateTo(e.target.value)} 
+                className="bg-transparent text-[11px] font-semibold text-foreground outline-none cursor-pointer"
+                title="Fecha hasta"
+              />
             </div>
+
             {(historySearch || dateFrom || dateTo) && (
-              <Button variant="ghost" size="icon" onClick={() => { setHistorySearch(""); setDateFrom(""); setDateTo(""); }} className="h-10 w-10 text-destructive hover:bg-destructive/10 rounded-xl">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => { setHistorySearch(""); setDateFrom(""); setDateTo(""); }} 
+                className="h-9 w-9 text-destructive hover:bg-destructive/10 rounded-xl shrink-0 cursor-pointer"
+                title="Limpiar filtros"
+              >
                 <FilterX className="w-4 h-4" />
               </Button>
             )}
@@ -61,69 +211,141 @@ export function OdontogramHistory({ records, view, canEdit, currentUser, confirm
 
         {/* TABLA DE AUDITORÍA */}
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-muted/50 border-b border-border text-xs uppercase text-muted-foreground font-bold">
+          <table className="w-full text-left text-xs whitespace-nowrap">
+            <thead className="bg-muted/10 border-b border-border/70 text-[10px] uppercase text-muted-foreground font-bold">
               <tr>
-                <th className="p-4">Fecha</th>
-                <th className="p-4 text-center">Pieza</th>
-                <th className="p-4">Caras</th>
-                <th className="p-4">Hallazgo / Tratamiento</th>
-                <th className="p-4">Profesional</th>
-                <th className="p-4 text-center">Observación</th>
-                {canEdit && <th className="p-4 text-right">Acción</th>}
+                <th className="px-5 py-3">Fecha</th>
+                <th className="px-4 py-3 text-center">Pieza</th>
+                <th className="px-4 py-3">Superficie(s)</th>
+                <th className="px-4 py-3">Hallazgo / Tratamiento</th>
+                <th className="px-4 py-3">Profesional</th>
+                <th className="px-4 py-3 text-center">Observación</th>
+                {canEdit && <th className="px-5 py-3 text-right">Acción</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-border/60 bg-background">
               {filteredHistoryRecords.length === 0 ? (
-                <tr><td colSpan={canEdit ? 7 : 6} className="p-12 text-center text-muted-foreground font-medium">Sin hallazgos clínicos.</td></tr>
+                <tr>
+                  <td colSpan={canEdit ? 7 : 6} className="p-12 text-center text-muted-foreground font-medium">
+                    Sin hallazgos clínicos registrados para este criterio.
+                  </td>
+                </tr>
               ) : (
                 filteredHistoryRecords.map((record: any) => (
-                  <tr key={record.id} className="hover:bg-accent/40 transition-colors">
-                    <td className="p-4 font-semibold text-foreground">
-                      {format(new Date(record.createdAt), "dd/MM/yyyy")}
-                      <span className="block text-[11px] text-muted-foreground font-normal">{format(new Date(record.createdAt), "HH:mm")}</span>
+                  <tr key={record.id} className="hover:bg-muted/30 transition-colors">
+                    
+                    {/* Fecha y Hora */}
+                    <td className="px-5 py-3.5 font-mono text-muted-foreground">
+                      <p className="font-bold text-foreground">
+                        {format(new Date(record.createdAt), "dd/MM/yyyy", { locale: es })}
+                      </p>
+                      <span className="text-[10px] text-muted-foreground/70">
+                        {format(new Date(record.createdAt), "HH:mm")}
+                      </span>
                     </td>
-                    <td className="p-4 font-black text-center text-[#008bcd] text-lg">{record.toothNumber}</td>
-                    <td className="p-4 font-medium">
-                      {record.surfaces.includes("TODA_LA_PIEZA") ? <span className="bg-muted px-2.5 py-1 rounded-md text-xs font-semibold border border-border">Toda la pieza</span> : record.surfaces.join(", ")}
+
+                    {/* Número de Pieza */}
+                    <td className="px-4 py-3.5 text-center">
+                      <span className="font-black font-mono text-sm text-[#008bcd] bg-[#008bcd]/10 border border-[#008bcd]/20 px-2.5 py-1 rounded-lg">
+                        {record.toothNumber}
+                      </span>
                     </td>
-                    <td className="p-4">
+
+                    {/* Caras Anatómicas Traducidas */}
+                    <td className="px-4 py-3.5">
+                      {renderSurfacesBadges(record.surfaces, record.toothNumber)}
+                    </td>
+
+                    {/* Estado Clínico */}
+                    <td className="px-4 py-3.5">
                       {(() => {
-                        const config = odontogramStatuses[record.status];
+                        const config = odontogramStatuses[record.status]
                         if (record.status === "DIENTE_SANO" || !config) {
-                          return <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20"><CheckCircle className="w-3.5 h-3.5" /> Diente Sano</div>;
+                          return (
+                            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                              <CheckCircle className="w-3.5 h-3.5" /> Diente Sano
+                            </div>
+                          )
                         }
-                        return <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${config.bg} ${config.color}`}><config.icon /> <span>{config.label}</span></div>;
+                        const StatusIcon = config.icon || CheckCircle
+                        return (
+                          <div className={cn("inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border", config.bg, config.color)}>
+                            <StatusIcon className="w-3.5 h-3.5 shrink-0" />
+                            <span>{config.label}</span>
+                          </div>
+                        )
                       })()}
                     </td>
-                    <td className="p-4 flex items-center gap-2.5">
-                      <Avatar className="h-7 w-7 border border-border"><AvatarImage src={record.author?.image} /><AvatarFallback className="bg-primary/10 text-primary font-bold text-[10px]">D</AvatarFallback></Avatar>
-                      <span className="text-xs font-bold text-foreground">{record.author?.name || "Dr(a). Asignado"}</span>
+
+                    {/* Especialista Responsable */}
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-6 w-6 border border-border/80">
+                          <AvatarImage src={record.author?.image} />
+                          <AvatarFallback className="bg-[#008bcd]/10 text-[#008bcd] font-black text-[9px]">
+                            {record.author?.name?.charAt(0) || "D"}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-xs font-bold text-foreground">
+                          {record.author?.name || "Dr(a). Asignado"}
+                        </span>
+                      </div>
                     </td>
-                    <td className="p-4 text-center">
+
+                    {/* Observaciones y Nota */}
+                    <td className="px-4 py-3.5 text-center">
                       {record.notes ? (
-                        <Button variant="outline" size="sm" onClick={() => setSelectedRecordForDetail(record)} className="h-8 px-3 rounded-lg text-xs font-bold border-amber-500/30 text-amber-600 bg-amber-500/10 hover:bg-amber-500/20">
-                          <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> Ver Nota
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => {
+                            setSelectedRecordForDetail(record)
+                            setEditedNote(record.notes || "")
+                            setIsEditingNote(false)
+                          }} 
+                          className="h-7 px-2.5 rounded-lg text-[11px] font-bold border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 cursor-pointer"
+                        >
+                          <MessageSquare className="w-3 h-3 mr-1 text-amber-500" /> Ver Nota
                         </Button>
-                      ) : <span className="text-xs text-muted-foreground italic">Sin notas</span>}
+                      ) : (
+                        canEdit ? (
+                          <button
+                            onClick={() => {
+                              setSelectedRecordForDetail(record)
+                              setEditedNote("")
+                              setIsEditingNote(true)
+                            }}
+                            className="text-[11px] text-muted-foreground/50 hover:text-[#008bcd] font-medium transition-colors cursor-pointer"
+                          >
+                            + Añadir nota
+                          </button>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground/40 italic">Sin notas</span>
+                        )
+                      )}
                     </td>
+
+                    {/* Acción de Anular */}
                     {canEdit && (
-                      <td className="p-4 text-right">
+                      <td className="px-5 py-3.5 text-right">
                         {canUserDeleteRecord(record) ? (
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            className="text-destructive font-bold hover:bg-destructive/10 h-8 px-3 flex items-center gap-1.5 ml-auto rounded-lg transition-colors" 
+                            className="text-destructive font-bold hover:bg-destructive/10 h-7 px-2.5 text-xs rounded-lg cursor-pointer ml-auto transition-colors" 
                             onClick={() => setRecordToDelete(record)}
                           >
-                            <Trash2 className="w-4 h-4" />
-                            <span>Anular</span>
+                            <Trash2 className="w-3.5 h-3.5 mr-1" />
+                            Anular
                           </Button>
                         ) : (
-                          <span className="text-[11px] font-semibold text-muted-foreground/60 italic">No permitido</span>
+                          <span className="text-[10px] font-medium text-muted-foreground/50 italic">
+                            No permitido
+                          </span>
                         )}
                       </td>
                     )}
+
                   </tr>
                 ))
               )}
@@ -132,45 +354,129 @@ export function OdontogramHistory({ records, view, canEdit, currentUser, confirm
         </div>
       </div>
 
-      {/* MODAL DETALLE DE COMENTARIO */}
-      <Dialog open={!!selectedRecordForDetail} onOpenChange={(open) => !open && setSelectedRecordForDetail(null)}>
-        <DialogContent className="sm:max-w-[450px] bg-card border-border rounded-2xl shadow-xl">
-          <DialogHeader><DialogTitle className="text-lg font-bold flex items-center gap-2"><MessageSquare className="w-5 h-5 text-[#008bcd]" /> Observación Clínica</DialogTitle></DialogHeader>
-          <div className="py-4 space-y-4">
-            <div className="p-4 bg-background border border-border rounded-xl text-sm font-medium whitespace-pre-wrap">{selectedRecordForDetail?.notes}</div>
+      {/* MODAL DETALLE Y EDICIÓN DE OBSERVACIÓN CLÍNICA */}
+      <Dialog 
+        open={!!selectedRecordForDetail} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedRecordForDetail(null)
+            setIsEditingNote(false)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-[450px] bg-card border-border/80 rounded-2xl shadow-xl p-6">
+          <DialogHeader className="border-b border-border/70 pb-3">
+            <DialogTitle className="text-sm font-black uppercase text-foreground flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-[#008bcd]" /> Observación • Pieza #{selectedRecordForDetail?.toothNumber}
+              </span>
+              <span className="text-xs font-mono text-muted-foreground font-normal">
+                {selectedRecordForDetail && getStatusLabel(selectedRecordForDetail.status)}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="py-3 space-y-3">
+            {isEditingNote ? (
+              <div className="space-y-1.5">
+                <p className="text-[11px] font-bold uppercase text-muted-foreground tracking-wider">
+                  Editar Nota Clínica:
+                </p>
+                <textarea
+                  rows={4}
+                  value={editedNote}
+                  onChange={(e) => setEditedNote(e.target.value)}
+                  placeholder="Detalles del diagnóstico, profundidad, pronóstico o indicaciones..."
+                  className="w-full text-xs font-medium rounded-xl p-3 bg-background border border-border/80 text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-[#008bcd]"
+                />
+              </div>
+            ) : (
+              <div className="p-4 bg-muted/20 border border-border/70 rounded-xl text-xs font-medium text-foreground whitespace-pre-wrap leading-relaxed">
+                {selectedRecordForDetail?.notes || "Sin observaciones clínicas registradas."}
+              </div>
+            )}
           </div>
+
+          <DialogFooter className="gap-2 sm:justify-between border-t border-border/70 pt-3">
+            {isEditingNote ? (
+              <>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setIsEditingNote(false)}
+                  className="h-8 rounded-xl text-xs font-bold cursor-pointer"
+                  disabled={isSavingNote}
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  size="sm"
+                  onClick={handleSaveObservation}
+                  disabled={isSavingNote}
+                  className="h-8 rounded-xl text-xs font-bold bg-[#008bcd] hover:bg-[#0070a8] text-white cursor-pointer"
+                >
+                  {isSavingNote && <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />}
+                  Guardar Cambios
+                </Button>
+              </>
+            ) : (
+              <>
+                {canEdit ? (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsEditingNote(true)}
+                    className="h-8 rounded-xl text-xs font-bold text-[#008bcd] hover:bg-[#008bcd]/10 border-[#008bcd]/30 cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5 mr-1" /> Editar Nota
+                  </Button>
+                ) : <div />}
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={() => setSelectedRecordForDetail(null)}
+                  className="h-8 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Cerrar
+                </Button>
+              </>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* MODAL DE CONFIRMACIÓN PARA ANULAR REGISTRO */}
       <AlertDialog open={!!recordToDelete} onOpenChange={(open) => !open && setRecordToDelete(null)}>
-        <AlertDialogContent className="bg-card border-border rounded-[24px] sm:max-w-[450px] p-0 overflow-hidden shadow-2xl">
-          <div className="p-6">
-            <AlertDialogHeader className="flex flex-col items-center text-center space-y-3">
-              <div className="w-16 h-16 bg-red-500/10 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center border border-red-500/20 mb-2">
-                <Trash2 className="w-8 h-8" />
-              </div>
-              <AlertDialogTitle className="text-xl font-black text-foreground">
-                ¿Anular hallazgo de la pieza {recordToDelete?.toothNumber}?
-              </AlertDialogTitle>
-              <AlertDialogDescription className="text-sm text-muted-foreground">
-                Esta acción eliminará la simbología <b className="text-foreground">"{getStatusLabel(recordToDelete?.status || '')}"</b> del odontograma del paciente. Esta acción no se puede deshacer.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-          </div>
+        <AlertDialogContent className="bg-card border-border/80 rounded-2xl sm:max-w-[420px] p-6 shadow-2xl">
+          <AlertDialogHeader className="flex flex-col items-center text-center space-y-2">
+            <div className="w-12 h-12 bg-destructive/10 text-destructive rounded-full flex items-center justify-center border border-destructive/20 mb-1">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <AlertDialogTitle className="text-base font-black text-foreground">
+              ¿Anular hallazgo de la pieza #{recordToDelete?.toothNumber}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              Se anulará el registro <b className="text-foreground">&quot;{getStatusLabel(recordToDelete?.status || '')}&quot;</b> y se restaurará el estado anatómico de la pieza en el odontograma.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           
-          <AlertDialogFooter className="w-full flex sm:justify-center gap-3 p-6 pt-0 bg-card">
-            <AlertDialogCancel className="rounded-xl h-11 px-6 border-border hover:bg-accent font-bold text-foreground mt-0">
+          <AlertDialogFooter className="w-full flex sm:justify-center gap-2 pt-3">
+            <AlertDialogCancel className="rounded-xl h-9 px-4 border-border/80 font-bold text-xs cursor-pointer">
               Cancelar
             </AlertDialogCancel>
             <AlertDialogAction 
-              onClick={() => { confirmDeleteRecord(recordToDelete); setRecordToDelete(null); }} 
-              className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-11 px-6 shadow-sm flex items-center gap-2 transition-all active:scale-[0.98]"
+              onClick={() => { 
+                confirmDeleteRecord(recordToDelete)
+                setRecordToDelete(null) 
+              }} 
+              className="bg-destructive hover:bg-destructive/90 text-white rounded-xl h-9 px-4 text-xs font-bold shadow-xs cursor-pointer"
             >
-              <Trash2 className="w-4 h-4" />
               Sí, Anular
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   )
 }

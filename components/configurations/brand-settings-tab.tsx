@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils"
 export interface BrandSettingsData {
   clinicName?: string
   slogan?: string
+  razonSocial?: string
+  ruc?: string
   logoUrl?: string
   logoScale?: number
   watermarkUrl?: string
@@ -42,7 +44,6 @@ export function BrandSettingsTab({ settings, setSettings }: BrandSettingsTabProp
   const { toast } = useToast()
   const [dragActiveLogo, setDragActiveLogo] = useState(false)
   const [dragActiveWatermark, setDragActiveWatermark] = useState(false)
-
   const [deleteTarget, setDeleteTarget] = useState<"logoUrl" | "watermarkUrl" | null>(null)
 
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -82,7 +83,7 @@ export function BrandSettingsTab({ settings, setSettings }: BrandSettingsTabProp
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       
-      {/* 1. SECCIÓN DE IDENTIDAD TEXTUAL (SLOGAN / SUBTÍTULO) */}
+      {/* 1. SECCIÓN DE ESLOGAN INSTITUCIONAL */}
       <div className="p-5 rounded-2xl bg-muted/20 border border-border/60 space-y-3">
         <div>
           <Label htmlFor="slogan-input" className="text-[11px] font-black uppercase tracking-wider text-foreground flex items-center gap-1.5">

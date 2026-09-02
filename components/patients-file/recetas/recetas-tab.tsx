@@ -26,6 +26,7 @@ const calculateAge = (birthDateString?: string | Date | null) => {
   if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--
   return age
 }
+
 const SignaturePad = ({ onSave, onCancel, title }: any) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [isDrawing, setIsDrawing] = useState(false)
@@ -42,9 +43,13 @@ const SignaturePad = ({ onSave, onCancel, title }: any) => {
     const rect = canvas.getBoundingClientRect()
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
-    ctx.lineWidth = 3; ctx.lineCap = "round"; ctx.strokeStyle = "#000000"
+    ctx.lineWidth = 3
+    ctx.lineCap = "round"
+    ctx.strokeStyle = "#000000"
     ctx.lineTo(clientX - rect.left, clientY - rect.top)
-    ctx.stroke(); ctx.beginPath(); ctx.moveTo(clientX - rect.left, clientY - rect.top)
+    ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(clientX - rect.left, clientY - rect.top)
   }
 
   const handleClear = () => canvasRef.current?.getContext("2d")?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
@@ -54,9 +59,19 @@ const SignaturePad = ({ onSave, onCancel, title }: any) => {
     <div className="flex flex-col gap-4 items-center w-full">
       <p className="font-medium text-xs text-muted-foreground">{title}</p>
       <div className="relative w-full rounded-xl border-2 border-dashed border-border/80 bg-white shadow-xs overflow-hidden touch-none">
-        <canvas ref={canvasRef} width={500} height={200} 
-          onMouseDown={startDrawing} onMouseUp={stopDrawing} onMouseOut={stopDrawing} onMouseMove={draw}
-          onTouchStart={startDrawing} onTouchEnd={stopDrawing} onTouchMove={draw} className="cursor-crosshair w-full h-40" />
+        <canvas 
+          ref={canvasRef} 
+          width={500} 
+          height={200} 
+          onMouseDown={startDrawing} 
+          onMouseUp={stopDrawing} 
+          onMouseOut={stopDrawing} 
+          onMouseMove={draw}
+          onTouchStart={startDrawing} 
+          onTouchEnd={stopDrawing} 
+          onTouchMove={draw} 
+          className="cursor-crosshair w-full h-40" 
+        />
       </div>
       <div className="flex gap-2 w-full justify-end mt-2">
         <Button variant="outline" onClick={handleClear} className="rounded-xl font-bold">Limpiar lienzo</Button>
@@ -74,8 +89,10 @@ export function RecetasTab({ patientId }: { patientId: string }) {
   const { toast } = useToast()
 
   const currentUser = session?.user as any
-  const canEditClinicalData = currentUser?.role === "DOCTOR" || currentUser?.role === "ADMIN"
-  const canDeleteData = currentUser?.role === "ADMIN"
+  const userRole = String(currentUser?.role || "").toUpperCase().trim()
+  const isAdmin = userRole === "ADMIN" || userRole === "ADMINISTRADOR"
+  const isDoctor = userRole === "DOCTOR"
+  const canEditClinicalData = isDoctor || isAdmin
 
   const { patient } = useGetPatient(patientId)
 
@@ -102,33 +119,43 @@ export function RecetasTab({ patientId }: { patientId: string }) {
   const fetchPrescriptions = useCallback(async () => {
     try {
       const res = await fetch(`/api/prescriptions?patientId=${patientId}`)
+      if (!res.ok) throw new Error()
       const data = await res.json()
       setPrescriptions(data || [])
-    } catch (e) { toast({ title: "Error al cargar recetas", variant: "destructive" }) }
-    finally { setIsLoading(false) }
+    } catch (e) { 
+      toast({ title: "Error al cargar recetas", variant: "destructive" }) 
+    } finally { 
+      setIsLoading(false) 
+    }
   }, [patientId, toast])
 
-  useEffect(() => { fetchPrescriptions() }, [fetchPrescriptions])
+  useEffect(() => { 
+    fetchPrescriptions() 
+  }, [fetchPrescriptions])
+
   useEffect(() => {
-    if (!canEditClinicalData) return
+    if (!canEditClinicalData || !isDirty || isSaving) return
+    if (!medications.trim() && !indications.trim() && !observations.trim()) return
+
     const timer = setTimeout(() => {
-      if (isDirty && (medications.trim() || indications.trim() || observations.trim())) handleSave(true)
-    }, 1500)
+      handleSave(true)
+    }, 2000)
+
     return () => clearTimeout(timer)
-  }, [medications, indications, observations, isDirty, canEditClinicalData])
+  }, [medications, indications, observations, isDirty, canEditClinicalData, isSaving])
 
   const handleSave = async (isAutoSave = false) => {
-    if (!canEditClinicalData) return;
+    if (!canEditClinicalData || isSaving) return
 
     if (!medications.trim() && !indications.trim() && !observations.trim()) {
-      if (!isAutoSave) toast({ title: "La receta está vacía", variant: "destructive" });
-      return;
+      if (!isAutoSave) toast({ title: "La receta está vacía", variant: "destructive" })
+      return
     }
 
-    setIsSaving(true);
+    setIsSaving(true)
     try {
-      const method = editingId ? "PUT" : "POST";
-      const url = editingId ? `/api/prescriptions/${editingId}` : `/api/prescriptions`;
+      const method = editingId ? "PUT" : "POST"
+      const url = editingId ? `/api/prescriptions/${editingId}` : `/api/prescriptions`
       
       const res = await fetch(url, {
         method,
@@ -140,27 +167,29 @@ export function RecetasTab({ patientId }: { patientId: string }) {
           observations,
           authorId: currentUser?.id 
         })
-      });
+      })
 
-      if (!res.ok) throw new Error("Error en la respuesta del servidor");
+      if (!res.ok) throw new Error("Error en la respuesta del servidor")
 
-      const savedDoc = await res.json();
+      const savedDoc = await res.json()
+      setIsDirty(false)
       
       if (!isAutoSave) {
-        toast({ title: editingId ? "Receta actualizada" : "Receta creada", variant: "success" });
-        handleNewRecipe(); 
+        toast({ title: editingId ? "Receta actualizada" : "Receta creada con éxito", variant: "success" })
+        handleNewRecipe()
+        await fetchPrescriptions()
       } else {
-        if (!editingId && savedDoc.id) setEditingId(savedDoc.id);
-        setIsDirty(false);
+        if (!editingId && savedDoc.id) {
+          setEditingId(savedDoc.id)
+        }
+        await fetchPrescriptions()
       }
-      
-      await fetchPrescriptions();
     } catch (error) { 
-      if (!isAutoSave) toast({ title: "Error al guardar", variant: "destructive" });
+      if (!isAutoSave) toast({ title: "Error al guardar la receta", variant: "destructive" })
     } finally { 
-      setIsSaving(false); 
+      setIsSaving(false) 
     }
-  };
+  }
 
   const handleNewRecipe = () => {
     setEditingId(null)
@@ -183,11 +212,17 @@ export function RecetasTab({ patientId }: { patientId: string }) {
   const handleDelete = async (id: string) => {
     if (!canEditClinicalData) return
     try {
-      await fetch(`/api/prescriptions/${id}`, { method: "DELETE" })
-      toast({ title: "Receta eliminada", variant: "success" })
+      const res = await fetch(`/api/prescriptions/${id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || "No se pudo eliminar")
+      }
+      toast({ title: "Receta eliminada correctamente" })
       if (editingId === id) handleNewRecipe()
       fetchPrescriptions()
-    } catch (error) { toast({ title: "Error", variant: "destructive" }) }
+    } catch (error: any) { 
+      toast({ title: "Error", description: error.message, variant: "destructive" }) 
+    }
   }
 
   const handleWhatsApp = (p: any) => {
@@ -215,14 +250,13 @@ export function RecetasTab({ patientId }: { patientId: string }) {
     window.open(`https://wa.me/${patientPhone}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
-  // FILTRADO
   const filteredPrescriptions = prescriptions.filter(p => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
     return p.medications?.toLowerCase().includes(term) || 
            p.indications?.toLowerCase().includes(term) || 
-           p.author?.name?.toLowerCase().includes(term);
-  });
+           p.author?.name?.toLowerCase().includes(term)
+  })
 
   return (
     <div className="animate-in fade-in duration-300 pb-20">
@@ -245,37 +279,54 @@ export function RecetasTab({ patientId }: { patientId: string }) {
           </DialogHeader>
           <div className="p-6">
             {signingRecipe && (
-              <SignaturePad title="Firme aquí para validar la receta digital antes de imprimir" onCancel={() => setSigningRecipe(null)} 
+              <SignaturePad 
+                title="Firme aquí para validar la receta digital antes de imprimir" 
+                onCancel={() => setSigningRecipe(null)} 
                 onSave={async (img: string) => {
-                  await fetch(`/api/prescriptions/${signingRecipe.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ doctorSignature: img }) })
-                  setPrintingDoc({ ...signingRecipe, doctorSignature: img }); 
-                  setSigningRecipe(null)
-                  setTimeout(() => { window.print(); setPrintingDoc(null) }, 300)
+                  try {
+                    await fetch(`/api/prescriptions/${signingRecipe.id}`, { 
+                      method: "PUT", 
+                      headers: { "Content-Type": "application/json" }, 
+                      body: JSON.stringify({ doctorSignature: img }) 
+                    })
+                    const docConFirma = { ...signingRecipe, doctorSignature: img }
+                    setPrintingDoc(docConFirma) 
+                    setSigningRecipe(null)
+                    fetchPrescriptions()
+                    setTimeout(() => { 
+                      window.print()
+                      setPrintingDoc(null) 
+                    }, 300)
+                  } catch (e) {
+                    toast({ title: "Error al guardar firma", variant: "destructive" })
+                  }
                 }} 
               />
             )}
           </div>
         </DialogContent>
       </Dialog> 
+
       {/* CABECERA Y ACCIONES */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-5 bg-card p-5 rounded-2xl border border-border shadow-sm sticky top-0 z-20 print:hidden">
         
         <div>
           <div className="flex items-center gap-3">
-            <h2 className="text-2xl font-bold tracking-tight text-foreground flex items-center gap-2">
-              Recetas y Prescripciones
-            </h2>
-            {!canEditClinicalData && (
-              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 tracking-wider">
-                SÓLO LECTURA
-              </span>
-            )}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <h2 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
+                <Pill className="w-5 h-5 text-[#008bcd] " /> Recetas y Prescripciones
+              </h2>
+              {!canEditClinicalData && (
+                <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 tracking-wider">
+                  SÓLO LECTURA
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-3 mt-1.5">
             <p className="text-sm font-medium text-muted-foreground">
-              Emisión de indicaciones médicas.
+              Emisión y control farmacológico del paciente.
             </p>
-            {/* INDICADORES DE GUARDADO */}
             {isSaving && (
               <span className="text-[11px] bg-blue-500/10 text-blue-600 font-bold px-2 py-0.5 rounded-full flex items-center">
                 <Loader2 className="w-3 h-3 mr-1 animate-spin"/> Guardando...
@@ -298,7 +349,13 @@ export function RecetasTab({ patientId }: { patientId: string }) {
           
           <div className="relative w-full sm:w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input type="text" placeholder="Buscar medicamento..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-9 bg-background border-border text-sm font-medium focus-visible:ring-[#008bcd] w-full h-11 rounded-xl" />
+            <Input 
+              type="text" 
+              placeholder="Buscar medicamento..." 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)} 
+              className="pl-9 bg-background border-border text-sm font-medium focus-visible:ring-[#008bcd] w-full h-11 rounded-xl" 
+            />
           </div>
 
           {canEditClinicalData && (
@@ -326,7 +383,7 @@ export function RecetasTab({ patientId }: { patientId: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
         
-        {/* 3. EDITOR MODULAR */}
+        {/* EDITOR */}
         {canEditClinicalData && (
           <div className="lg:col-span-5">
             <PrescriptionEditor 
@@ -339,7 +396,7 @@ export function RecetasTab({ patientId }: { patientId: string }) {
           </div>
         )}
 
-        {/* HISTORIAL DE RECETAS - ESTILO PREMIUM */}
+        {/* HISTORIAL DE RECETAS */}
         <div className={cn("flex flex-col gap-5", canEditClinicalData ? "lg:col-span-7" : "lg:col-span-12")}>
           {isLoading ? (
             <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#008bcd] w-8 h-8"/></div>
@@ -350,93 +407,133 @@ export function RecetasTab({ patientId }: { patientId: string }) {
               <p className="text-sm">No hay prescripciones registradas para este paciente.</p>
             </div>
           ) : (
-            filteredPrescriptions.map((p) => (
-              <div key={p.id} className={cn("bg-card border rounded-2xl shadow-xs overflow-hidden flex flex-col transition-all hover:shadow-sm", editingId === p.id ? "border-[#008bcd] ring-1 ring-[#008bcd]/20" : "border-border/80 hover:border-border")}>
-                
-                <div className="bg-muted/15 px-5 py-3.5 border-b border-border/60 flex flex-wrap gap-3 justify-between items-center text-sm">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-full bg-[#008bcd]/10 flex items-center justify-center text-[#008bcd] font-bold text-xs shadow-xs">
-                      {p.author?.name ? p.author.name.charAt(0) : "D"}
+            filteredPrescriptions.map((p) => {
+              const canDeleteThis = isAdmin || (isDoctor && p.authorId === currentUser?.id)
+
+              return (
+                <div 
+                  key={p.id} 
+                  className={cn(
+                    "bg-card border rounded-2xl shadow-xs overflow-hidden flex flex-col transition-all hover:shadow-sm", 
+                    editingId === p.id ? "border-[#008bcd] ring-1 ring-[#008bcd]/20" : "border-border/80 hover:border-border"
+                  )}
+                >
+                  <div className="bg-muted/15 px-5 py-3.5 border-b border-border/60 flex flex-wrap gap-3 justify-between items-center text-sm">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-full bg-[#008bcd]/10 flex items-center justify-center text-[#008bcd] font-bold text-xs shadow-xs">
+                        {p.author?.name ? p.author.name.charAt(0) : "D"}
+                      </div>
+                      <span className="font-bold text-foreground">{p.author?.name || "Dr. Asignado"}</span>
+                      {p.author?.specialty && (
+                        <span className="text-[11px] text-muted-foreground font-normal">({p.author.specialty})</span>
+                      )}
                     </div>
-                    <span className="font-bold text-foreground">{p.author?.name || "Dr. Asignado"}</span>
-                  </div>
-                  <div className="text-muted-foreground text-xs font-medium flex items-center gap-1.5 bg-background px-2.5 py-1 rounded-md border border-border/50">
-                    <CalendarIcon size={12}/> {format(new Date(p.createdAt), "dd MMM yyyy - HH:mm", { locale: es })}
-                  </div>
-                </div>
-
-                <div className="p-5 text-sm text-foreground whitespace-pre-wrap leading-relaxed [&>ul]:list-disc [&>ul]:ml-5">
-                  <div className="mb-4">
-                    <p className="font-extrabold text-[11px] text-[#008bcd] mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                      <Pill className="w-3.5 h-3.5" /> R.P. (Medicamentos)
-                    </p>
-                    <div dangerouslySetInnerHTML={{ __html: p.medications }} className="pl-1"/>
-                  </div>
-                  
-                  <div>
-                    <p className="font-extrabold text-[11px] text-[#008bcd] mb-1.5 uppercase tracking-wider">
-                      Indicaciones
-                    </p>
-                    <div dangerouslySetInnerHTML={{ __html: p.indications }} className="pl-1"/>
+                    <div className="text-muted-foreground text-xs font-medium flex items-center gap-1.5 bg-background px-2.5 py-1 rounded-md border border-border/50">
+                      <CalendarIcon size={12}/> {format(new Date(p.createdAt), "dd MMM yyyy - HH:mm", { locale: es })}
+                    </div>
                   </div>
 
-                  {p.observations && (
-                  <div className="mt-4 pt-3 border-t border-dashed border-border/60 bg-amber-500/5 -mx-5 px-5 pb-1">
-                    <p className="font-extrabold text-[11px] text-amber-600 mb-1.5 uppercase tracking-wider">
-                      Observaciones Especiales
-                    </p>
-                    <div 
-                      dangerouslySetInnerHTML={{ __html: p.observations }} 
-                      className="text-foreground text-xs font-medium leading-relaxed pl-1"
-                    />
+                  <div className="p-5 text-sm text-foreground whitespace-pre-wrap leading-relaxed [&>ul]:list-disc [&>ul]:ml-5">
+                    <div className="mb-4">
+                      <p className="font-extrabold text-[11px] text-[#008bcd] mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                        <Pill className="w-3.5 h-3.5" /> R.P. (Medicamentos)
+                      </p>
+                      <div dangerouslySetInnerHTML={{ __html: p.medications }} className="pl-1"/>
+                    </div>
+                    
+                    <div>
+                      <p className="font-extrabold text-[11px] text-[#008bcd] mb-1.5 uppercase tracking-wider">
+                        Indicaciones
+                      </p>
+                      <div dangerouslySetInnerHTML={{ __html: p.indications }} className="pl-1"/>
+                    </div>
+
+                    {p.observations && (
+                      <div className="mt-4 pt-3 border-t border-dashed border-border/60 bg-amber-500/5 -mx-5 px-5 pb-1">
+                        <p className="font-extrabold text-[11px] text-amber-600 mb-1.5 uppercase tracking-wider">
+                          Observaciones Especiales
+                        </p>
+                        <div 
+                          dangerouslySetInnerHTML={{ __html: p.observations }} 
+                          className="text-foreground text-xs font-medium leading-relaxed pl-1"
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-                </div>
 
-                <div className="bg-muted/10 px-4 py-3 border-t border-border/60 flex flex-wrap justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => handleWhatsApp(p)} className="text-[#25D366] hover:text-[#1da851] hover:bg-[#25D366]/10 border-[#25D366]/20 h-8 text-xs font-bold rounded-lg">
-                    <Send size={14} className="mr-1.5"/> WhatsApp
-                  </Button>
-                  
-                  <Button variant="outline" size="sm" onClick={() => {
-                    if (!p.doctorSignature && canEditClinicalData) setSigningRecipe(p)
-                    else { setPrintingDoc(p); setTimeout(() => { window.print(); setPrintingDoc(null) }, 300) }
-                  }} className="text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 border-border h-8 text-xs font-bold rounded-lg">
-                    <Printer size={14} className="mr-1.5"/> Imprimir
-                  </Button>
-
-                  {canEditClinicalData && (
-                    <Button variant="outline" size="sm" onClick={() => handleEdit(p)} className="text-foreground hover:text-amber-600 hover:bg-amber-500/10 border-border h-8 text-xs font-bold rounded-lg">
-                      <Edit size={14} className="mr-1.5"/> Editar
+                  <div className="bg-muted/10 px-4 py-3 border-t border-border/60 flex flex-wrap justify-end gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleWhatsApp(p)} 
+                      className="text-[#25D366] hover:text-[#1da851] hover:bg-[#25D366]/10 border-[#25D366]/20 h-8 text-xs font-bold rounded-lg"
+                    >
+                      <Send size={14} className="mr-1.5"/> WhatsApp
                     </Button>
-                  )}
-
-                  {canDeleteData && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="text-foreground hover:text-red-500 hover:bg-red-500/10 border-border h-8 text-xs font-bold rounded-lg">
-                          <Trash2 size={14} className="mr-1.5"/> Eliminar
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-card border-border rounded-[24px]">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-foreground font-bold">¿Eliminar receta?</AlertDialogTitle>
-                          <AlertDialogDescription>Se eliminará de forma permanente del historial del paciente.</AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="text-foreground border-border rounded-xl font-bold">Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(p.id)} className="bg-red-600 text-white hover:bg-red-700 rounded-xl font-bold">Eliminar</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
+                    
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        if (!p.doctorSignature && canEditClinicalData) {
+                          setSigningRecipe(p)
+                        } else { 
+                          setPrintingDoc(p)
+                          setTimeout(() => { 
+                            window.print()
+                            setPrintingDoc(null) 
+                          }, 300) 
+                        }
+                      }} 
+                      className="text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 border-border h-8 text-xs font-bold rounded-lg">
+                      <Printer size={14} className="mr-1.5"/> Imprimir
+                    </Button>
+                    {canEditClinicalData && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleEdit(p)} 
+                        className="text-foreground hover:text-amber-600 hover:bg-amber-500/10 border-border h-8 text-xs font-bold rounded-lg"
+                      >
+                        <Edit size={14} className="mr-1.5"/> Editar
+                      </Button>
+                    )}
+                    {canDeleteThis && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="text-foreground hover:text-red-500 hover:bg-red-500/10 border-border h-8 text-xs font-bold rounded-lg"
+                          >
+                            <Trash2 size={14} className="mr-1.5"/> Eliminar
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="bg-card border-border rounded-[24px]">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-foreground font-bold">¿Eliminar receta?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Esta acción eliminará el registro de forma permanente del expediente médico y quedará asentada en la auditoría.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="text-foreground border-border rounded-xl font-bold">Cancelar</AlertDialogCancel>
+                            <AlertDialogAction 
+                              onClick={() => handleDelete(p.id)} 
+                              className="bg-red-600 text-white hover:bg-red-700 rounded-xl font-bold"
+                            >
+                              Eliminar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
                 </div>
-
-              </div>
-            ))
+              )
+            })
           )}
         </div>
-
       </div>
     </div>
   )

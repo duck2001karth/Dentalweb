@@ -1,23 +1,62 @@
 import { NextAuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import { headers } from "next/headers";
 
 import { prisma } from "@/lib/db";
 import { Prisma, UserRole } from "@prisma/client";
+
+// Helper para capturar cabeceras de red
+async function getRequestMetadata() {
+  try {
+    const headersList = await headers();
+    const forwardedFor = headersList.get("x-forwarded-for");
+    const ipAddress = forwardedFor
+      ? forwardedFor.split(",")[0].trim()
+      : headersList.get("x-real-ip") || "127.0.0.1";
+    const userAgent = headersList.get("user-agent") || "Desconocido";
+    return { ipAddress, userAgent };
+  } catch {
+    return { ipAddress: "127.0.0.1", userAgent: "Desconocido" };
+  }
+}
 
 export const authOptions: NextAuthOptions = {
   adapter: {
     ...PrismaAdapter(prisma),
 
     async createUser(data: Prisma.UserCreateInput) {
-      return prisma.user.create({
+      const newUser = await prisma.user.create({
         data: {
           ...data,
           role: UserRole.DOCTOR,
           isActive: true,
-          lastLogin: new Date(), 
+          lastLogin: new Date(),
         },
       });
+      try {
+        const { ipAddress, userAgent } = await getRequestMetadata();
+        await prisma.auditLog.create({
+          data: {
+            userId: newUser.id,
+            action: "CREATE",
+            entity: "USER",
+            entityId: newUser.id,
+            details: `Registro inicial de usuario con Google: ${newUser.email}`,
+            newData: {
+              email: newUser.email,
+              name: newUser.name,
+              role: newUser.role,
+            },
+            ipAddress,
+            userAgent,
+          },
+        });
+      } catch (error) {
+        console.error("Error al auditar createUser en NextAuth:", error);
+      }
+
+      return newUser;
     },
   },
 
@@ -33,12 +72,45 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user }) {
       if (user?.email) {
         try {
-          await prisma.user.update({
+          const updatedUser = await prisma.user.update({
             where: { email: user.email },
             data: { lastLogin: new Date() },
           });
+          const { ipAddress, userAgent } = await getRequestMetadata();
+          await prisma.auditLog.create({
+            data: {
+              userId: updatedUser.id,
+              action: "LOGIN",
+              entity: "AUTH",
+              entityId: updatedUser.id,
+              details: `Inicio de sesión vía Google OAuth: ${user.email}`,
+              ipAddress,
+              userAgent,
+            },
+          });
         } catch (error) {
-          console.error("Error al actualizar lastLogin en evento signIn:", error);
+          console.error("Error en evento signIn / AuditLog:", error);
+        }
+      }
+    },
+
+    async signOut({ token }) {
+      if (token?.id) {
+        try {
+          const { ipAddress, userAgent } = await getRequestMetadata();
+          await prisma.auditLog.create({
+            data: {
+              userId: token.id as string,
+              action: "LOGOUT",
+              entity: "AUTH",
+              entityId: token.id as string,
+              details: `Cierre de sesión de usuario: ${token.email || token.name || token.id}`,
+              ipAddress,
+              userAgent,
+            },
+          });
+        } catch (error) {
+          console.error("Error en evento signOut / AuditLog:", error);
         }
       }
     },
