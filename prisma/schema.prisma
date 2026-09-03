@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  //directUrl = env("DIRECT_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -136,6 +136,8 @@ model User {
 
   paymentsProcessed Payment[]     @relation("UserPayments")
   liquidations      Liquidation[] @relation("DoctorLiquidations")
+
+  createdTemplates DocumentTemplate[] @relation("CreatedTemplates")
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -766,4 +768,36 @@ model Agreement {
   updatedAt       DateTime       @updatedAt
 
   @@map("agreements")
+}
+// Tipo o categoría de documento clínico
+enum ClinicalDocType {
+  CONSENT         // Consentimiento Informado (Cirugía, Endodoncia, Implantes, etc.)
+  CERTIFICATE     // Certificado Médico / Reposo
+  PRESCRIPTION    // Receta / Prescripción Médica tipo
+  REPORT          // Informe Clínico / Epicrisis
+  AUTHORIZATION   // Autorización de Tratamiento / Menores de edad
+  INSTRUCTIONS    // Cuidados Postoperatorios
+}
+
+model DocumentTemplate {
+  id              String           @id @default(uuid())
+  title           String           
+  type            ClinicalDocType  @default(CONSENT)
+  category        String?          
+  content         String           @db.Text
+  
+  requiresPatientSignature Boolean @default(true)
+  requiresDoctorSignature  Boolean @default(true)
+  
+  isActive        Boolean          @default(true)
+  isDefault       Boolean          @default(false) // Si es la plantilla predeterminada de su tipo
+  
+  createdById     String?
+  createdBy       User?            @relation("CreatedTemplates", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([type])
+  @@index([isActive])
 }

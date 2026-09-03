@@ -45,7 +45,7 @@ const adminNavItems: NavItemConfig[] = [
 
 const configNavItems: NavItemConfig[] = [
   { name: "Ajustes de Clínica", href: "/ajustes", icon: Sliders, roles: ["ADMIN"] },
-  { name: "Plantillas Clínicas", href: "/ajustes/documentos", icon: FileCode, roles: ["ADMIN"] },
+  { name: "Plantillas Clínicas", href: "/ajustes/plantillas", icon: FileCode, roles: ["ADMIN"] },
 ]
 
 type ModuleKey = "clinica" | "admin" | "config"
@@ -62,8 +62,6 @@ export const Nav = () => {
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role || "ADMIN"
   const { settings } = useClinicSettings()
-  
-  // Memoización para no recrear arrays en cada render
   const visibleAdminItems = React.useMemo(() => {
     return adminNavItems.filter(item => !item.roles || item.roles.includes(userRole))
   }, [userRole])
@@ -74,6 +72,7 @@ export const Nav = () => {
   
   const showAdminModule = visibleAdminItems.length > 0
   const showConfigModule = visibleConfigItems.length > 0
+  
 
   const [logoScale, setLogoScale] = React.useState(100)
 
@@ -87,8 +86,6 @@ export const Nav = () => {
     window.addEventListener("logoScaleUpdated", updateScale)
     return () => window.removeEventListener("logoScaleUpdated", updateScale)
   }, [settings?.logoScale])
-
-  // Abre automáticamente el módulo correspondiente si la ruta coincide al cargar
   React.useEffect(() => {
     if (!pathname) return
 
@@ -231,7 +228,11 @@ export const Nav = () => {
 
 export const NavItem = ({ item, isSubItem, isExpanded }: { item: NavItemConfig, isSubItem?: boolean, isExpanded: boolean }) => {
   const pathname = usePathname()
-  const isActive = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href))
+  const isActive =
+    item.href === "/" || item.href === "/ajustes"
+      ? pathname === item.href
+      : pathname === item.href || pathname?.startsWith(`${item.href}/`)
+
   const Icon = item.icon
 
   return (
