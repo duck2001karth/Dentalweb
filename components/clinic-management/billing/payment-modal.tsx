@@ -57,6 +57,9 @@ export function PaymentModal({
   const [installments, setInstallments] = useState("3")
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
 
+  // Control de errores visuales
+  const [showErrors, setShowErrors] = useState(false)
+
   const [formData, setFormData] = useState<PaymentFormData>({
     patientId: "",
     amount: "",
@@ -67,6 +70,7 @@ export function PaymentModal({
   })
 
   useEffect(() => {
+    setShowErrors(false)
     if (editingPayment) {
       setFormData({
         patientId: editingPayment.patient?.id || "",
@@ -152,8 +156,18 @@ export function PaymentModal({
     }
   }
 
+  const isCard = formData.method === "CREDIT_CARD" || formData.method === "DEBIT_CARD"
+  const isTransfer = formData.method === "TRANSFER"
+  const needsReference = isCard || isTransfer
+  const isPatientMissing = !formData.patientId
+  const isAmountMissing = !formData.amount || Number(formData.amount) <= 0
+  const isReferenceMissing = needsReference && !reference.trim()
+
   const handleSubmit = async () => {
-    if (!formData.patientId || !formData.amount) return
+    setShowErrors(true)
+    if (isPatientMissing || isAmountMissing || isReferenceMissing) {
+      return
+    }
 
     let structuredNotes = formData.notes || ""
     if (formData.method === "CREDIT_CARD") {
@@ -175,9 +189,6 @@ export function PaymentModal({
     const success = await onSave(payload)
     if (success) onClose()
   }
-
-  const isCard = formData.method === "CREDIT_CARD" || formData.method === "DEBIT_CARD"
-  const isTransfer = formData.method === "TRANSFER"
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -205,10 +216,20 @@ export function PaymentModal({
           <div className="md:col-span-5 space-y-4">
             
             {/* PACIENTE */}
-            <div className="bg-muted/10 border border-border/60 rounded-xl p-3.5 relative" ref={dropdownRef}>
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-2">
-                <User className="w-3.5 h-3.5 text-[#008bcd]" /> Paciente Titular <span className="text-rose-500">*</span>
-              </Label>
+            <div className={cn(
+              "bg-muted/10 border rounded-xl p-3.5 relative transition-colors",
+              showErrors && isPatientMissing ? "border-rose-500/80 bg-rose-500/5" : "border-border/60"
+            )} ref={dropdownRef}>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5 text-[#008bcd]" /> Paciente Titular <span className="text-rose-500">*</span>
+                </Label>
+                {showErrors && isPatientMissing && (
+                  <span className="text-[10px] text-rose-500 font-bold flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Requerido
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
                 <Input
@@ -220,7 +241,10 @@ export function PaymentModal({
                   }}
                   onFocus={() => setShowDropdown(true)}
                   placeholder="Buscar paciente por nombre o CI..."
-                  className="pl-9 h-10 bg-background border-border text-xs font-semibold focus-visible:ring-[#008bcd]"
+                  className={cn(
+                    "pl-9 h-10 bg-background text-xs font-semibold focus-visible:ring-[#008bcd]",
+                    showErrors && isPatientMissing ? "border-rose-500 focus-visible:ring-rose-500" : "border-border"
+                  )}
                   disabled={!!editingPayment}
                 />
               </div>
@@ -255,10 +279,20 @@ export function PaymentModal({
             </div>
 
             {/* MONTO */}
-            <div className="bg-muted/10 border border-border/60 rounded-xl p-3.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-2">
-                <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> Monto a Cobrar (USD) <span className="text-rose-500">*</span>
-              </Label>
+            <div className={cn(
+              "bg-muted/10 border rounded-xl p-3.5 transition-colors",
+              showErrors && isAmountMissing ? "border-rose-500/80 bg-rose-500/5" : "border-border/60"
+            )}>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> Monto a Cobrar (USD) <span className="text-rose-500">*</span>
+                </Label>
+                {showErrors && isAmountMissing && (
+                  <span className="text-[10px] text-rose-500 font-bold flex items-center gap-1">
+                    <AlertCircle className="w-3 h-3" /> Ingrese un monto
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-muted-foreground">$</span>
                 <Input
@@ -267,12 +301,15 @@ export function PaymentModal({
                   value={formData.amount}
                   onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
                   placeholder="0.00"
-                  className="pl-7 h-11 bg-background border-border font-mono text-lg font-black text-foreground rounded-lg focus-visible:ring-[#008bcd]"
+                  className={cn(
+                    "pl-7 h-11 bg-background font-mono text-lg font-black text-foreground rounded-lg focus-visible:ring-[#008bcd]",
+                    showErrors && isAmountMissing ? "border-rose-500 focus-visible:ring-rose-500" : "border-border"
+                  )}
                 />
               </div>
             </div>
 
-            {/* MÉTODO DE PAGO: SELECTOR VISUAL DE BOTONES (NO SE DESBORDA) */}
+            {/* MÉTODO DE PAGO */}
             <div className="bg-muted/10 border border-border/60 rounded-xl p-3.5">
               <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-2.5">
                 <CreditCard className="w-3.5 h-3.5 text-[#008bcd]" /> Método de Cobro <span className="text-rose-500">*</span>
@@ -308,12 +345,23 @@ export function PaymentModal({
             
             {/* CAMPOS ESPECÍFICOS SEGÚN EL MÉTODO */}
             {isCard ? (
-              <div className="bg-muted/15 border border-border/80 rounded-xl p-4 space-y-3">
+              <div className={cn(
+                "border rounded-xl p-4 space-y-3 transition-colors",
+                showErrors && isReferenceMissing 
+                  ? "bg-rose-500/5 border-rose-500/80" 
+                  : "bg-muted/15 border-border/80"
+              )}>
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black text-[#008bcd] uppercase tracking-wider flex items-center gap-1">
                     <CreditCard className="w-3.5 h-3.5" /> Datos del POS / Datáfono
                   </span>
-                  <span className="text-[9px] text-muted-foreground">Requerido para arqueo</span>
+                  {showErrors && isReferenceMissing ? (
+                    <span className="text-[10px] text-rose-500 font-bold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> Ingrese autorización
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-muted-foreground">Requerido para arqueo</span>
+                  )}
                 </div>
 
                 {formData.method === "CREDIT_CARD" && (
@@ -358,23 +406,55 @@ export function PaymentModal({
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
                     placeholder="Ej: AUT-049821 / LOTE 012"
-                    className="mt-1 h-9 bg-background font-mono text-xs font-bold uppercase focus-visible:ring-[#008bcd]"
+                    className={cn(
+                      "mt-1 h-9 bg-background font-mono text-xs font-bold uppercase",
+                      showErrors && isReferenceMissing 
+                        ? "border-rose-500 focus-visible:ring-rose-500" 
+                        : "border-border focus-visible:ring-[#008bcd]"
+                    )}
                     required
                   />
+                  {showErrors && isReferenceMissing && (
+                    <p className="text-[10px] text-rose-500 mt-1 font-medium">
+                      El número de lote o código de autorización del voucher es obligatorio para tarjetas.
+                    </p>
+                  )}
                 </div>
               </div>
             ) : isTransfer ? (
-              <div className="bg-muted/15 border border-border/80 rounded-xl p-4 space-y-2">
-                <Label className="text-[10px] font-bold text-muted-foreground uppercase">
-                  N° de Comprobante / Transferencia <span className="text-rose-500">*</span>
-                </Label>
+              <div className={cn(
+                "border rounded-xl p-4 space-y-2 transition-colors",
+                showErrors && isReferenceMissing 
+                  ? "bg-rose-500/5 border-rose-500/80" 
+                  : "bg-muted/15 border-border/80"
+              )}>
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] font-bold text-muted-foreground uppercase">
+                    N° de Comprobante / Transferencia <span className="text-rose-500">*</span>
+                  </Label>
+                  {showErrors && isReferenceMissing && (
+                    <span className="text-[10px] text-rose-500 font-bold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3" /> Requerido
+                    </span>
+                  )}
+                </div>
                 <Input
                   value={reference}
                   onChange={(e) => setReference(e.target.value)}
                   placeholder="Ej: TRANSF-902148 Banco Pichincha"
-                  className="h-9 bg-background font-mono text-xs font-bold uppercase focus-visible:ring-[#008bcd]"
+                  className={cn(
+                    "h-9 bg-background font-mono text-xs font-bold uppercase",
+                    showErrors && isReferenceMissing 
+                      ? "border-rose-500 focus-visible:ring-rose-500" 
+                      : "border-border focus-visible:ring-[#008bcd]"
+                  )}
                   required
                 />
+                {showErrors && isReferenceMissing && (
+                  <p className="text-[10px] text-rose-500 mt-1 font-medium">
+                    Debe ingresar el número de referencia o comprobante de la transferencia.
+                  </p>
+                )}
               </div>
             ) : (
               <div className="p-4 border border-dashed border-border/80 rounded-xl bg-muted/5 flex items-center gap-3">
@@ -495,10 +575,24 @@ export function PaymentModal({
         </div>
 
         {/* FOOTER */}
-        <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20 flex gap-3 sm:justify-between items-center rounded-b-[24px]">
-          <p className="text-[10px] text-muted-foreground hidden sm:block font-medium">
-            Verifique voucher y datos antes de confirmar el ingreso a caja.
-          </p>
+        <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20 flex flex-col sm:flex-row gap-3 sm:justify-between items-center rounded-b-[24px]">
+          <div className="text-[11px] font-medium">
+            {showErrors && (isPatientMissing || isAmountMissing || isReferenceMissing) ? (
+              <span className="text-rose-500 font-bold flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                {isReferenceMissing 
+                  ? "Debe ingresar el código de autorización o referencia del voucher."
+                  : isAmountMissing 
+                  ? "Ingrese un monto válido para el cobro."
+                  : "Seleccione el paciente titular."}
+              </span>
+            ) : (
+              <p className="text-muted-foreground hidden sm:block">
+                Verifique voucher y datos antes de confirmar el ingreso a caja.
+              </p>
+            )}
+          </div>
+
           <div className="flex gap-2 w-full sm:w-auto">
             <Button 
               variant="outline" 
@@ -508,8 +602,9 @@ export function PaymentModal({
               Cancelar
             </Button>
             <Button
+              type="button"
               onClick={handleSubmit}
-              disabled={isSaving || !formData.patientId || !formData.amount || (isCard && !reference.trim())}
+              disabled={isSaving}
               className="bg-[#008bcd] hover:bg-[#0073ab] text-white rounded-lg text-xs font-bold h-9 px-5 shadow-xs transition-all active:scale-95 w-full sm:w-auto"
             >
               {isSaving ? (
