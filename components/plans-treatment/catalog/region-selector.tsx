@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { Grid, Layers, Sparkles, AlertCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -29,13 +29,22 @@ const SEXTANTES = [
 ]
 
 export function RegionSelector({ selectedLocation, onSelectLocation }: RegionSelectorProps) {
-  const [activeTab, setActiveTab] = useState<"GENERAL" | "TOOTH" | "ARCADA" | "SEXTANTE">(selectedLocation.type || "GENERAL")
+  const [activeTab, setActiveTab] = useState<"GENERAL" | "TOOTH" | "ARCADA" | "SEXTANTE">(
+    selectedLocation?.type || "GENERAL"
+  )
+
+  useEffect(() => {
+    if (selectedLocation?.type && selectedLocation.type !== activeTab) {
+      setActiveTab(selectedLocation.type)
+    }
+  }, [selectedLocation?.type])
 
   const handleTabChange = (type: "GENERAL" | "TOOTH" | "ARCADA" | "SEXTANTE") => {
     setActiveTab(type)
-    if (type === "GENERAL") {
-      onSelectLocation({ type: "GENERAL", value: "" })
-    }
+    onSelectLocation({
+      type,
+      value: selectedLocation.type === type ? selectedLocation.value : ""
+    })
   }
 
   return (
@@ -85,6 +94,7 @@ export function RegionSelector({ selectedLocation, onSelectLocation }: RegionSel
           <Grid className="w-3.5 h-3.5" /> Sextantes
         </button>
       </div>
+
       <div className="min-h-[42px] flex items-center">
         {activeTab === "GENERAL" && (
           <div className="text-xs text-muted-foreground font-semibold px-2 py-1 flex items-center gap-1.5">
@@ -99,7 +109,7 @@ export function RegionSelector({ selectedLocation, onSelectLocation }: RegionSel
             className="w-full h-10 px-3 text-xs font-bold bg-background border border-border/80 rounded-xl focus:ring-2 focus:ring-[#008bcd] outline-none text-foreground cursor-pointer shadow-xs"
           >
             <option value="">-- Seleccionar Pieza Dental (11 al 48) --</option>
-            {PIEZAS_DENTALES.map(p => (
+            {PIEZAS_DENTALES.map((p) => (
               <option key={p} value={p}>Pieza Dental {p}</option>
             ))}
           </select>
@@ -107,7 +117,7 @@ export function RegionSelector({ selectedLocation, onSelectLocation }: RegionSel
 
         {activeTab === "ARCADA" && (
           <div className="grid grid-cols-2 gap-2 w-full">
-            {ARCADAS.map(arc => {
+            {ARCADAS.map((arc) => {
               const isSelected = selectedLocation.type === "ARCADA" && selectedLocation.value === arc.id
               return (
                 <button
@@ -133,13 +143,12 @@ export function RegionSelector({ selectedLocation, onSelectLocation }: RegionSel
             className="w-full h-10 px-3 text-xs font-bold bg-background border border-border/80 rounded-xl focus:ring-2 focus:ring-[#008bcd] outline-none text-foreground cursor-pointer shadow-xs"
           >
             <option value="">-- Seleccionar Sextante Periodontal --</option>
-            {SEXTANTES.map(sex => (
+            {SEXTANTES.map((sex) => (
               <option key={sex.id} value={sex.id}>{sex.label}</option>
             ))}
           </select>
         )}
       </div>
-
     </div>
   )
 }

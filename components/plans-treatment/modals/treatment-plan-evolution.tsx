@@ -1,8 +1,15 @@
 "use client"
 
 import React, { useState } from "react"
-import { Lock, Paperclip, FileText, AlertCircle } from "lucide-react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
+import { Lock, Paperclip, AlertCircle } from "lucide-react"
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogDescription, 
+  DialogFooter 
+} from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -20,7 +27,7 @@ interface EvolutionModalProps {
   evolutionNote: string
   setEvolutionNote: (note: string | ((prev: string) => string)) => void
   handleSaveEvolution: (data?: EvolutionInput) => void
-  setIsTemplateModalOpen: (open: boolean) => void
+  availableDoctors?: Array<{ id: string; name: string }>
 }
 
 export function EvolutionModal({
@@ -33,11 +40,13 @@ export function EvolutionModal({
   evolutionNote,
   setEvolutionNote,
   handleSaveEvolution,
-  setIsTemplateModalOpen
+  availableDoctors = []
 }: EvolutionModalProps) {
   const { toast } = useToast()
-  
-  const [selectedDoctor, setSelectedDoctor] = useState(plan?.doctor?.name || "Dr. Asignado")
+
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(
+    plan?.doctor?.id || plan?.doctorId || ""
+  )
   const [isPrivateEvolution, setIsPrivateEvolution] = useState(false)
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [hasIncident, setHasIncident] = useState(false)
@@ -48,8 +57,8 @@ export function EvolutionModal({
     if (!evolutionNote.trim()) {
       setShowError(true)
       toast({
-        title: "Campos incompletos",
-        description: "Debes completar la Nota de Evolución.",
+        title: "Campos requeridos",
+        description: "Debe ingresar una nota de evolución clínica para registrar el avance.",
         variant: "destructive"
       })
       return
@@ -61,7 +70,7 @@ export function EvolutionModal({
       isPrivate: isPrivateEvolution,
       hasIncident,
       hasAdverseEvent,
-      doctorId: selectedDoctor
+      doctorId: selectedDoctorId || plan?.doctor?.id || plan?.doctorId
     })
   }
 
@@ -83,64 +92,61 @@ export function EvolutionModal({
 
         <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-6 overflow-y-auto max-h-[calc(88vh-130px)]">
           <div className="md:col-span-7 space-y-4 flex flex-col">
+            
+            {/* PROFESIONAL A CARGO */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1">
-                Profesional a cargo <span className="text-red-500 font-extrabold">*</span>
+                Profesional Tratante <span className="text-red-500 font-extrabold">*</span>
               </Label>
               <select 
-                value={selectedDoctor}
-                onChange={(e) => setSelectedDoctor(e.target.value)}
+                value={selectedDoctorId}
+                onChange={(e) => setSelectedDoctorId(e.target.value)}
                 className="w-full border border-border rounded-xl h-10 px-3 text-xs font-bold bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#008bcd]"
               >
-                <option value={plan?.doctor?.name || "Dr. Asignado"}>
-                  {plan?.doctor?.name || "Dr. Asignado"}
+                <option value={plan?.doctor?.id || plan?.doctorId || ""}>
+                  👨‍⚕️ {plan?.doctor?.name || "Dr(a). Asignado al Plan"}
                 </option>
+                {availableDoctors
+                  .filter((d) => d.id !== plan?.doctor?.id && d.id !== plan?.doctorId)
+                  .map((doc) => (
+                    <option key={doc.id} value={doc.id}>
+                      👨‍⚕️ Dr(a). {doc.name}
+                    </option>
+                  ))}
               </select>
             </div>
 
+            {/* NOTA DE EVOLUCIÓN DIRECTA */}
             <div className="space-y-1.5 flex-1 flex flex-col">
-              <div className="flex justify-between items-center">
-                <Label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1">
-                  Nota de Evolución <span className="text-red-500 font-extrabold">*</span>
-                </Label>
-                
-                <button 
-                  type="button" 
-                  onClick={() => setIsTemplateModalOpen(true)}
-                  className="text-xs font-bold text-[#008bcd] dark:text-blue-400 hover:underline flex items-center gap-1 bg-blue-500/10 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
-                >
-                  <FileText className="w-3.5 h-3.5" /> Usar plantilla
-                </button>
-              </div>
+              <Label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1">
+                Nota Clínica de Evolución <span className="text-red-500 font-extrabold">*</span>
+              </Label>
 
               <div className={`border rounded-xl overflow-hidden bg-background flex flex-col flex-1 shadow-xs transition-all ${
                 showError && !evolutionNote.trim() 
                   ? "border-red-500 ring-2 ring-red-500/20" 
                   : "border-border focus-within:border-[#008bcd]"
               }`}>
-                <div className="flex items-center gap-1 p-1 bg-muted/40 border-b border-border text-xs font-bold text-foreground">
-                  <span className="w-6 h-6 flex items-center justify-center hover:bg-muted rounded cursor-pointer">B</span>
-                  <span className="w-6 h-6 flex items-center justify-center italic hover:bg-muted rounded cursor-pointer">I</span>
-                  <span className="w-6 h-6 flex items-center justify-center underline hover:bg-muted rounded cursor-pointer">U</span>
-                </div>
                 <Textarea 
                   value={evolutionNote} 
                   onChange={(e) => {
                     setEvolutionNote(e.target.value)
                     if (e.target.value.trim()) setShowError(false)
                   }} 
-                  className="min-h-[140px] border-none shadow-none focus-visible:ring-0 resize-none p-3 text-xs font-medium leading-relaxed bg-transparent text-foreground placeholder:text-muted-foreground" 
-                  placeholder="Escriba los detalles clínicos del procedimiento efectuado (Requerido)..." 
+                  className="min-h-[170px] border-none shadow-none focus-visible:ring-0 resize-none p-3 text-xs font-medium leading-relaxed bg-transparent text-foreground placeholder:text-muted-foreground" 
+                  placeholder="Detalle el instrumental utilizado, anestésico, procedimiento efectuado y respuesta clínica del paciente..." 
                 />
               </div>
+
               {showError && !evolutionNote.trim() && (
                 <p className="text-[11px] font-bold text-red-500 flex items-center gap-1 mt-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> Este campo es obligatorio para continuar.
+                  <AlertCircle className="w-3.5 h-3.5" /> La nota de evolución es obligatoria para continuar.
                 </p>
               )}
             </div>
           </div>
 
+          {/* OPCIONES LATERALES */}
           <div className="md:col-span-5 space-y-4 flex flex-col justify-between border-t md:border-t-0 md:border-l border-border pt-4 md:pt-0 md:pl-6">
             <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1">
               <div className="flex items-center gap-2">
@@ -150,7 +156,7 @@ export function EvolutionModal({
                 </label>
               </div>
               <p className="text-[10px] text-amber-800/80 dark:text-amber-400 font-medium pl-6">
-                (Opcional) Sólo podrá ser leída por el profesional emisor.
+                (Opcional) Sólo podrá ser consultada por el doctor tratante emisor.
               </p>
             </div>
 
@@ -161,7 +167,7 @@ export function EvolutionModal({
               <label className="flex flex-col items-center justify-center gap-1.5 w-full p-4 border border-dashed border-border rounded-xl cursor-pointer hover:bg-muted/40 transition-colors bg-background">
                 <Paperclip className="w-4 h-4 text-[#008bcd]" />
                 <span className="text-xs font-bold text-foreground text-center truncate max-w-[200px]">
-                  {attachedFile ? attachedFile.name : "Adjuntar archivo"}
+                  {attachedFile ? attachedFile.name : "Adjuntar radiografía o documento"}
                 </span>
                 <span className="text-[10px] text-muted-foreground">PDF, JPG o PNG (máx 10MB)</span>
                 <input type="file" className="hidden" onChange={(e) => setAttachedFile(e.target.files?.[0] || null)} />
@@ -175,7 +181,7 @@ export function EvolutionModal({
                 </p>
                 <div className="flex items-center gap-2 mt-0.5">
                   <Checkbox id="inc-chk" checked={hasIncident} onCheckedChange={(c) => setHasIncident(!!c)} />
-                  <label htmlFor="inc-chk" className="text-xs font-semibold text-foreground cursor-pointer">Sí, registrar incidente</label>
+                  <label htmlFor="inc-chk" className="text-xs font-semibold text-foreground cursor-pointer">Sí, registrar incidente clínico</label>
                 </div>
               </div>
 
@@ -199,9 +205,9 @@ export function EvolutionModal({
           <Button 
             size="sm" 
             onClick={onSubmit} 
-            className="bg-[#22c55e] hover:bg-[#16a34a] text-white font-extrabold px-6 rounded-xl shadow-xs cursor-pointer active:scale-95 transition-all"
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 rounded-xl shadow-xs cursor-pointer active:scale-95 transition-all"
           >
-            Evolucionar al {evolutionProgress}%
+            Guardar y Evolucionar al {evolutionProgress}%
           </Button>
         </DialogFooter>
 
@@ -209,3 +215,5 @@ export function EvolutionModal({
     </Dialog>
   )
 }
+
+export default EvolutionModal

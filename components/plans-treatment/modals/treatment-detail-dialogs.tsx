@@ -20,6 +20,7 @@ interface TreatmentDetailDialogsProps {
   setIsSectionModalOpen: (open: boolean) => void
   sectionName: string
   setSectionName: (name: string) => void
+  handleAddSection?: () => void
   isDiscountModalOpen: boolean
   setIsDiscountModalOpen: (open: boolean) => void
   tempDiscount: string
@@ -27,11 +28,13 @@ interface TreatmentDetailDialogsProps {
   handleApplyDiscount: () => void
   isCatalogModalOpen: boolean
   setIsCatalogModalOpen: (open: boolean) => void
-  catalogSearch: string
-  setCatalogSearch: (search: string) => void
-  filteredCatalog: any[]
+  catalogSearch?: string
+  setCatalogSearch?: (search: string) => void
+  filteredCatalog?: any[]
   handleAddManualProcedure: (procedure: any, toothNum?: string) => Promise<void>
   isAddingProcedure: boolean
+  targetToothOrRegion?: string
+  initialLocation?: { type: "GENERAL" | "TOOTH" | "ARCADA" | "SEXTANTE"; value: string }
   isEvolutionModalOpen: boolean
   setIsEvolutionModalOpen: (open: boolean) => void
   evolutionProgress: number
@@ -43,6 +46,7 @@ interface TreatmentDetailDialogsProps {
   setIsDiagnosisModalOpen: (open: boolean) => void
   selectedDiagnosis: string
   setSelectedDiagnosis: (diag: string) => void
+  handleSaveDiagnosis?: () => void
   isSignatureModalOpen: boolean
   setIsSignatureModalOpen: (open: boolean) => void
   handleSaveSignature: (signature: string) => Promise<void>
@@ -55,6 +59,7 @@ interface TreatmentDetailDialogsProps {
   deleteMode: "ALL" | "SELECTED"
   handleClearPlan: () => Promise<void>
   executeDeleteSelected: () => Promise<void>
+  onPlanUpdate?: () => void
   itemsToDelete: string[]
 }
 
@@ -67,6 +72,7 @@ export function TreatmentDetailDialogs({
   setIsSectionModalOpen,
   sectionName,
   setSectionName,
+  handleAddSection,
   isDiscountModalOpen,
   setIsDiscountModalOpen,
   tempDiscount,
@@ -74,11 +80,13 @@ export function TreatmentDetailDialogs({
   handleApplyDiscount,
   isCatalogModalOpen,
   setIsCatalogModalOpen,
-  catalogSearch,
+  catalogSearch = "",
   setCatalogSearch,
-  filteredCatalog,
+  filteredCatalog = [],
   handleAddManualProcedure,
   isAddingProcedure,
+  targetToothOrRegion,
+  initialLocation,
   isEvolutionModalOpen,
   setIsEvolutionModalOpen,
   evolutionProgress,
@@ -90,6 +98,7 @@ export function TreatmentDetailDialogs({
   setIsDiagnosisModalOpen,
   selectedDiagnosis,
   setSelectedDiagnosis,
+  handleSaveDiagnosis,
   isSignatureModalOpen,
   setIsSignatureModalOpen,
   handleSaveSignature,
@@ -104,6 +113,18 @@ export function TreatmentDetailDialogs({
   executeDeleteSelected,
   itemsToDelete
 }: TreatmentDetailDialogsProps) {
+  // Construir la ubicación anatómica exacta para el modal
+  const computedLocation = initialLocation || (targetToothOrRegion ? {
+    type: targetToothOrRegion.includes("Arcada")
+      ? ("ARCADA" as const)
+      : targetToothOrRegion.includes("Sextante")
+      ? ("SEXTANTE" as const)
+      : targetToothOrRegion.toLowerCase() === "general"
+      ? ("GENERAL" as const)
+      : ("TOOTH" as const),
+    value: targetToothOrRegion === "GENERAL" ? "" : targetToothOrRegion
+  } : { type: "GENERAL" as const, value: "" })
+
   return (
     <>
       <TreatmentPlanModals 
@@ -114,7 +135,7 @@ export function TreatmentDetailDialogs({
         setIsSectionModalOpen={setIsSectionModalOpen} 
         sectionName={sectionName} 
         setSectionName={setSectionName} 
-        handleAddSection={() => setIsSectionModalOpen(false)}
+        handleAddSection={handleAddSection || (() => setIsSectionModalOpen(false))}
         isDiscountModalOpen={isDiscountModalOpen} 
         setIsDiscountModalOpen={setIsDiscountModalOpen} 
         tempDiscount={tempDiscount} 
@@ -127,6 +148,7 @@ export function TreatmentDetailDialogs({
         filteredCatalog={filteredCatalog} 
         handleAddManualProcedure={handleAddManualProcedure} 
         isAddingProcedure={isAddingProcedure}
+        initialLocation={computedLocation}
         isEvolutionModalOpen={isEvolutionModalOpen} 
         setIsEvolutionModalOpen={setIsEvolutionModalOpen} 
         evolutionProgress={evolutionProgress} 
@@ -138,25 +160,26 @@ export function TreatmentDetailDialogs({
         setIsDiagnosisModalOpen={setIsDiagnosisModalOpen} 
         selectedDiagnosis={selectedDiagnosis} 
         setSelectedDiagnosis={setSelectedDiagnosis} 
-        handleSaveDiagnosis={() => setIsDiagnosisModalOpen(false)}
+        handleSaveDiagnosis={handleSaveDiagnosis || (() => setIsDiagnosisModalOpen(false))}
       />
 
       <SignaturePadModal 
         isOpen={isSignatureModalOpen} 
         setIsOpen={setIsSignatureModalOpen} 
         onSaveSignature={handleSaveSignature} 
-        patientName={`${patient?.firstName || ''} ${patient?.lastName || ''}`} 
+        patientName={`${patient?.firstName || ""} ${patient?.lastName || ""}`.trim() || "Paciente"} 
       />
 
-    <AssignCollaboratorsModal 
-      isOpen={isCollaboratorsOpen} 
-      setIsOpen={setIsCollaboratorsOpen} 
-      planId={plan?.id}
-      mainDoctorId={plan?.doctorId || plan?.doctor?.id}
-      currentUser={currentUser}
-      currentCollaborators={collaborators} 
-      onSaveCollaborators={(selected: string[]) => setCollaborators(selected)} 
-    />
+      <AssignCollaboratorsModal 
+        isOpen={isCollaboratorsOpen} 
+        setIsOpen={setIsCollaboratorsOpen} 
+        planId={plan?.id}
+        mainDoctorId={plan?.doctorId || plan?.doctor?.id}
+        currentUser={currentUser}
+        currentCollaborators={collaborators} 
+        onSaveCollaborators={(selected: string[]) => setCollaborators(selected)} 
+      />
+
       <AlertDialog open={isDeleteModalOpen} onOpenChange={setIsDeleteModalOpen}>
         <AlertDialogContent className="bg-card border border-border/80 rounded-2xl shadow-2xl sm:max-w-[420px] p-6 font-sans antialiased">
           <AlertDialogHeader className="flex flex-col items-center text-center space-y-3">
@@ -188,3 +211,5 @@ export function TreatmentDetailDialogs({
     </>
   )
 }
+
+export default TreatmentDetailDialogs

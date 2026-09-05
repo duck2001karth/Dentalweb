@@ -18,7 +18,7 @@ interface AssignCollaboratorsModalProps {
   doctorsList?: any[]
   currentCollaborators?: string[]
   currentUser?: any 
-  onSaveCollaborators: (selectedIds: string[]) => void
+  onSaveCollaborators: (selected: string[]) => void
 }
 
 export function AssignCollaboratorsModal({
@@ -28,16 +28,19 @@ export function AssignCollaboratorsModal({
   mainDoctorId,
   doctorsList,
   currentCollaborators = [],
+  currentUser,
   onSaveCollaborators
 }: AssignCollaboratorsModalProps) {
   const { data: session } = useSession()
   const { toast } = useToast()
 
-  const userRole = (session?.user as any)?.role || "DOCTOR"
-  const currentUserId = session?.user?.id
-  const canAssign = userRole === "ADMIN" || userRole === "RECEPCION"
+  const rawRole = String(currentUser?.role || (session?.user as any)?.role || "DOCTOR").toUpperCase()
+  const currentUserId = currentUser?.id || session?.user?.id
+  
+  // Doctores, Recepción y Administradores pueden gestionar colaboradores
+  const canAssign = rawRole === "ADMIN" || rawRole === "ADMINISTRADOR" || rawRole === "DOCTOR" || rawRole === "RECEPCION"
 
-  const [selectedIds, setSelectedIds] = useState<string[]>(currentCollaborators)
+  const [selectedList, setSelectedList] = useState<string[]>(currentCollaborators)
   const [fetchedDoctors, setFetchedDoctors] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [isSaving, setIsSaving] = useState<boolean>(false)
@@ -45,7 +48,7 @@ export function AssignCollaboratorsModal({
 
   useEffect(() => {
     if (isOpen) {
-      setSelectedIds(currentCollaborators)
+      setSelectedList(currentCollaborators)
       setSearchQuery("")
     }
   }, [isOpen, currentCollaborators])
@@ -68,7 +71,7 @@ export function AssignCollaboratorsModal({
       })
       .then((data) => {
         if (!isMounted) return
-        const list = Array.isArray(data) ? data : (data.users || data.doctors || [])
+        const list = Array.isArray(data) ? data : (data.users || data.doctors || data.data || [])
         setFetchedDoctors(list)
       })
       .catch(() => {
@@ -82,59 +85,58 @@ export function AssignCollaboratorsModal({
     return () => {
       isMounted = false
     }
-  }, [isOpen, canAssign])
+  }, [isOpen, canAssign, doctorsList])
 
   const rawDoctors = (doctorsList && doctorsList.length > 0) ? doctorsList : fetchedDoctors
 
+  // Excluir al doctor principal del plan para no duplicarlo como colaborador
   const availableDoctors = rawDoctors.filter((doc) => {
     const docId = doc.id || doc._id
     if (mainDoctorId && docId === mainDoctorId) return false
-    if (currentUserId && docId === currentUserId) return false
-
     return true
   })
 
   const filteredDoctors = availableDoctors.filter((doc) => {
     const name = (doc.name || `${doc.firstName || ''} ${doc.lastName || ''}`).toLowerCase()
     const spec = (doc.specialty || doc.role || "").toLowerCase()
-    const query = searchQuery.toLowerCase()
+    const query = searchQuery.toLowerCase().trim()
     return name.includes(query) || spec.includes(query)
   })
 
-  const toggleDoctor = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+  const toggleDoctor = (doc: any) => {
+    const docIdentifier = doc.name || `${doc.firstName || ''} ${doc.lastName || ''}`.trim() || doc.id
+    setSelectedList((prev) =>
+      prev.includes(docIdentifier) || prev.includes(doc.id)
+        ? prev.filter((item) => item !== docIdentifier && item !== doc.id)
+        : [...prev, docIdentifier]
     )
   }
 
   const handleSave = async () => {
-  setIsSaving(true)
-  try {
-    const selectedDoctors = rawDoctors.filter(d => selectedIds.includes(d.id) || selectedIds.includes(d.name))
-    const selectedNames = selectedDoctors.map(d => d.name || "Dr. Especialista")
+    setIsSaving(true)
+    try {
+      if (planId) {
+        const res = await fetch(`/api/treatments/${planId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ collaborators: selectedList }) 
+        })
 
-    if (planId) {
-      const res = await fetch(`/api/treatments/${planId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collaborators: selectedIds }) 
-      })
+        if (!res.ok) throw new Error("Error al guardar")
+        const data = await res.json()
+        onSaveCollaborators(data.plan?.collaborators || selectedList)
+      } else {
+        onSaveCollaborators(selectedList)
+      }
 
-      if (!res.ok) throw new Error("Error al guardar")
-      const data = await res.json()
-      onSaveCollaborators(data.plan?.collaborators || selectedNames)
-    } else {
-      onSaveCollaborators(selectedNames)
+      toast({ title: "Colaboradores asignados con éxito", variant: "success" })
+      setIsOpen(false)
+    } catch (e) {
+      toast({ title: "Error al guardar colaboradores", variant: "destructive" })
+    } finally {
+      setIsSaving(false)
     }
-
-    toast({ title: "Colaboradores asignados con éxito", variant: "success" })
-    setIsOpen(false)
-  } catch (e) {
-    toast({ title: "Error al guardar colaboradores", variant: "destructive" })
-  } finally {
-    setIsSaving(false)
   }
-}
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -153,7 +155,7 @@ export function AssignCollaboratorsModal({
           <div className="p-6 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3 my-2 text-xs">
             <ShieldAlert className="w-6 h-6 text-amber-500 shrink-0" />
             <p className="font-semibold text-amber-700 dark:text-amber-400">
-              Solo Administración y Recepción tienen permisos para gestionar la asignación de colaboradores.
+              No tienes permisos suficientes para gestionar la asignación de colaboradores.
             </p>
           </div>
         ) : (
@@ -161,7 +163,7 @@ export function AssignCollaboratorsModal({
             <div className="relative mt-2">
               <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-3" />
               <Input 
-                placeholder="Buscar especialista..."
+                placeholder="Buscar especialista por nombre o especialidad..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 h-10 rounded-xl text-xs bg-background border-border/80 focus:ring-[#008bcd]"
@@ -172,18 +174,18 @@ export function AssignCollaboratorsModal({
               {isLoading ? (
                 <div className="flex flex-col items-center justify-center py-8 text-muted-foreground gap-2">
                   <Loader2 className="w-6 h-6 animate-spin text-[#008bcd]" />
-                  <p className="text-xs font-semibold">Cargando doctores...</p>
+                  <p className="text-xs font-semibold">Cargando especialistas...</p>
                 </div>
               ) : filteredDoctors.length > 0 ? (
                 filteredDoctors.map((doc) => {
                   const docId = doc.id || doc._id
-                  const isSelected = selectedIds.includes(docId) || selectedIds.includes(doc.name)
-                  const docName = doc.name || "Dr. Especialista"
+                  const docName = doc.name || `${doc.firstName || ''} ${doc.lastName || ''}`.trim() || "Dr. Especialista"
+                  const isSelected = selectedList.includes(docName) || selectedList.includes(docId)
 
                   return (
                     <div 
                       key={docId} 
-                      onClick={() => toggleDoctor(docId)}
+                      onClick={() => toggleDoctor(doc)}
                       className={`p-3 rounded-xl border cursor-pointer flex items-center justify-between transition-all ${
                         isSelected 
                           ? "border-[#008bcd] bg-[#008bcd]/10 font-bold" 
@@ -209,7 +211,7 @@ export function AssignCollaboratorsModal({
                 })
               ) : (
                 <div className="p-6 text-center text-muted-foreground text-xs font-semibold bg-muted/20 rounded-xl border border-dashed border-border/80">
-                  No hay otros doctores disponibles para asignar.
+                  No hay especialistas disponibles para asignar.
                 </div>
               )}
             </div>
@@ -224,7 +226,7 @@ export function AssignCollaboratorsModal({
             <Button 
               onClick={handleSave} 
               disabled={isSaving}
-              className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl text-xs h-10 px-5 shadow-xs"
+              className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl text-xs h-10 px-5 shadow-xs cursor-pointer"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-1.5" /> : null}
               Guardar Asignación
@@ -235,3 +237,5 @@ export function AssignCollaboratorsModal({
     </Dialog>
   )
 }
+
+export default AssignCollaboratorsModal

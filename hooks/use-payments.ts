@@ -7,6 +7,7 @@ import type { PaymentRecord, PaymentFormData } from '@/types/billing';
 export function usePayments() {
   const { toast } = useToast();
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [lastClose, setLastClose] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -14,9 +15,25 @@ export function usePayments() {
     setIsLoading(true);
     try {
       const res = await fetch('/api/payments');
-      if (res.ok) setPayments(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setPayments(data);
+          setLastClose(null);
+        } else if (data && typeof data === 'object') {
+          setPayments(Array.isArray(data.payments) ? data.payments : []);
+          setLastClose(data.lastClose || null);
+        } else {
+          setPayments([]);
+        }
+      }
     } catch (error) {
-      toast({ title: "Error", description: "No se pudieron cargar los pagos.", variant: "destructive" });
+      toast({ 
+        title: "Error", 
+        description: "No se pudieron cargar los pagos.", 
+        variant: "destructive" 
+      });
+      setPayments([]);
     } finally {
       setIsLoading(false);
     }
@@ -37,7 +54,9 @@ export function usePayments() {
     } catch (error) {
       toast({ title: "Error de Registro", variant: "destructive" });
       return false;
-    } finally { setIsSaving(false); }
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const updatePayment = async (id: string, data: Partial<PaymentFormData>) => {
@@ -55,7 +74,9 @@ export function usePayments() {
     } catch (error) {
       toast({ title: "Error al actualizar", variant: "destructive" });
       return false;
-    } finally { setIsSaving(false); }
+    } finally { 
+      setIsSaving(false); 
+    }
   };
 
   const deletePayment = async (id: string) => {
@@ -71,5 +92,15 @@ export function usePayments() {
     }
   };
 
-  return { payments, isLoading, isSaving, fetchPayments, createPayment, updatePayment, deletePayment };
+  return { 
+    payments, 
+    lastClose, 
+    setLastClose, 
+    isLoading, 
+    isSaving, 
+    fetchPayments, 
+    createPayment, 
+    updatePayment, 
+    deletePayment 
+  };
 }

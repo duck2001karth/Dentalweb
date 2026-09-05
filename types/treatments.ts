@@ -3,16 +3,20 @@
 // --- INTERFAZ PARA PRESTACIONES/ÍTEMS INDIVIDUALES DEL PLAN ---
 export interface TreatmentItem {
   id: string;
-  treatmentPlanId: string;
-  procedureName: string;
+  treatmentPlanId?: string;
+  procedureName?: string;
+  name?: string;               
   cost: number;
+  price?: number;             
   tooth?: string | null;
+  toothNumber?: string | null; 
+  region?: string | null;      
   surfaces?: string[];
   isCompleted: boolean;
-  progress?: number;         // Porcentaje de avance (0, 25, 50, 75, 100)
-  discount?: number;        // Descuento individual por ítem (%)
-  paidAmount?: number;      // Monto abonado a esta prestación
-  isPaid?: boolean;         // Estado de pago completo
+  progress?: number;           
+  discount?: number;           
+  paidAmount?: number;         
+  isPaid?: boolean;            
   evolutionNote?: string | null;
   isPrivate?: boolean;
   fileUrl?: string | null;
@@ -24,7 +28,7 @@ export interface TreatmentItem {
   updatedAt?: string | Date;
 }
 
-// --- INTERFAZ PARA PLANTILLAS DE EVOLUCIÓN CLÍNICA ---
+// --- INTERFAZ PARA PLANTILLAS DE PROTOCOLO CLÍNICO ---
 export interface EvolutionTemplate {
   id: string;
   name: string;
@@ -41,22 +45,27 @@ export interface TreatmentPlan {
   doctor?: { 
     id?: string;
     name: string; 
-    specialty?: string 
+    specialty?: string;
   };
   name: string;
   status: string; 
   totalCost: number;
   totalPaid: number;
   progress?: number;
-  collaborators?: string;
+  discount?: number;                          
+  agreementId?: string | null;                
+  convenio?: string | null;
+  collaborators?: string | string[];          
   commentsToPatient?: string; 
+  signatureBase64?: string | null;            
   lastAppointment?: string;
-  items?: TreatmentItem[];  // Lista de prestaciones asociadas
+  items?: TreatmentItem[];                   
+  payments?: any[];                           
   createdAt: string | Date;
   updatedAt: string | Date;
 }
 
-// --- PARÁMETROS DE BÚSQUEDA Y FILTRADO ---
+
 export interface UseGetTreatmentsParams {
   patientId?: string;
   status?: string;
@@ -72,15 +81,18 @@ export interface TreatmentPlanInput {
   status?: string;
   totalCost?: number;
   totalPaid?: number;
+  discount?: number;
+  agreementId?: string | null;
 }
 
 export type UpdateTreatmentInput = Partial<TreatmentPlanInput> & { 
   progress?: number;
   commentsToPatient?: string; 
-  collaborators?: string;
+  collaborators?: string | string[];
+  signatureBase64?: string | null;
 };
 
-// --- ENTRADA COMPLETA PARA REGISTRAR EVOLUCIÓN CLÍNICA ---
+// --- ENTRADA PARA REGISTRAR EVOLUCIÓN CLÍNICA ---
 export interface EvolutionInput {
   progress: number;
   note?: string;

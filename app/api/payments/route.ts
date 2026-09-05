@@ -44,6 +44,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const patientId = searchParams.get("patientId")
     const dateParam = searchParams.get("date")
+    const currentShift = searchParams.get("currentShift") === "true"
+    const lastClose = await prisma.cashRegisterClose.findFirst({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, createdAt: true, countedCash: true, status: true },
+    })
 
     const whereClause: any = {
       NOT: {
@@ -62,6 +67,10 @@ export async function GET(request: Request) {
       whereClause.createdAt = {
         gte: startOfDay,
         lte: endOfDay,
+      }
+    } else if (currentShift && lastClose) {
+      whereClause.createdAt = {
+        gt: lastClose.createdAt,
       }
     }
 
@@ -94,8 +103,10 @@ export async function GET(request: Request) {
       },
       orderBy: { createdAt: "desc" },
     })
-
-    return NextResponse.json(payments)
+    return NextResponse.json({
+      payments,
+      lastClose: lastClose || null,
+    })
   } catch (error) {
     console.error("Error al obtener pagos:", error)
     return NextResponse.json({ error: "Error al obtener historial de pagos" }, { status: 500 })

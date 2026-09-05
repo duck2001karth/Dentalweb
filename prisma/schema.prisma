@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  //directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -138,6 +138,7 @@ model User {
   liquidations      Liquidation[] @relation("DoctorLiquidations")
 
   createdTemplates DocumentTemplate[] @relation("CreatedTemplates")
+  cashRegisterCloses CashRegisterClose[] @relation("UserCashCloses")
 
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -800,4 +801,33 @@ model DocumentTemplate {
 
   @@index([type])
   @@index([isActive])
+}
+
+// ==========================================
+// 8. CIERRES Y ARQUEOS DE CAJA (Carmo Dental)
+// ==========================================
+
+enum CashCloseStatus {
+  BALANCED  // Caja cuadrada
+  SURPLUS   // Sobrante
+  DEFICIT   // Faltante
+}
+
+model CashRegisterClose {
+  id           String          @id @default(uuid())
+  userId       String
+  user         User            @relation("UserCashCloses", fields: [userId], references: [id], onDelete: Cascade)
+
+  expectedCash Float           // Monto teórico calculado por el sistema
+  countedCash  Float           // Monto físico contado por el cajero
+  difference   Float           // countedCash - expectedCash
+  status       CashCloseStatus @default(BALANCED)
+  
+  notes        String?         @db.Text // Justificación obligatoria en descuadres
+  breakdown    Json?           // Desglose de billetes y monedas en formato JSON
+
+  createdAt    DateTime        @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
 }
