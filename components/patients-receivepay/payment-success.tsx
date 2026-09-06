@@ -7,26 +7,24 @@ import { useToast } from "@/hooks/use-toast"
 import { useClinicSettings } from "@/config/clinic-settings"
 import { generateReceiptHTML } from "./receipt-print-sheet"
 
-interface PaymentSuccessStepProps {
-  invoiceId: string | null
-  totalPaid: number
-  paymentMethod: string
-  patient?: any
-  items?: any[]
-  onReset: () => void
-}
-
 const formatPaymentMethod = (method?: string) => {
   if (!method) return "Efectivo"
   const m = method.toUpperCase().trim()
-  switch (m) {
-    case "CASH": case "EFECTIVO": return "Efectivo"
-    case "CREDIT_CARD": case "TARJETA_CREDITO": case "TARJETA": return "Tarjeta de Crédito"
-    case "DEBIT_CARD": case "TARJETA_DEBITO": return "Tarjeta de Débito"
-    case "TRANSFER": case "TRANSFERENCIA": case "DEUNA": return "Transferencia Bancaria"
-    case "CHECK": case "CHEQUE": return "Cheque"
-    default: return method
+  
+  if (m === "CASH" || m === "EFECTIVO") return "Efectivo"
+  if (m === "TRANSFER" || m === "TRANSFERENCIA") return "Transferencia Bancaria"
+  if (m === "TARJETA_DEBITO") return "Tarjeta de Débito"
+  if (m === "TARJETA_CREDITO_CORRIENTE") return "T. Crédito (Corriente)"
+  
+  if (m.startsWith("TARJETA_CREDITO_DIFERIDO_")) {
+    const months = m.split("_").pop()
+    return `T. Crédito (Diferido ${months} meses)`
   }
+  
+  if (m === "TARJETA" || m === "CREDIT_CARD") return "Tarjeta"
+  if (m === "CHECK" || m === "CHEQUE") return "Cheque"
+  
+  return method
 }
 
 const formatReceiptCode = (rawId: string | null) => {
@@ -38,6 +36,15 @@ const formatReceiptCode = (rawId: string | null) => {
   return `#REC-${clean}`
 }
 
+interface PaymentSuccessStepProps {
+  invoiceId: string | null
+  totalPaid: number
+  paymentMethod: string
+  patient?: any
+  items?: any[]
+  onReset: () => void
+}
+
 export function PaymentSuccessStep({
   invoiceId,
   totalPaid,
@@ -47,7 +54,7 @@ export function PaymentSuccessStep({
   onReset
 }: PaymentSuccessStepProps) {
   const { toast } = useToast()
-  const { settings } = useClinicSettings() 
+  const { settings } = useClinicSettings()
   
   const [copied, setCopied] = useState(false)
   const [isPrinting, setIsPrinting] = useState(false)
@@ -71,14 +78,10 @@ export function PaymentSuccessStep({
     window.open(`/api/invoices/${invoiceId}/pdf`, "_blank")
   }
 
-  // Simulación de envío a n8n / WhatsApp
   const handleSendWhatsApp = async () => {
     setIsSendingWa(true)
     try {
-      // Aquí iría tu fetch al webhook de n8n
-      // await fetch("TU_WEBHOOK_DE_N8N", { method: "POST", body: ... })
-      
-      await new Promise(resolve => setTimeout(resolve, 1500)) 
+      await new Promise(resolve => setTimeout(resolve, 1500))
       toast({
         title: "¡WhatsApp Enviado!",
         description: `El comprobante fue enviado al número de ${patientName}.`,
@@ -94,6 +97,7 @@ export function PaymentSuccessStep({
 
   const handlePrintReceipt = () => {
     setIsPrinting(true)
+
     const receiptHtml = generateReceiptHTML({
       receiptNumber: displayCode,
       patientName,
@@ -101,7 +105,7 @@ export function PaymentSuccessStep({
       totalPaid,
       paymentMethod: displayMethod,
       items,
-      clinic: settings 
+      clinic: settings
     })
 
     const iframe = document.createElement("iframe")
@@ -133,7 +137,6 @@ export function PaymentSuccessStep({
   return (
     <div className="p-8 sm:p-10 flex flex-col items-center text-center space-y-8 animate-in zoom-in-95 duration-300 font-sans antialiased w-full">
       
-      {/* ANIMACIÓN DE ÉXITO PREMIUM */}
       <div className="relative flex items-center justify-center mt-2">
         <div className="absolute inset-0 bg-emerald-500/20 blur-2xl rounded-full scale-150" />
         <div className="relative w-24 h-24 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-3xl flex items-center justify-center shadow-xl shadow-emerald-500/30 ring-4 ring-white/50">
@@ -159,10 +162,7 @@ export function PaymentSuccessStep({
         </div>
       </div>
 
-      {/* TARJETA DE RESUMEN FINANCIERO */}
       <div className="w-full max-w-md bg-white border border-slate-200 rounded-[20px] p-6 space-y-5 shadow-sm relative overflow-hidden">
-        
-        {/* MONTO COBRADO */}
         <div className="flex flex-col items-center justify-center relative z-10 space-y-1">
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             Monto Cobrado
@@ -172,7 +172,6 @@ export function PaymentSuccessStep({
           </span>
         </div>
 
-        {/* DETALLES (PACIENTE Y MÉTODO) */}
         <div className="grid grid-cols-2 gap-4 pt-5 border-t border-slate-100 relative z-10">
           <div className="text-left">
             <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Paciente</span>
@@ -189,10 +188,7 @@ export function PaymentSuccessStep({
         </div>
       </div>
 
-      {/* BOTONES DE ACCIÓN (GRID MEJORADO) */}
       <div className="w-full max-w-md space-y-3 pt-2">
-        
-        {/* ACCIONES PRINCIPALES (WHATSAPP Y PDF) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Button
             type="button"
@@ -214,7 +210,6 @@ export function PaymentSuccessStep({
           </Button>
         </div>
 
-        {/* ACCIONES SECUNDARIAS (IMPRIMIR Y FINALIZAR) */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Button
             type="button"
@@ -236,9 +231,7 @@ export function PaymentSuccessStep({
             <ArrowRight className="w-4 h-4 opacity-80" />
           </Button>
         </div>
-
       </div>
-
     </div>
   )
 }
