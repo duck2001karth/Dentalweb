@@ -62,12 +62,27 @@ export function PaymentReceiptModal({
       if (p && p.id && !uniquePlansMap.has(p.id)) uniquePlansMap.set(p.id, p)
     })
 
+    const patientConvenioDiscount = parseFloat(
+      patient?.convenioDiscount ?? patient?.agreementDiscount ?? patient?.convenioPercent ?? 0
+    )
+
     Array.from(uniquePlansMap.values()).forEach((p: any) => {
       if (p.status !== "CANCELLED" && Array.isArray(p.items || p.treatmentItems)) {
-        (p.items || p.treatmentItems).forEach((item: any) => {
+        const planGlobalDiscount = parseFloat(
+          p.discountPercent ?? p.discount ?? p.planDiscountPercent ?? 0
+        )
+        const planConvenioDiscount = parseFloat(
+          p.agreementDiscountPercent ?? p.convenioDiscount ?? patientConvenioDiscount ?? 0
+        )
+        const effectivePlanDiscount = Math.max(planGlobalDiscount, planConvenioDiscount)
+
+        ;(p.items || p.treatmentItems).forEach((item: any) => {
           const cost = parseFloat(item.cost ?? item.price ?? 0)
-          const dscto = parseFloat(item.discount ?? 0)
-          const finalPrice = cost - (cost * (dscto / 100))
+          const itemDiscount = parseFloat(item.discount ?? 0)
+          const effectiveDiscountPercent = itemDiscount > 0 ? itemDiscount : effectivePlanDiscount
+
+          const discountAmount = cost * (effectiveDiscountPercent / 100)
+          const finalPrice = Math.max(0, cost - discountAmount)
           const paid = parseFloat(item.paidAmount ?? 0)
           const itemDebt = Math.max(0, finalPrice - paid)
 
@@ -76,10 +91,14 @@ export function PaymentReceiptModal({
               ...item,
               id: item.id || `item-${Math.random()}`,
               name: item.procedureName || item.name || "Prestación Dental",
-              toothLabel: formatToothLocation(item), // 👈 Pieza dental limpia y legible
+              toothLabel: formatToothLocation(item),
               planName: p.name || `Plan #${p.id?.slice(-4)?.toUpperCase()}`,
               planId: p.id,
               cost,
+              discountPercent: effectiveDiscountPercent,
+              discountAmount,
+              hasConvenio: effectivePlanDiscount > 0 || Boolean(p.agreementName || patient?.convenio),
+              convenioName: p.agreementName || patient?.convenio || null,
               finalPrice,
               paidAmount: paid,
               itemDebt
@@ -128,6 +147,18 @@ export function PaymentReceiptModal({
 
     setIsProcessing(true)
     try {
+      const selectedItemsData = pendingItems
+        .filter((item: any) => selectedItemIds.includes(item.id))
+        .map((item: any) => ({
+          id: item.id,
+          treatmentPlanId: item.planId,
+          baseCost: item.cost,
+          discountPercent: item.discountPercent,
+          finalPrice: item.finalPrice,
+          paidAmount: item.paidAmount,
+          payingAmount: item.itemDebt
+        }))
+
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -138,6 +169,7 @@ export function PaymentReceiptModal({
           reference: requiresReference ? reference : null,
           receiptImage: receiptImage || null,
           itemIds: selectedItemIds,
+          itemsBreakdown: selectedItemsData,
           treatmentPlanId: pendingItems[0]?.planId || undefined
         })
       })

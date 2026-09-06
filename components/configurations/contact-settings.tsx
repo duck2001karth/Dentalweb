@@ -22,7 +22,7 @@ export function ContactSettingsTab({ settings, setSettings }: ContactSettingsTab
           value={settings.address || ""} 
           onChange={(e) => setSettings({ ...settings, address: e.target.value })} 
           className="h-11 rounded-xl bg-background text-sm" 
-          placeholder="Ej: Solanda Sector 4, José Argudo S24-72 y Av. Solanda" 
+          placeholder="Av. calle 123, Edificio Ejemplo, Oficina 456" 
         />
       </div>
 
@@ -101,7 +101,7 @@ export function ContactSettingsTab({ settings, setSettings }: ContactSettingsTab
           value={settings.website || ""} 
           onChange={(e) => setSettings({ ...settings, website: e.target.value })} 
           className="h-11 rounded-xl bg-background text-sm" 
-          placeholder="https://carmodental.com" 
+          placeholder="https://clinicaejemplo.com" 
         />
       </div>
     </div>
