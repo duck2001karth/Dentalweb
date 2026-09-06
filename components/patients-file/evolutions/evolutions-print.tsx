@@ -24,8 +24,6 @@ export function EvolutionsPrint({
   doctorSpecialty,
 }: EvolutionsPrintProps) {
   const { settings } = useClinicSettings()
-
-  if (!evolutionNotes || evolutionNotes.length === 0) return null
   const clinicName = settings?.clinicName?.trim() || "CLÍNICA ODONTOLÓGICA"
   const clinicSlogan = settings?.slogan?.trim() || "CENTRO DE ESPECIALIDADES MÉDICAS Y DENTALES"
   const doctorHolder = settings?.razonSocial?.trim() || "Dr. Especialista Asignado"
@@ -131,58 +129,65 @@ export function EvolutionsPrint({
               </span>
             </div>
             
-            {evolutionNotes.map((note) => {
-              const statusConfig = treatmentStatuses[note.status] || treatmentStatuses.IN_PROGRESS
-              const noteDate = note.createdAt ? format(new Date(note.createdAt), "dd/MM/yyyy HH:mm", { locale: es }) : "--"
+            {/* 💥 MANEJO DEL ESTADO VACÍO DENTRO DE LA UI */}
+            {evolutionNotes.length === 0 ? (
+              <div className="py-10 text-center text-[11px] text-slate-500 italic">
+                No hay evoluciones clínicas registradas para este paciente.
+              </div>
+            ) : (
+              evolutionNotes.map((note) => {
+                const statusConfig = treatmentStatuses[note.status] || treatmentStatuses.IN_PROGRESS
+                const noteDate = note.createdAt ? format(new Date(note.createdAt), "dd/MM/yyyy HH:mm", { locale: es }) : "--"
 
-              return (
-                <div key={note.id} className="border border-neutral-200 rounded-xl p-3.5 bg-white break-inside-avoid shadow-xs">
-                  <div className="flex justify-between items-center border-b border-neutral-100 pb-1.5 mb-2">
-                    <div>
-                      <h3 className="font-bold text-[#008bcd] text-xs uppercase tracking-wider">
-                        Evolución #{note.id?.slice(-4).toUpperCase() || "EVOL"}
-                      </h3>
-                      <p className="text-[10px] text-neutral-500 font-mono mt-0.5">{noteDate}</p>
+                return (
+                  <div key={note.id} className="border border-neutral-200 rounded-xl p-3.5 bg-white break-inside-avoid shadow-xs">
+                    <div className="flex justify-between items-center border-b border-neutral-100 pb-1.5 mb-2">
+                      <div>
+                        <h3 className="font-bold text-[#008bcd] text-xs uppercase tracking-wider">
+                          Evolución #{note.id?.slice(-4).toUpperCase() || "EVOL"}
+                        </h3>
+                        <p className="text-[10px] text-neutral-500 font-mono mt-0.5">{noteDate}</p>
+                      </div>
+                      <span className={`text-[9px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${statusConfig.bg || "bg-neutral-50"} ${statusConfig.color || "text-neutral-700"}`}>
+                        {statusConfig.label}
+                      </span>
                     </div>
-                    <span className={`text-[9px] font-bold uppercase px-2.5 py-0.5 rounded-full border ${statusConfig.bg || "bg-neutral-50"} ${statusConfig.color || "text-neutral-700"}`}>
-                      {statusConfig.label}
-                    </span>
+                    
+                    <div className="text-xs text-neutral-800 leading-relaxed whitespace-pre-wrap font-medium">
+                      {note.content}
+                    </div>
+
+                    {note.fileUrl && (
+                      <div className="mt-2 mb-2">
+                        <p className="text-[9px] font-bold text-neutral-400 mb-1 uppercase tracking-wider">Archivo Adjunto:</p>
+                        <img src={note.fileUrl} alt="Adjunto Clínico" className="max-h-36 w-auto object-contain border border-neutral-200 rounded-md p-1 bg-white" />
+                      </div>
+                    )}
+
+                    {(note.professionalSignature || note.patientSignature) && (
+                      <div className="mt-3 pt-2 border-t border-dashed border-neutral-200 flex gap-8">
+                        {note.professionalSignature && (
+                          <div className="text-center">
+                            <img src={note.professionalSignature} alt="Firma Profesional" className="h-8 object-contain mx-auto mix-blend-multiply" />
+                            <p className="text-[8.5px] font-bold text-neutral-800 uppercase border-t border-neutral-300 pt-0.5">
+                              Prof. {note.author?.name || activeDoctorName}
+                            </p>
+                          </div>
+                        )}
+                        {note.patientSignature && (
+                          <div className="text-center">
+                            <img src={note.patientSignature} alt="Firma Paciente" className="h-8 object-contain mx-auto mix-blend-multiply" />
+                            <p className="text-[8.5px] font-bold text-neutral-800 uppercase border-t border-neutral-300 pt-0.5">
+                              Paciente / Tutor
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  
-                  <div className="text-xs text-neutral-800 leading-relaxed whitespace-pre-wrap font-medium">
-                    {note.content}
-                  </div>
-
-                  {note.fileUrl && (
-                    <div className="mt-2 mb-2">
-                      <p className="text-[9px] font-bold text-neutral-400 mb-1 uppercase tracking-wider">Archivo Adjunto:</p>
-                      <img src={note.fileUrl} alt="Adjunto Clínico" className="max-h-36 w-auto object-contain border border-neutral-200 rounded-md p-1 bg-white" />
-                    </div>
-                  )}
-
-                  {(note.professionalSignature || note.patientSignature) && (
-                    <div className="mt-3 pt-2 border-t border-dashed border-neutral-200 flex gap-8">
-                      {note.professionalSignature && (
-                        <div className="text-center">
-                          <img src={note.professionalSignature} alt="Firma Profesional" className="h-8 object-contain mx-auto mix-blend-multiply" />
-                          <p className="text-[8.5px] font-bold text-neutral-800 uppercase border-t border-neutral-300 pt-0.5">
-                            Prof. {note.author?.name || activeDoctorName}
-                          </p>
-                        </div>
-                      )}
-                      {note.patientSignature && (
-                        <div className="text-center">
-                          <img src={note.patientSignature} alt="Firma Paciente" className="h-8 object-contain mx-auto mix-blend-multiply" />
-                          <p className="text-[8.5px] font-bold text-neutral-800 uppercase border-t border-neutral-300 pt-0.5">
-                            Paciente / Tutor
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
         </div>
 
