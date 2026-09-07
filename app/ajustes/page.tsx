@@ -23,6 +23,7 @@ export default function ClinicSettingsPage() {
   
   const [settings, setSettings] = useState({
     clinicName: "",
+    slogan: "", 
     ruc: "",
     razonSocial: "",
     estabCode: "001",
@@ -31,6 +32,8 @@ export default function ClinicSettingsPage() {
     taxRate: 0,
     currency: "USD",
     address: "",
+    city: "",
+    country: "", 
     phone: "",
     whatsappNumber: "",
     email: "",
@@ -56,6 +59,7 @@ export default function ClinicSettingsPage() {
           setSettings(prev => ({
             ...prev,
             clinicName: data.clinicName || "",
+            slogan: data.slogan || "", 
             ruc: data.ruc || "",
             razonSocial: data.razonSocial || "",
             estabCode: data.estabCode || "001",
@@ -64,6 +68,8 @@ export default function ClinicSettingsPage() {
             taxRate: Number(data.taxRate) || 0,
             currency: data.currency || "USD",
             address: data.address || "",
+            city: data.city || "",
+            country: data.country || "",
             phone: data.phone || "",
             whatsappNumber: data.whatsappNumber || "",
             email: data.email || "",
