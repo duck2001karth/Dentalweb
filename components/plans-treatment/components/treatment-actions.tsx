@@ -34,7 +34,6 @@ export function TreatmentActions({
 
   return (
     <div className="flex items-center gap-2.5 font-sans antialiased">
-      {/* BOTÓN PRINCIPAL: REGISTRAR PAGO */}
       {onOpenPaymentReceipt && (
         <Button
           type="button"

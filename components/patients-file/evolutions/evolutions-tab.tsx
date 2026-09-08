@@ -20,9 +20,10 @@ import { useToast } from "@/hooks/use-toast"
 
 import { useGetClinicalNotes, useCreateClinicalNote } from "@/hooks/clinical-notes"
 import { useGetPatient } from "@/hooks/patients"
+import { useClinicSettings } from "@/config/clinic-settings"
 import { EvolutionCard } from "@/components/patients-file/evolutions/evolutions-card"
 import { EvolutionModal } from "@/components/patients-file/evolutions/evolutions-modal"
-import { EvolutionsPrint } from "@/components/patients-file/evolutions/evolutions-print"
+import { printEvolutionsSheet } from "@/components/patients-file/evolutions/evolutions-print"
 
 const calculateAge = (birthDateString?: string | Date | null) => {
   if (!birthDateString) return "--"
@@ -36,6 +37,7 @@ const calculateAge = (birthDateString?: string | Date | null) => {
 export function EvolucionesTab({ patientId }: { patientId: string }) {
   const { data: session } = useSession()
   const { toast } = useToast()
+  const { settings } = useClinicSettings()
   const currentUser = session?.user as any
   const canEditClinicalData = currentUser?.role === "DOCTOR" || currentUser?.role === "ADMIN"
   const canDeleteData = currentUser?.role === "ADMIN" 
@@ -77,6 +79,18 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
     })
     .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
+  const handlePrint = () => {
+    printEvolutionsSheet({
+      evolutionNotes,
+      patientFullName,
+      patientAge,
+      patientDocId,
+      doctorName: currentUser?.name || "Dr. Especialista",
+      doctorSpecialty: currentUser?.specialty || "Odontología General",
+      settings,
+    })
+  }
+
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
@@ -106,7 +120,6 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
         toast({ 
           title: "Evolución actualizada correctamente",
           description: "Los cambios clínicos han sido guardados en el expediente.",
-          variant: "success",
         })
         setIsModalOpen(false)
         resetForm()
@@ -137,7 +150,6 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
             toast({ 
               title: "Evolución registrada correctamente",
               description: "La nueva nota clínica fue incorporada al historial del paciente.",
-              variant: "success",
             })
             setIsModalOpen(false)
             resetForm()
@@ -196,16 +208,6 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
   return (
     <div className="animate-in fade-in duration-300 relative space-y-6">
 
-      {/* COMPONENTE EXCLUSIVO DE IMPRESIÓN OFICIAL */}
-      <EvolutionsPrint 
-        evolutionNotes={evolutionNotes}
-        patientFullName={patientFullName}
-        patientAge={patientAge}
-        patientDocId={patientDocId}
-        doctorName={currentUser?.name || "Dr. Especialista"}
-        doctorSpecialty={currentUser?.specialty || "Odontología General"}
-      />
-
       {/* LIGHTBOX DE IMÁGENES */}
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
         <DialogContent className="max-w-[90vw] md:max-w-5xl bg-transparent border-none shadow-none p-0 flex justify-center items-center">
@@ -258,20 +260,20 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
         fileBase64={fileBase64} 
         setFileBase64={setFileBase64} 
         fileName={fileName} 
-        setFileName={setFileName}
+        setFileName={setFileName} 
         setProfSignature={setProfSignature} 
-        setPatientSignature={setPatientSignature}
+        setPatientSignature={setPatientSignature} 
         onSave={handleSaveEvolution} 
         isWorking={isCreating || isSavingEdit} 
-        handleImageUpload={handleImageUpload}
+        handleImageUpload={handleImageUpload} 
       />
       
-      {/* CABECERA SUPERIOR PREMIUM (CON ICONO ESTILO ANAMNESIS) */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-card p-5 rounded-2xl border border-border/80 shadow-xs sticky top-0 z-20 print:hidden">
+      {/* CABECERA SUPERIOR */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-card p-5 rounded-2xl border border-border/80 shadow-xs sticky top-0 z-20">
         <div>
           <div className="flex items-center gap-3">
             <h2 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-                <Stethoscope className="w-5 h-5 text-[#008bcd]" /> Evoluciones Clínicas
+              <Stethoscope className="w-5 h-5 text-[#008bcd]" /> Evoluciones Clínicas
             </h2>
             {!canEditClinicalData && (
               <span className="text-[10px] bg-muted text-muted-foreground font-bold px-2 py-0.5 rounded-md border border-border/80 tracking-wider">
@@ -306,7 +308,7 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
               </Button>
             )}
             <Button 
-              onClick={() => window.print()} 
+              onClick={handlePrint} 
               variant="outline" 
               size="icon"
               className="bg-background border-border/80 text-foreground hover:bg-accent shrink-0 rounded-xl h-10 w-10 font-bold cursor-pointer transition-all"
@@ -319,7 +321,7 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
       </div>
 
       {/* ÁREA DE EVOLUCIONES */}
-      <div className="print:hidden">
+      <div>
         {isLoading ? (
           <div className="flex flex-col items-center justify-center py-32 text-[#008bcd]">
             <Loader2 className="h-10 w-10 animate-spin mb-4" />

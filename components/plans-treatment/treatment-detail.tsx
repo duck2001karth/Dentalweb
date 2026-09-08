@@ -12,7 +12,8 @@ import { TreatmentTable } from "./components/treatment-table"
 import { TreatmentDetailDialogs } from "./modals/treatment-detail-dialogs"
 import { TreatmentExtra } from "./components/treatment-extra"
 import { OdontogramaTab } from "@/components/patients-file/odontogram/odontogram-tab"
-import { TreatmentPrintView, PrintMode } from "./print/treatment-print-view"
+import { printTreatmentPlanSheet, PrintMode } from "@/components/plans-treatment/print/treatment-print-view"
+import { useClinicSettings } from "@/config/clinic-settings"
 
 interface TreatmentPlanDetailProps {
   plan: TreatmentPlan | any
@@ -31,7 +32,8 @@ export function TreatmentPlanDetail({
   const currentUser = session?.user as any
 
   const { state, setters, handlers } = useTreatmentState(plan, patient, currentUser, toast)
-  const [printMode, setPrintMode] = useState<PrintMode>("COMPLETO")
+  const { settings } = useClinicSettings()
+
   const calculateAge = (birthDate: string | Date | undefined) => {
     if (!birthDate) return undefined
     const birth = new Date(birthDate)
@@ -43,6 +45,28 @@ export function TreatmentPlanDetail({
   }
 
   const patientAge = patient?.age || calculateAge(patient?.birthDate)
+  const handlePrint = (mode: PrintMode = "COMPLETO") => {
+    const subtotal = state.calculatedTotals.subtotal
+    const discountPct = state.discountPercent
+    const discountAmt = subtotal * (discountPct / 100)
+    const finalTotal = Math.max(0, subtotal - discountAmt)
+    const autoRecoveredSignature = state.currentPlan?.patient?.signatureBase64 || patient?.signatureBase64
+
+    printTreatmentPlanSheet({
+      plan: { ...state.currentPlan, items: state.planItems },
+      patient,
+      patientAge,
+      baseTotal: subtotal,
+      discountPercent: discountPct,
+      discountAmount: discountAmt,
+      finalTotalCost: finalTotal,
+      commentText: state.currentPlan?.comment,
+      autoRecoveredSignature,
+      getSignatureSrc: (sig: string) => sig.startsWith("data:") ? sig : `data:image/png;base64,${sig}`,
+      printMode: mode,
+      settings
+    })
+  }
 
   return (
     <div className="w-full font-sans antialiased animate-in fade-in duration-300 relative">
@@ -125,7 +149,8 @@ export function TreatmentPlanDetail({
               onUpdateItemDiscount={handlers.handleUpdateItemDiscount}
               onUpdateItemRegion={handlers.handleUpdateItemRegion}
               onSelectPrintMode={(mode: string) => {
-                setPrintMode(mode as PrintMode)
+                // 2. Disparamos la impresión mediante IFRAME según el modo elegido
+                handlePrint(mode as PrintMode)
               }}
             />
 
@@ -144,19 +169,9 @@ export function TreatmentPlanDetail({
           </div>
         </div>
       </div>
-      <TreatmentPrintView
-        plan={{ ...state.currentPlan, items: state.planItems }}
-        patient={patient}
-        patientAge={patientAge}
-        baseTotal={state.calculatedTotals.subtotal}
-        discountPercent={state.discountPercent}
-        discountAmount={state.calculatedTotals.subtotal * (state.discountPercent / 100)}
-        finalTotalCost={Math.max(0, state.calculatedTotals.subtotal - (state.calculatedTotals.subtotal * (state.discountPercent / 100)))}
-        commentText={state.currentPlan?.comment}
-        autoRecoveredSignature={state.currentPlan?.patient?.signatureBase64 || patient?.signatureBase64}
-        getSignatureSrc={(sig: string) => sig.startsWith("data:") ? sig : `data:image/png;base64,${sig}`}
-        printMode={printMode}
-      />
+      
+      {/* 3. Se elimina por completo el <TreatmentPrintView> del DOM */}
+      
       <div className="print:hidden">
         <TreatmentDetailDialogs
           plan={state.currentPlan}
@@ -207,7 +222,6 @@ export function TreatmentPlanDetail({
           onPlanUpdate={handlers.refreshPlanData}
         />
       </div>
-      
     </div>
   )
 }

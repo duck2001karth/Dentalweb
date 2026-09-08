@@ -62,7 +62,6 @@ export function PaymentsTable({
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 10
 
-  // Filtrar pagos válidos (ingresos activos, no anulados ni notas de crédito)
   const onlyActiveIncomePayments = useMemo(() => {
     return paymentsList.filter((item: any) => {
       const isDeleted = item.notes && typeof item.notes === "string" && item.notes.includes("[PAGO ELIMINADO")
@@ -81,7 +80,6 @@ export function PaymentsTable({
     return onlyActiveIncomePayments.slice(startIndex, endIndex)
   }, [onlyActiveIncomePayments, startIndex, endIndex])
 
-  // Estados para modales
   const [selectedPaymentForReceipt, setSelectedPaymentForReceipt] = useState<any>(null)
   const [isReceiptOpen, setIsReceiptOpen] = useState(false)
   const [selectedPaymentForBreakdown, setSelectedPaymentForBreakdown] = useState<any>(null)
@@ -155,19 +153,22 @@ export function PaymentsTable({
                   const isSriFormat = rawNumber.includes("-") && !rawNumber.toUpperCase().includes("REC")
                   const invoiceStr = 
                     item.invoiceNumber || 
+                    item.taxDocuments?.[0]?.secuencial || 
+                    item.taxDocuments?.[0]?.authorizationNum ||
                     item.sriDocument?.number || 
                     item.sriDocument?.secuencial ||
-                    item.taxDocument?.number || 
                     item.invoiceId || 
                     item.receiptNumberFiscal || 
                     (isSriFormat ? rawNumber : null) || 
                     (item.isFiscal ? "Factura Emitida" : null)
+
                   let displayPaymentNum = `#REC-${item.id?.slice(-6)?.toUpperCase() || idx + 1}`
                   if (!isSriFormat && rawNumber) {
                     displayPaymentNum = rawNumber.toUpperCase().startsWith("REC") || rawNumber.startsWith("#") 
                       ? rawNumber 
                       : `#REC-${rawNumber}`
                   }
+                  
                   const treatmentName = item.treatmentPlan?.name || item.treatmentName
                   const targetPlanId = item.treatmentPlanId || item.treatmentPlan?.id || item.planId
                   const isPlanDeleted = !treatmentName && !targetPlanId

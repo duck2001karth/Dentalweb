@@ -14,7 +14,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast"
 
 import { useGetClinicalNotes, useCreateClinicalNote } from "@/hooks/clinical-notes"
-import { HistorialPrint } from "./history-print"
+import { useGetPatient } from "@/hooks/patients"
+import { printHistorialSheet } from "@/components/patients-file/history/history-print"
+import { useClinicSettings } from "@/config/clinic-settings"
 import { HistoryCard } from "@/components/patients-file/history/history-card"
 import { EvolutionModal } from "@/components/patients-file/evolutions/evolutions-modal"
 import { QuickDocumentModal } from "@/components/patients-file/history/history-modal"
@@ -27,8 +29,10 @@ export function HistorialTab({ patientId }: { patientId: string }) {
   const canEditClinicalData = currentUser?.role === "DOCTOR" || currentUser?.role === "ADMIN"
   const canDeleteData = currentUser?.role === "ADMIN" 
 
+  const { patient, isLoading: isPatientLoading } = useGetPatient(patientId)
   const { clinicalNotes = [], isLoading, refetch } = useGetClinicalNotes({ patientId })
   const { createClinicalNote, isLoading: isCreating } = useCreateClinicalNote()
+  const { settings } = useClinicSettings()
 
   const [monthFilter, setMonthFilter] = useState("todos")
   const [typeFilter, setTypeFilter] = useState("todos")
@@ -75,6 +79,24 @@ export function HistorialTab({ patientId }: { patientId: string }) {
     }
   }
 
+  const handlePrintHistorial = () => {
+    if (!patient) {
+      return toast({
+        title: "Cargando datos...",
+        description: "Espere a que se cargue la ficha del paciente para imprimir.",
+        variant: "destructive",
+      })
+    }
+
+    printHistorialSheet({
+      patient,
+      notes: sortedNotes,
+      doctorName: currentUser?.name || "Dr. Especialista",
+      doctorSpecialty: currentUser?.specialty || "Odontología General",
+      settings,
+    })
+  }
+
   const handleSaveEvolution = async () => {
     if (!noteContent.trim()) return
 
@@ -91,7 +113,7 @@ export function HistorialTab({ patientId }: { patientId: string }) {
         setIsEvolutionOpen(false)
         resetEvolutionForm()
         refetch()
-      } catch (error) {
+      } catch {
         toast({ title: "Error", description: "No se pudo actualizar.", variant: "destructive" })
       } finally { setIsSavingEdit(false) }
     } else {
@@ -137,7 +159,7 @@ export function HistorialTab({ patientId }: { patientId: string }) {
       if (!res.ok) throw new Error()
       toast({ title: "Registro eliminado" })
       refetch()
-    } catch (error) { 
+    } catch { 
       toast({ title: "Error al eliminar", variant: "destructive" })
     } finally { 
       setIsDeleting(false)
@@ -148,10 +170,10 @@ export function HistorialTab({ patientId }: { patientId: string }) {
   const handleAclarar = async (noteId: string) => {
     if (!canEditClinicalData) return
     try {
-      const res = await fetch(`/api/clinical-notes/${noteId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isSigned: true }) })
+      await fetch(`/api/clinical-notes/${noteId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ isSigned: true }) })
       toast({ title: "Evolución aclarada" })
       refetch() 
-    } catch (error) { toast({ title: "Error al actualizar", variant: "destructive" }) }
+    } catch { toast({ title: "Error al actualizar", variant: "destructive" }) }
   }
 
   const openEditModal = (note: any) => {
@@ -292,13 +314,13 @@ export function HistorialTab({ patientId }: { patientId: string }) {
               </Popover>
             )}
 
-            <Button
-              type="button"
-              onClick={() => window.print()}
-              variant="outline"
-              size="icon"
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={handlePrintHistorial}
+              disabled={isPatientLoading || !patient}
               className="bg-background border-border/80 text-foreground hover:bg-accent shrink-0 rounded-xl h-10 w-10 font-bold cursor-pointer transition-all"
-              title="Imprimir Historial Clínico"
+              title="Imprimir Historial General"
             >
               <Printer className="w-4 h-4" />
             </Button>
@@ -342,14 +364,6 @@ export function HistorialTab({ patientId }: { patientId: string }) {
           </div>
         )}
       </div>
-
-      {/* RENDERIZADO OCULTO PARA IMPRESIÓN OFICIAL */}
-      <HistorialPrint 
-        patientId={patientId} 
-        notes={sortedNotes} 
-        doctorName={currentUser?.name || "Especialista"} 
-        doctorSpecialty={currentUser?.specialty || "Odontología"} 
-      />
 
       {/* 1. Modal Evolución */}
       <EvolutionModal 

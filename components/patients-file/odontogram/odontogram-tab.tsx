@@ -12,7 +12,8 @@ import { useGetPatient } from "@/hooks/patients"
 import { OdontogramGrid } from "./odontogram-grid"
 import { OdontogramActionMenu, HEALTHY_OPTION, LESION_OPTIONS, PREEXISTENCE_OPTIONS } from "./odontogram-action-menu"
 import { OdontogramHistory } from "./odontogram-history"
-import { OdontogramPrint } from "./odontogram-print"
+import { printOdontogramSheet } from "@/components/patients-file/odontogram/odontogram-print"
+import { useClinicSettings } from "@/config/clinic-settings"
 import { OdontogramLegendModal } from "@/components/patients-file/odontogram/odontogram-legend-modal"
 
 export function OdontogramaTab({ 
@@ -87,6 +88,21 @@ export function OdontogramaTab({
     }
   }
 
+  const { settings } = useClinicSettings()
+
+  const handlePrintOdontogram = () => {
+    printOdontogramSheet({
+      records,
+      view,
+      dentition,
+      patientFullName: `${patient.firstName} ${patient.lastName}`,
+      patientDocId: patient.ci,
+      doctorName: currentUser?.name,
+      doctorSpecialty: currentUser?.specialty,
+      getStatusLabel,
+      settings,
+    })
+}
   const handleCloseMenu = () => {
     setMenuStep("NONE")
     setSelectedTooth(null)
@@ -283,14 +299,7 @@ export function OdontogramaTab({
             <OdontogramLegendModal />
 
             {!isPlanView && (
-              <Button 
-                type="button"
-                onClick={() => window.print()} 
-                variant="outline" 
-                size="icon"
-                className="bg-background border-border/80 text-foreground hover:bg-accent shrink-0 rounded-xl h-9 w-9 font-bold cursor-pointer transition-all"
-                title="Imprimir Odontograma"
-              >
+              <Button variant="outline" size="icon" onClick={handlePrintOdontogram} title="Imprimir Odontograma">
                 <Printer className="w-4 h-4" />
               </Button>
             )}
@@ -308,20 +317,6 @@ export function OdontogramaTab({
           </div>
         </div>
       </div>
-
-      {/* COMPONENTE OCULTO PARA IMPRESIÓN OFICIAL */}
-      {!isPlanView && (
-        <OdontogramPrint 
-          records={currentViewRecords}
-          view={view}
-          dentition={dentition}
-          patientFullName={patientFullName}
-          patientDocId={patient?.ci || "No registrado"}
-          doctorName={currentUser?.name}
-          doctorSpecialty={currentUser?.specialty}
-          getStatusLabel={getStatusLabel}
-        />
-      )}
 
       {/* COMPONENTES DE LA GRILLA INTERACTIVA */}
       <div className="print:hidden space-y-6">

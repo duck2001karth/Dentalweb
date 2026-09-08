@@ -27,6 +27,7 @@ export interface ClinicSettings {
   watermarkUrl: string | null
   watermarkOpacity?: number
   watermarkScale?: number
+  defaultPrintMode?: "color" | "bw" 
 }
 
 interface ClinicSettingsContextType {

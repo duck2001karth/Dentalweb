@@ -32,7 +32,7 @@ interface TreatmentItem {
 
 interface TreatmentTableProps {
   planItems?: TreatmentItem[] | any[]
-  planDiscountPercent?: number // <--- AGREGAR ESTA LÍNEA
+  planDiscountPercent?: number
   setIsSectionModalOpen?: (open: boolean) => void
   openCatalogModal?: (region?: string) => void
   setIsDiagnosisModalOpen?: (open: boolean) => void
@@ -46,6 +46,7 @@ interface TreatmentTableProps {
 
 export function TreatmentTable({
   planItems = [],
+  planDiscountPercent = 0,
   setIsSectionModalOpen,
   openCatalogModal,
   setIsDiagnosisModalOpen,
@@ -105,18 +106,10 @@ export function TreatmentTable({
     setEditingItemId(null)
   }
 
- const triggerPrint = (mode: string) => {
+  const triggerPrint = (mode: string) => {
     if (onSelectPrintMode) {
       onSelectPrintMode(mode)
     }
-    document.body.classList.add("printing-treatment-plan")
-
-    setTimeout(() => {
-      window.print()
-      setTimeout(() => {
-        document.body.classList.remove("printing-treatment-plan")
-      }, 500)
-    }, 150)
   }
 
   return (
@@ -252,13 +245,17 @@ export function TreatmentTable({
             {planItems.length > 0 ? (
               planItems.map((item) => {
                 const currentProg = item.progress || (item.isCompleted ? 100 : 0)
-                const itemDiscount = item.discount || 0
+                const itemDiscount = Number(item.discount || 0)
+                const globalDiscount = Number(planDiscountPercent || 0)
+                const effectiveDiscount = itemDiscount > 0 ? itemDiscount : globalDiscount
+
                 const basePrice = Number(item.cost ?? item.price ?? 0)
-                const finalItemPrice = basePrice - (basePrice * (itemDiscount / 100))
+                const finalItemPrice = basePrice - (basePrice * (effectiveDiscount / 100))
                 const paidAmount = Number(item.paidAmount || 0)
                 const isSelected = selectedItemIds.includes(item.id)
 
-                const isPaidFull = item.isPaid || paidAmount >= (finalItemPrice - 0.01)
+                // Verificación considerando centavos
+                const isPaidFull = item.isPaid || (paidAmount >= (finalItemPrice - 0.01) && finalItemPrice > 0)
                 const isPaidPartial = paidAmount > 0 && !isPaidFull
 
                 return (
@@ -330,10 +327,10 @@ export function TreatmentTable({
                             onClick={() => {
                               setEditingItemId(item.id)
                               setTempItemDiscount(itemDiscount.toString())
-                            }}
+                            }} 
                             className="text-xs font-bold text-[#008bcd] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer"
                           >
-                            {itemDiscount}% <Edit2 className="w-3 h-3 stroke-[2] opacity-60" />
+                            {itemDiscount > 0 ? `${itemDiscount}%` : globalDiscount > 0 ? `${globalDiscount}% (Conv)` : "0%"} <Edit2 className="w-3 h-3 stroke-[2] opacity-60 ml-0.5" />
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-48 p-3 bg-card border-border/80 shadow-xl rounded-xl" align="center">
@@ -355,8 +352,21 @@ export function TreatmentTable({
                       </Popover>
                     </td>
 
-                    <td className="px-4 py-3 text-right font-bold text-foreground text-sm font-mono">
-                      {currencySymbol}{finalItemPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    <td className="px-4 py-3 text-right font-mono">
+                      {effectiveDiscount > 0 ? (
+                        <div className="flex flex-col items-end">
+                          <span className="text-[10px] text-muted-foreground line-through">
+                            {currencySymbol}{basePrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                          <span className="font-bold text-foreground text-sm">
+                            {currencySymbol}{finalItemPrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="font-bold text-foreground text-sm">
+                          {currencySymbol}{basePrice.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </span>
+                      )}
                     </td>
 
                     <td className="py-3 px-4 text-center">

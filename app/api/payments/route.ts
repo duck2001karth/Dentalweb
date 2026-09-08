@@ -85,21 +85,13 @@ export async function GET(request: Request) {
             id: true,
             name: true,
             totalPaid: true,
-            items: {
-              select: {
-                id: true,
-                procedureName: true,
-                tooth: true,
-                cost: true,
-                paidAmount: true,
-                isPaid: true,
-              },
-            },
+            items: { /* ... */ },
           },
         },
         processedBy: {
           select: { id: true, name: true, specialty: true, role: true },
         },
+        taxDocuments: true,
       },
       orderBy: { createdAt: "desc" },
     })

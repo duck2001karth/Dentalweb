@@ -2,6 +2,7 @@
 
 import React from "react"
 import { format } from "date-fns"
+import { useClinicSettings } from "@/config/clinic-settings"
 
 interface PrescriptionPrintProps {
   printingDoc: any
@@ -18,9 +19,32 @@ export function PrescriptionPrint({
   patientDocId,
   patientAllergies,
 }: PrescriptionPrintProps) {
+  const { settings } = useClinicSettings()
+
   if (!printingDoc) return null
   const today = format(new Date(), "dd/MM/yyyy")
-  const doctorName = printingDoc.author?.name || printingDoc.specialistName || "Dr. Asignado"
+
+  // Datos dinámicos de configuración de clínica
+  const clinicName = settings?.clinicName?.trim() || "Carmodental"
+  const clinicSlogan = settings?.slogan?.trim() || "Clínica de Especialidades Odontológicas"
+  const clinicRuc = settings?.ruc?.trim() || "1719231696001"
+  const clinicHolder = settings?.razonSocial?.trim() || "Dr. José Napoleón Cargua Ríos"
+  const clinicAddress = settings?.address?.trim() || "Solanda Sector 4, José Argudo S24-72 y Av. Solanda"
+  const clinicPhone = settings?.phone?.trim() || settings?.whatsappNumber?.trim() || "0998 990 215"
+  const clinicEmail = settings?.email?.trim() || "carmodental@gmail.com"
+  
+  const clinicCity = (settings as any)?.city?.trim() || "Quito"
+  const clinicCountry = (settings as any)?.country?.trim() || "Ecuador"
+  const clinicLocation = `${clinicCity} - ${clinicCountry}`
+
+  const logoUrl = settings?.logoUrl || "/logosn.png"
+  const watermarkUrl = settings?.watermarkUrl || "/logosn.png"
+  const watermarkOpacity = ((settings as any)?.watermarkOpacity ?? 12) / 100
+  const watermarkScale = ((settings as any)?.watermarkScale || 100) / 100
+
+  // Modo monocromático / B&N
+  const isMonochrome = settings?.defaultPrintMode === "bw"
+  const filterStyle = isMonochrome ? "grayscale(100%)" : "none"
 
   return (
     <>
@@ -71,7 +95,6 @@ export function PrescriptionPrint({
             align-items: center; 
             z-index: 0; 
             pointer-events: none; 
-            opacity: 0.12;
           }
           .watermark-img { 
             width: 320px; 
@@ -84,21 +107,37 @@ export function PrescriptionPrint({
         
         {/* LADO 1: MEDICAMENTOS (R.P.) */}
         <div className="print-pane relative">
-          <div className="hidden print:flex watermark-container">
-            <img src="/logosn.png" alt="Marca de Agua" className="watermark-img" />
+          <div 
+            className="hidden print:flex watermark-container"
+            style={{ opacity: watermarkOpacity }}
+          >
+            <img 
+              src={watermarkUrl} 
+              alt="Marca de Agua" 
+              className="watermark-img" 
+              style={{ 
+                transform: `scale(${watermarkScale})`,
+                filter: filterStyle 
+              }}
+            />
           </div>
 
           <div className="flex justify-between items-start mb-3 border-b-2 border-[#008bcd] pb-2 relative z-10">
             <div className="flex items-center gap-3">
-              <img src="/logosn.png" alt="Logo Carmodental" className="h-10 w-auto object-contain" />
+              <img 
+                src={logoUrl} 
+                alt={`Logo ${clinicName}`} 
+                className="h-10 w-auto object-contain" 
+                style={{ filter: filterStyle }}
+              />
               <div>
-                <h1 className="text-2xl font-black text-[#008bcd] tracking-tight uppercase leading-none">Carmodental</h1>
-                <p className="text-[10px] font-bold text-slate-800 uppercase mt-0.5">Clínica de Especialidades Odontológicas</p>
+                <h1 className="text-2xl font-black text-[#008bcd] tracking-tight uppercase leading-none">{clinicName}</h1>
+                <p className="text-[10px] font-bold text-slate-800 uppercase mt-0.5">{clinicSlogan}</p>
               </div>
             </div>
             <div className="text-right text-[10px] leading-tight">
-              <p className="font-bold text-black"><span>Dr.</span> José Napoleón Cargua Ríos</p>
-              <p className="text-black">RUC: 1719231696001</p>
+              <p className="font-bold text-black">{clinicHolder}</p>
+              <p className="text-black">RUC: {clinicRuc}</p>
             </div>
           </div>
           
@@ -135,29 +174,45 @@ export function PrescriptionPrint({
               </div>
             )}
             <div className="border-t-2 border-[#008bcd] pt-1.5 text-[9px] text-slate-800 flex flex-col text-center">
-              <p className="font-semibold uppercase tracking-wider mb-0.5">Dirección: Solanda Sector 4, José Argudo S24-72 y Av. Solanda</p>
-              <p>Cel.: 0998 990 215 • e-mail: carmodental@gmail.com • Quito - Ecuador</p>
+              <p className="font-semibold uppercase tracking-wider mb-0.5">Dirección: {clinicAddress}</p>
+              <p>Cel.: {clinicPhone} • e-mail: {clinicEmail} • {clinicLocation}</p>
             </div>
           </div>
         </div>
 
         {/* LADO 2: INDICACIONES Y OBSERVACIONES */}
         <div className="print-pane relative">
-          <div className="hidden print:flex watermark-container">
-            <img src="/logosn.png" alt="Marca de Agua" className="watermark-img" />
+          <div 
+            className="hidden print:flex watermark-container"
+            style={{ opacity: watermarkOpacity }}
+          >
+            <img 
+              src={watermarkUrl} 
+              alt="Marca de Agua" 
+              className="watermark-img" 
+              style={{ 
+                transform: `scale(${watermarkScale})`,
+                filter: filterStyle 
+              }}
+            />
           </div>
 
           <div className="flex justify-between items-start mb-3 border-b-2 border-[#008bcd] pb-2 relative z-10">
             <div className="flex items-center gap-3">
-              <img src="/logosn.png" alt="Logo Carmodental" className="h-10 w-auto object-contain" />
+              <img 
+                src={logoUrl} 
+                alt={`Logo ${clinicName}`} 
+                className="h-10 w-auto object-contain" 
+                style={{ filter: filterStyle }}
+              />
               <div>
-                <h1 className="text-2xl font-black text-[#008bcd] tracking-tight uppercase leading-none">Carmodental</h1>
-                <p className="text-[10px] font-bold text-slate-800 uppercase mt-0.5">Clínica de Especialidades Odontológicas</p>
+                <h1 className="text-2xl font-black text-[#008bcd] tracking-tight uppercase leading-none">{clinicName}</h1>
+                <p className="text-[10px] font-bold text-slate-800 uppercase mt-0.5">{clinicSlogan}</p>
               </div>
             </div>
             <div className="text-right text-[10px] leading-tight">
-              <p className="font-bold text-black"><span>Dr.</span> José Napoleón Cargua Ríos</p>
-              <p className="text-black">RUC: 1719231696001</p>
+              <p className="font-bold text-black">{clinicHolder}</p>
+              <p className="text-black">RUC: {clinicRuc}</p>
             </div>
           </div>
           
@@ -207,8 +262,8 @@ export function PrescriptionPrint({
               </div>
             )}
             <div className="border-t-2 border-[#008bcd] pt-1.5 text-[9px] text-slate-800 flex flex-col text-center">
-              <p className="font-semibold uppercase tracking-wider mb-0.5">Dirección: Solanda Sector 4, José Argudo S24-72 y Av. Solanda</p>
-              <p>Cel.: 0998 990 215 • e-mail: carmodental@gmail.com • Quito - Ecuador</p>
+              <p className="font-semibold uppercase tracking-wider mb-0.5">Dirección: {clinicAddress}</p>
+              <p>Cel.: {clinicPhone} • e-mail: {clinicEmail} • {clinicLocation}</p>
             </div>
           </div>
         </div>

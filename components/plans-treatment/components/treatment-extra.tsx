@@ -18,6 +18,7 @@ import {
   DialogDescription
 } from "@/components/ui/dialog"
 import { useClinicSettings } from "@/config/clinic-settings"
+import { printClinicalDocSheet } from "@/components/patients-file/documents/document-print"
 
 export interface TreatmentExtraProps {
   patient?: any
@@ -51,7 +52,8 @@ export function TreatmentExtraSection({
   handleSaveComments: externalHandleSave,
   isSavingComment = false,
   onApproveWithSavedSignature,
-  onSaveComment
+  onSaveComment,
+  currentUser
 }: TreatmentExtraProps) {
   const clinicCtx = useClinicSettings() as any
   const settings = clinicCtx?.settings || clinicCtx
@@ -109,16 +111,32 @@ export function TreatmentExtraSection({
     return `data:image/png;base64,${base64String}`
   }
 
-const handlePrintDocument = (e: React.MouseEvent) => {
+  const handlePrintDocument = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation() 
-    window.print()
+    if (!selectedConsent) return
+
+    const patientFullName = patient ? `${patient.firstName || ""} ${patient.lastName || ""}`.trim() : "Paciente Registrado"
+    const patientDocId = patient?.ci || "No registrado"
+    const patientAge = patient?.age
+
+    printClinicalDocSheet({
+      document: {
+        ...selectedConsent,
+        patientSignature: activeSignature || selectedConsent.patientSignature,
+        doctorSignature: selectedConsent.doctorSignature
+      },
+      patientFullName,
+      patientAge,
+      patientDocId,
+      doctorSpecialty: currentUser?.specialty || plan?.doctor?.specialty,
+      settings
+    })
   }
+
   return (
     <div className="space-y-6 font-sans antialiased">
       <div className="bg-card rounded-2xl border border-border/80 shadow-xs p-6 space-y-6">
-        
-        {/* CABECERA DE APROBACIÓN */}
         <div className="border-b border-border/80 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <h4 className="text-lg font-black flex items-center gap-2 text-foreground tracking-tight">
@@ -196,7 +214,7 @@ const handlePrintDocument = (e: React.MouseEvent) => {
             <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
               {onApproveWithSavedSignature && (
                 <Button 
-                  type="button"
+                  type="button" 
                   onClick={onApproveWithSavedSignature}
                   className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold rounded-xl h-9 text-xs px-4 shadow-xs cursor-pointer"
                 >
@@ -207,6 +225,7 @@ const handlePrintDocument = (e: React.MouseEvent) => {
                 <Button 
                   type="button"
                   variant="outline"
+                  size="sm"
                   onClick={() => setIsSignatureModalOpen(true)}
                   className="border-border text-foreground font-bold rounded-xl h-9 text-xs px-3 cursor-pointer"
                   title="Dibujar nueva firma desde cero"
@@ -403,7 +422,7 @@ const handlePrintDocument = (e: React.MouseEvent) => {
             </Button>
             <Button 
               type="button" 
-              onClick={(e) => handlePrintDocument(e)}
+              onClick={handlePrintDocument}
               className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl text-xs h-9 px-4 cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5 mr-1.5" /> Imprimir Documento

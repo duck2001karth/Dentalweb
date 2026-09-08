@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react"
 import { 
   Printer, Trash2, Edit, PenTool, Loader2, User, 
   FileText, Plus, Search, CalendarIcon, X, ShieldAlert,
-  RefreshCw, CheckCircle2, MoreVertical
+  CheckCircle2
 } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { format } from "date-fns"
@@ -13,7 +13,7 @@ import { es } from "date-fns/locale"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { 
   AlertDialog, AlertDialogAction, AlertDialogCancel, 
   AlertDialogContent, AlertDialogHeader, AlertDialogTitle, 
@@ -24,7 +24,8 @@ import { cn } from "@/lib/utils"
 import { SignaturePad } from "@/components/patients-file/signature-pad" 
 import { documentStatuses } from "@/constants/status"
 import { ClinicalDocEditorModal } from "./document-editor-modal"
-import { ClinicalDocPrint } from "@/components/patients-file/documents/document-print"
+import { printClinicalDocSheet } from "@/components/patients-file/documents/document-print"
+import { useClinicSettings } from "@/config/clinic-settings"
 
 export function DocumentosClinicosTab({ 
   patientId, 
@@ -36,6 +37,9 @@ export function DocumentosClinicosTab({
   const { data: session } = useSession()
   const { toast } = useToast()
   
+  // 1. Mover configuración de clínica dentro del componente
+  const { settings } = useClinicSettings()
+
   const currentUser = session?.user as any
   const userRole = String(currentUser?.role || "").toUpperCase().trim()
   const canEditDocs = userRole === "DOCTOR" || userRole === "ADMIN" || userRole === "ADMINISTRADOR"
@@ -91,6 +95,7 @@ export function DocumentosClinicosTab({
     return documentStatuses?.DRAFT || { label: "Borrador", bg: "bg-slate-500/10", color: "text-slate-600", icon: FileText }
   }
 
+  // Cálculos de datos del paciente
   const patientFullName = currentPatient?.firstName && currentPatient?.lastName
     ? `${currentPatient.firstName} ${currentPatient.lastName}`.trim()
     : currentPatient?.name || currentPatient?.fullName || "Paciente Registrado"
@@ -102,6 +107,18 @@ export function DocumentosClinicosTab({
       ? new Date().getFullYear() - new Date(currentPatient.birthDate).getFullYear() 
       : ""
   )
+
+  // 2. Función de impresión también dentro, para que lea las variables
+  const handlePrintDocument = (document: any) => {
+    printClinicalDocSheet({
+      document,
+      patientFullName,
+      patientAge,
+      patientDocId,
+      doctorSpecialty: currentUser?.specialty, 
+      settings,
+    })
+  }
 
   const handleSaveDocument = async (title: string, content: string): Promise<void> => {
     if (!canEditDocs) { 
@@ -411,17 +428,6 @@ export function DocumentosClinicosTab({
         doctorName={currentUser?.name || "Dr(a). Asignado"}
       />
 
-      {/* Impresión */}
-      {selectedDoc && (
-        <ClinicalDocPrint 
-          document={selectedDoc} 
-          patientFullName={patientFullName}
-          patientAge={patientAge}
-          patientDocId={patientDocId}
-          doctorSpecialty={currentUser?.specialty || "Odontología Integral"}
-        />
-      )}
-
       {/* Visor Detallado */}
       <Dialog open={!!selectedDoc} onOpenChange={(open) => !open && setSelectedDoc(null)}>
         <DialogContent className="max-w-[95vw] md:max-w-5xl h-[85vh] flex flex-col bg-card border-border overflow-hidden p-0 rounded-[24px] shadow-2xl [&>button]:hidden print:hidden">
@@ -443,8 +449,9 @@ export function DocumentosClinicosTab({
                   <Edit size={14} className="mr-1.5 text-amber-500" /> Editar
                 </Button>
               )}
-              <Button size="sm" variant="outline" onClick={() => window.print()} className="rounded-xl font-bold border-border/80 hover:text-[#008bcd]">
-                <Printer size={14} className="mr-1.5" /> Imprimir
+              {/* 3. Botón de imprimir ajustado para usar la función con IFRAME */}
+              <Button size="sm" variant="outline" onClick={() => handlePrintDocument(selectedDoc)} className="rounded-xl font-bold border-border/80 hover:text-[#008bcd]">
+                <Printer size={14} className="mr-1.5" /> Imprimir Respaldo
               </Button>
               <Button size="sm" variant="ghost" className="h-9 w-9 p-0 rounded-xl bg-muted/50 hover:bg-muted" onClick={() => setSelectedDoc(null)}>
                 <X size={18} />
@@ -512,8 +519,8 @@ export function DocumentosClinicosTab({
               </div>
 
               {/* Panel Derecho: Contenido */}
-              <div className="flex-1 p-8 overflow-y-auto custom-scrollbar">
-                <div className="max-w-3xl mx-auto">
+                <div className="flex-1 p-8 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">                
+                  <div className="max-w-3xl mx-auto">
                   <div className="border-l-4 border-[#008bcd] pl-4 mb-6">
                     <h3 className="text-2xl font-bold text-[#008bcd] tracking-tight">{selectedDoc.title}</h3>
                   </div>

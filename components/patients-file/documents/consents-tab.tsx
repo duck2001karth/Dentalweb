@@ -12,7 +12,8 @@ import { useToast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 
 import { useGetPatient } from "@/hooks/patients"
-import { ClinicalDocPrint } from "@/components/patients-file/documents/document-print"
+import { printClinicalDocSheet } from "@/components/patients-file/documents/document-print"
+import { useClinicSettings } from "@/config/clinic-settings"
 
 const calculateAge = (birthDateString?: string | Date | null) => {
   if (!birthDateString) return ""
@@ -30,14 +31,29 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
   const currentUser = session?.user as any
   const { patient } = useGetPatient(patientId)
   
+  // Mover el hook de settings dentro del componente
+  const { settings } = useClinicSettings()
+  
   const [documents, setDocuments] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDoc, setSelectedDoc] = useState<any>(null)
   const [searchTerm, setSearchTerm] = useState("")
 
-  const patientFullName = patient ? `${patient.firstName} ${patient.lastName}`.trim() : "Paciente Registrado"
+  const patientFullName = patient ? `${patient.firstName || ""} ${patient.lastName || ""}`.trim() : "Paciente Registrado"
   const patientDocId = patient?.ci || "No registrado"
   const patientAge = calculateAge(patient?.birthDate)
+
+  // Mover la función de impresión dentro del componente para que tenga acceso a patient, currentUser y settings
+  const handlePrintDocument = (document: any) => {
+    printClinicalDocSheet({
+      document,
+      patientFullName,
+      patientAge,
+      patientDocId,
+      doctorSpecialty: currentUser?.specialty, 
+      settings,
+    })
+  }
 
   const fetchDocs = useCallback(async () => {
     try {
@@ -199,17 +215,6 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
         </div>
       </div>
 
-      {/* COMPONENTE DE IMPRESIÓN */}
-      {selectedDoc && (
-        <ClinicalDocPrint 
-          document={selectedDoc} 
-          patientFullName={patientFullName}
-          patientAge={patientAge}
-          patientDocId={patientDocId}
-          doctorSpecialty={selectedDoc.author?.specialty || currentUser?.specialty || "Odontología Integral"}
-        />
-      )}
-
       {/* VISOR TIPO AUDITORÍA */}
       <Dialog open={Boolean(selectedDoc)} onOpenChange={(open) => !open && setSelectedDoc(null)}>
         <DialogContent className="max-w-[95vw] md:max-w-4xl h-[90vh] flex flex-col bg-card border-border overflow-hidden p-0 rounded-[24px] shadow-2xl [&>button]:hidden print:hidden">
@@ -224,7 +229,7 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
               </DialogDescription>
             </div>
             <div className="flex gap-2">
-              <Button size="sm" variant="outline" onClick={() => window.print()} className="rounded-xl font-bold border-border/80">
+              <Button size="sm" variant="outline" onClick={() => handlePrintDocument(selectedDoc)} className="rounded-xl font-bold border-border/80">
                 <Printer size={14} className="mr-1.5"/> Imprimir Respaldo
               </Button>
               <Button size="sm" variant="ghost" className="h-9 w-9 p-0 rounded-xl bg-muted/50 hover:bg-muted" onClick={() => setSelectedDoc(null)}>
@@ -234,8 +239,8 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
           </DialogHeader>
 
           {selectedDoc && (
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-0 bg-muted/20">
-              <div className="max-w-[210mm] mx-auto bg-white dark:bg-slate-50 my-8 p-12 rounded-lg shadow-sm border border-border/40 text-slate-900 font-sans relative">
+             <div className="flex-0.5 overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">  
+                <div className="max-w-[210mm] mx-auto bg-white dark:bg-slate-50 my-8 p-12 rounded-lg shadow-sm border border-border/40 text-slate-900 font-sans relative">
                 
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.04] z-0">
                   <ShieldCheck className="w-96 h-96" />
