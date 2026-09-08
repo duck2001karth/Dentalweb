@@ -2,8 +2,8 @@
 
 import React from "react"
 import { 
-  MoreHorizontal, Printer, Mail, FileText, 
-  RotateCcw, Edit, Trash2 
+  MoreHorizontal, Printer, Mail, FileCheck,
+  RotateCcw, Edit, Trash2, MessageCircle, ShieldAlert
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -20,11 +20,11 @@ interface PaymentActionsMenuProps {
   canEdit: boolean
   canDelete: boolean
   onPrintReceipt: (payment: any) => void
-  onPrintDaily: (payment: any) => void
-  onSendEmail: (payment: any) => void
-  onEdit: (payment: any) => void
-  onCreditNote: (payment: any) => void
-  onDelete: (payment: any) => void
+  onSendEmail?: (payment: any) => void
+  onSendWhatsApp?: (payment: any) => void
+  onEdit?: (payment: any) => void
+  onCreditNote?: (payment: any) => void
+  onDelete?: (payment: any) => void
 }
 
 export function PaymentActionsMenu({
@@ -32,58 +32,123 @@ export function PaymentActionsMenu({
   canEdit,
   canDelete,
   onPrintReceipt,
-  onPrintDaily,
   onSendEmail,
+  onSendWhatsApp,
   onEdit,
   onCreditNote,
   onDelete,
 }: PaymentActionsMenuProps) {
+  const targetId = payment.id
+
+  const hasFiscalInvoice = Boolean(
+    (payment.taxDocuments && payment.taxDocuments.length > 0) ||
+    payment.invoiceNumber ||
+    payment.receiptNumberFiscal ||
+    (payment.reference && payment.reference.toUpperCase().includes("SRI"))
+  )
+
+  const allowEdit = canEdit && !hasFiscalInvoice
+  const allowDelete = canDelete && !hasFiscalInvoice
+
+  const handleOpenDocument = () => {
+    if (hasFiscalInvoice) {
+      window.open(`/comprobantes/${targetId}`, "_blank")
+    } else {
+      onPrintReceipt(payment)
+    }
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button 
           variant="ghost" 
           size="sm" 
-          className="h-8 w-8 p-0 rounded-full hover:bg-muted/80 flex items-center justify-center cursor-pointer"
+          className="h-8 w-8 p-0 rounded-full hover:bg-muted flex items-center justify-center cursor-pointer transition-colors"
           title="Opciones del pago"
         >
           <MoreHorizontal className="w-4 h-4 text-foreground/80" />
         </Button>
       </DropdownMenuTrigger>
       
-      <DropdownMenuContent align="end" className="w-52 rounded-xl font-sans text-xs p-1 shadow-xl">
-        {/* Acciones Generales */}
-        <DropdownMenuItem onClick={() => onPrintReceipt(payment)} className="cursor-pointer font-medium py-2">
-          <Printer className="w-4 h-4 mr-2 text-[#008bcd]" /> Imprimir comprobante
-        </DropdownMenuItem>
-        
-        <DropdownMenuItem onClick={() => onPrintDaily(payment)} className="cursor-pointer font-medium py-2">
-          <FileText className="w-4 h-4 mr-2 text-slate-500" /> Imprimir comprobante diario
+      <DropdownMenuContent align="end" className="w-56 rounded-xl font-sans text-xs p-1.5 shadow-xl border-border bg-popover">
+        {/* Documento principal unificado */}
+        <DropdownMenuItem 
+          onClick={handleOpenDocument} 
+          className="cursor-pointer font-semibold py-2 rounded-lg text-foreground hover:bg-muted"
+        >
+          {hasFiscalInvoice ? (
+            <>
+              <FileCheck className="w-4 h-4 mr-2.5 text-emerald-600" /> Ver Factura SRI (PDF)
+            </>
+          ) : (
+            <>
+              <Printer className="w-4 h-4 mr-2.5 text-[#008bcd]" /> Ver / Imprimir Recibo
+            </>
+          )}
         </DropdownMenuItem>
 
-        <DropdownMenuItem onClick={() => onSendEmail(payment)} className="cursor-pointer font-medium py-2">
-          <Mail className="w-4 h-4 mr-2 text-slate-500" /> Enviar comprobante
-        </DropdownMenuItem>
+        {/* Notificaciones */}
+        {(onSendEmail || onSendWhatsApp) && <DropdownMenuSeparator className="my-1" />}
 
-        {/* Acciones con Permisos (Recepción y Admin) */}
-        {canEdit && (
+        {onSendWhatsApp && (
+          <DropdownMenuItem 
+            onClick={() => onSendWhatsApp(payment)} 
+            className="cursor-pointer font-medium py-2 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+          >
+            <MessageCircle className="w-4 h-4 mr-2.5" /> Enviar por WhatsApp
+          </DropdownMenuItem>
+        )}
+
+        {onSendEmail && (
+          <DropdownMenuItem 
+            onClick={() => onSendEmail(payment)} 
+            className="cursor-pointer font-medium py-2 rounded-lg text-foreground hover:bg-muted"
+          >
+            <Mail className="w-4 h-4 mr-2.5 text-slate-500" /> Enviar por correo
+          </DropdownMenuItem>
+        )}
+
+        {/* Modificar: solo para cobros sin factura */}
+        {allowEdit && onEdit && (
           <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onEdit(payment)} className="cursor-pointer font-medium py-2 text-blue-600 dark:text-blue-400">
-              <Edit className="w-4 h-4 mr-2" /> Modificar datos
+            <DropdownMenuSeparator className="my-1" />
+            <DropdownMenuItem 
+              onClick={() => onEdit(payment)} 
+              className="cursor-pointer font-medium py-2 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+            >
+              <Edit className="w-4 h-4 mr-2.5" /> Modificar datos
             </DropdownMenuItem>
           </>
         )}
 
-        {canDelete && (
+        {/* Operaciones de anulación */}
+        <DropdownMenuSeparator className="my-1" />
+
+        {hasFiscalInvoice ? (
           <>
-            <DropdownMenuItem onClick={() => onCreditNote(payment)} className="cursor-pointer font-medium py-2 text-amber-600 dark:text-amber-400">
-              <RotateCcw className="w-4 h-4 mr-2" /> Nota de crédito
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => onDelete(payment)} className="cursor-pointer font-medium py-2 text-red-600 dark:text-red-400">
-              <Trash2 className="w-4 h-4 mr-2" /> Eliminar pago
-            </DropdownMenuItem>
+            {onCreditNote && (
+              <DropdownMenuItem 
+                onClick={() => onCreditNote(payment)} 
+                className="cursor-pointer font-semibold py-2 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+              >
+                <RotateCcw className="w-4 h-4 mr-2.5" /> Emitir nota de crédito
+              </DropdownMenuItem>
+            )}
+            <div className="px-2 py-1.5 text-[10px] text-muted-foreground flex items-center gap-1.5 bg-muted/40 rounded-md mt-1">
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              <span>Facturado ante el SRI (Inalterable)</span>
+            </div>
           </>
+        ) : (
+          allowDelete && onDelete && (
+            <DropdownMenuItem 
+              onClick={() => onDelete(payment)} 
+              className="cursor-pointer font-semibold py-2 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+            >
+              <Trash2 className="w-4 h-4 mr-2.5" /> Anular / Eliminar pago
+            </DropdownMenuItem>
+          )
         )}
       </DropdownMenuContent>
     </DropdownMenu>

@@ -3,7 +3,6 @@ import { prisma } from "@/lib/db"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
-// Traductor de métodos de pago para Ecuador
 const formatPaymentMethod = (method?: string | null) => {
   if (!method) return "Efectivo"
   const m = method.toUpperCase().trim()
@@ -23,22 +22,72 @@ export async function GET(
 ) {
   try {
     const { id: paymentId } = await params
-    const payment = await prisma.payment.findUnique({
-      where: { id: paymentId },
-      include: {
-        patient: true,
-        treatmentPlan: {
-          include: { items: true }
-        },
-        processedBy: true
-      }
-    })
+
+    const [payment, settings] = await Promise.all([
+      prisma.payment.findUnique({
+        where: { id: paymentId },
+        include: {
+          patient: true,
+          taxDocuments: true,
+          treatmentPlan: {
+            include: { 
+              items: true,
+              agreement: true 
+            }
+          },
+          processedBy: true
+        }
+      }),
+      prisma.clinicSettings.findFirst()
+    ])
 
     if (!payment) {
       return new NextResponse("Comprobante no encontrado o eliminado.", { status: 404 })
     }
-    const receiptNum = payment.receiptNumber || `#REC-${payment.id.slice(-6).toUpperCase()}`
-    
+
+    const clinicName = settings?.clinicName?.trim() || "Clinica dental"
+    const clinicSlogan = settings?.slogan?.trim() || "Clinica sonrisa"
+    const clinicRuc = settings?.ruc?.trim() || "1000000000001"
+    const clinicAddress = [settings?.address, settings?.city, settings?.country].filter(Boolean).join(", ") || "Ciudad, País"
+    const clinicEmail = settings?.email?.trim() || "dental@example.com"
+    const clinicCurrency = `${settings?.currency || "USD"} `
+
+    const logoUrl = settings?.logoUrl 
+    const watermarkUrl = settings?.watermarkUrl || settings?.logoUrl 
+    const watermarkOpacity = ((settings?.watermarkOpacity ?? 4) / 100)
+    const watermarkScale = ((settings?.watermarkScale || 100) / 100)
+    const isMonochrome = settings?.defaultPrintMode === "bw"
+    const filterStyle = isMonochrome ? "filter: grayscale(100%);" : ""
+
+    const sriDoc = payment.taxDocuments?.[0]
+    const invoiceSecuencial = sriDoc?.secuencial
+    const isOfficialInvoice = Boolean(invoiceSecuencial)
+    const displayDocNumber = invoiceSecuencial || payment.receiptNumber || `#REC-${payment.id.slice(-6).toUpperCase()}`
+    const docTitle = isOfficialInvoice ? "Factura Electrónica" : "Comprobante de Pago"
+
+    const planItems = payment.treatmentPlan?.items || []
+    const agreementDiscountPct = Number(payment.treatmentPlan?.agreement?.discountValue || 0)
+
+    const realNetPlanCost = planItems.reduce((acc, item) => {
+      const itemCost = Number(item.cost || 0)
+      const itemDiscount = Number(item.discount || 0)
+      const effectiveDiscount = itemDiscount > 0 ? itemDiscount : agreementDiscountPct
+      return acc + (itemCost - (itemCost * (effectiveDiscount / 100)))
+    }, 0)
+
+    const planTotalPaid = Number(payment.treatmentPlan?.totalPaid || 0)
+    const planPendingBalance = Math.max(0, realNetPlanCost - planTotalPaid)
+    const isFullyPaidPlan = planPendingBalance <= 0.01
+    let appliedItems: Array<{ procedureName: string; tooth: string; appliedAmount: number }> = []
+
+    try {
+      if (payment.notes && payment.notes.startsWith("[")) {
+        appliedItems = JSON.parse(payment.notes)
+      }
+    } catch {
+      appliedItems = []
+    }
+
     const patientFullName = payment.patient 
       ? `${payment.patient.firstName || ''} ${payment.patient.lastName || ''}`.trim() 
       : "Paciente General"
@@ -48,40 +97,41 @@ export async function GET(
     const formattedDate = format(new Date(payment.createdAt), "dd 'de' MMMM 'de' yyyy - HH:mm", { locale: es })
     const formattedAmount = Number(payment.amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })
     const cashierName = payment.processedBy?.name || "Caja / Administración"
+
     let itemsHtml = ""
-    const planItems = payment.treatmentPlan?.items || []
 
-    if (planItems.length > 0) {
-      itemsHtml = planItems.map((item: any) => {
-        const itemName = item.name || item.procedureName || item.treatmentName || item.description || "Procedimiento Odontológico"
-        const planName = payment.treatmentPlan?.name || "Plan General"
-        const tooth = item.toothNumber || item.tooth || item.piece || (item.toothLabel ? item.toothLabel : "General")
-        const itemCost = Number(item.cost || item.totalCost || item.price || item.paidAmount || 0).toFixed(2)
+    if (appliedItems.length > 0) {
+      itemsHtml = appliedItems
+        .filter((item) => Number(item.appliedAmount) > 0)
+        .map((item) => {
+          const tooth = item.tooth || "General"
+          const amount = Number(item.appliedAmount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })
 
-        return `
-          <tr>
-            <td>
-              <div class="desc-title">${itemName}</div>
-              <div class="desc-sub">Plan: ${planName}</div>
-            </td>
-            <td style="text-align: center; font-weight: 700; color: #64748b;">
-              ${typeof tooth === "number" || (typeof tooth === "string" && !isNaN(Number(tooth))) ? `Pieza ${tooth}` : tooth}
-            </td>
-            <td style="text-align: right; font-weight: 800;">
-              $${itemCost}
-            </td>
-          </tr>
-        `
-      }).join("")
+          return `
+            <tr>
+              <td>
+                <div class="desc-title">${item.procedureName}</div>
+                <div class="desc-sub">Plan: ${payment.treatmentPlan?.name || "Rehabilitación Oral"}</div>
+              </td>
+              <td style="text-align: center; font-weight: 700; color: #64748b;">
+                ${typeof tooth === "number" || (!isNaN(Number(tooth)) && tooth !== "") ? `Pieza ${tooth}` : tooth}
+              </td>
+              <td style="text-align: right; font-weight: 800;">
+                ${clinicCurrency}${amount}
+              </td>
+            </tr>
+          `
+        })
+        .join("")
     } else {
       itemsHtml = `
         <tr>
           <td>
-            <div class="desc-title">Abono General a Tratamiento</div>
-            <div class="desc-sub">Plan: ${payment.treatmentPlan?.name || 'Rehabilitación Oral'}</div>
+            <div class="desc-title">Abono a Tratamiento Odontológico</div>
+            <div class="desc-sub">Plan: ${payment.treatmentPlan?.name || "Rehabilitación Oral"}</div>
           </td>
           <td style="text-align: center; font-weight: 700; color: #64748b;">General</td>
-          <td style="text-align: right; font-weight: 800;">$${formattedAmount}</td>
+          <td style="text-align: right; font-weight: 800;">${clinicCurrency}${formattedAmount}</td>
         </tr>
       `
     }
@@ -91,7 +141,7 @@ export async function GET(
       <html lang="es">
       <head>
         <meta charset="UTF-8">
-        <title>Comprobante de Pago - ${receiptNum}</title>
+        <title>${docTitle} - ${displayDocNumber}</title>
         <style>
           @page {
             size: A4 portrait;
@@ -110,33 +160,30 @@ export async function GET(
             min-height: 100%;
             position: relative;
           }
-
-          /* MARCA DE AGUA */
           .watermark-container {
             position: absolute;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%) rotate(-30deg);
-            opacity: 0.035;
+            transform: translate(-50%, -50%) scale(${watermarkScale});
+            width: 450px;
+            max-height: 450px;
+            opacity: ${watermarkOpacity};
             z-index: 0;
             pointer-events: none;
-            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
           }
-          .watermark-text {
-            font-size: 75px;
-            font-weight: 900;
-            color: #008bcd;
-            letter-spacing: 6px;
-            text-transform: uppercase;
-            white-space: nowrap;
+          .watermark-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            ${filterStyle}
           }
-
           .content {
             position: relative;
             z-index: 1;
           }
-
-          /* ENCABEZADO */
           .header {
             display: flex;
             justify-content: space-between;
@@ -153,6 +200,9 @@ export async function GET(
           .logo-img {
             height: 55px;
             width: auto;
+            max-width: 160px;
+            object-fit: contain;
+            ${filterStyle}
           }
           .clinic-brand {
             font-size: 26px;
@@ -191,24 +241,20 @@ export async function GET(
             letter-spacing: 1px;
           }
           .receipt-number {
-            font-size: 20px;
+            font-size: ${isOfficialInvoice ? '16px' : '20px'};
             font-weight: 900;
             color: #0f172a;
             margin-top: 4px;
           }
           .badge-paid {
             display: inline-block;
-            background-color: #d1fae5;
-            color: #059669;
-            border: 1px solid #a7f3d0;
+            border: 1px solid;
             padding: 3px 8px;
             border-radius: 6px;
             font-size: 10px;
             font-weight: 800;
             margin-top: 8px;
           }
-
-          /* DATOS DEL PACIENTE */
           .info-grid {
             display: flex;
             justify-content: space-between;
@@ -239,8 +285,6 @@ export async function GET(
             font-size: 14px;
             font-weight: 800;
           }
-
-          /* TABLA DE DETALLES */
           .table-container {
             border: 1px solid #e2e8f0;
             border-radius: 12px;
@@ -272,7 +316,6 @@ export async function GET(
           .desc-title { font-weight: 800; color: #0f172a; }
           .desc-sub { font-size: 11px; color: #64748b; margin-top: 4px; }
 
-          /* TOTAL */
           .total-container {
             display: flex;
             justify-content: flex-end;
@@ -281,18 +324,20 @@ export async function GET(
           .total-box {
             background-color: #008bcd;
             color: white;
-            padding: 20px 30px;
+            padding: 20px 24px;
             border-radius: 16px;
             width: 320px;
+            box-shadow: 0 4px 10px -2px rgba(0, 139, 205, 0.3);
+          }
+          .total-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 4px 10px -2px rgba(0, 139, 205, 0.3);
           }
           .total-label {
             font-size: 12px;
             font-weight: 800;
-            color: rgba(255,255,255,0.8);
+            color: rgba(255,255,255,0.85);
             text-transform: uppercase;
             letter-spacing: 1px;
           }
@@ -301,8 +346,18 @@ export async function GET(
             font-weight: 900;
             color: white;
           }
+          .pending-balance-row {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.25);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.9);
+          }
 
-          /* PIE DE PÁGINA Y FIRMAS */
           .footer-section {
             margin-top: 60px;
             display: flex;
@@ -335,32 +390,37 @@ export async function GET(
       <body>
 
         <div class="watermark-container">
-          <div class="watermark-text">CARMO DENTAL</div>
+          <img src="${watermarkUrl}" alt="Watermark" />
         </div>
 
         <div class="content">
-          <!-- ENCABEZADO -->
           <div class="header">
             <div class="logo-container">
-              <img src="/logosn.png" alt="Logo" class="logo-img" onerror="this.style.display='none'">
+              ${logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo-img" onerror="this.style.display='none'">` : ''}
               <div>
-                <div class="clinic-brand">CARMO DENTAL</div>
-                <div class="clinic-sub">Clínica de Especialidades Odontológicas</div>
+                <div class="clinic-brand">${clinicName}</div>
+                <div class="clinic-sub">${clinicSlogan}</div>
                 <div class="clinic-info">
-                  RUC: 1719231696001<br/>
-                  Quito, Ecuador<br/>
-                  carmodental@gmail.com
+                  ${clinicRuc ? `RUC: ${clinicRuc}<br/>` : ''}
+                  ${clinicAddress}<br/>
+                  ${clinicEmail}
                 </div>
               </div>
             </div>
             <div class="receipt-box">
-              <div class="receipt-title">Comprobante de Pago</div>
-              <div class="receipt-number">${receiptNum}</div>
-              <div class="badge-paid">PAGADO EN CAJA</div>
+              <div class="receipt-title">${docTitle}</div>
+              <div class="receipt-number">${displayDocNumber}</div>
+              ${sriDoc?.accessKey ? `
+                <div style="font-size: 8px; color: #64748b; font-family: monospace; margin-top: 4px; max-width: 200px; word-break: break-all;">
+                  Aut: ${sriDoc.accessKey}
+                </div>
+              ` : ''}
+              <div class="badge-paid" style="${isFullyPaidPlan ? 'background-color: #d1fae5; color: #059669; border-color: #a7f3d0;' : 'background-color: #eff6ff; color: #008bcd; border-color: #bfdbfe;'}">
+                ${isFullyPaidPlan ? "✓ PLAN TOTALMENTE SALDADO" : "PAGO APLICADO"}
+              </div>
             </div>
           </div>
 
-          <!-- DATOS DEL PACIENTE -->
           <div class="info-grid">
             <div class="info-col">
               <div class="info-item">
@@ -384,14 +444,13 @@ export async function GET(
             </div>
           </div>
 
-          <!-- TABLA DE DETALLES -->
           <div class="table-container">
             <table>
               <thead>
                 <tr>
                   <th style="text-align: left;">Descripción de Prestación / Plan</th>
                   <th style="text-align: center;">Pieza Dental</th>
-                  <th style="text-align: right;">Abono Registrado</th>
+                  <th style="text-align: right;">Importe Pagado</th>
                 </tr>
               </thead>
               <tbody>
@@ -400,20 +459,35 @@ export async function GET(
             </table>
           </div>
 
-          <!-- TOTAL -->
           <div class="total-container">
             <div class="total-box">
-              <span class="total-label">Total Abonado</span>
-              <span class="total-amount">$${formattedAmount}</span>
+              <div class="total-row">
+                <span class="total-label">Total Pagado</span>
+                <span class="total-amount">${clinicCurrency}${formattedAmount}</span>
+              </div>
+              ${
+                !isFullyPaidPlan
+                  ? `
+                    <div class="pending-balance-row">
+                      <span>Saldo Pendiente del Plan:</span>
+                      <span>${clinicCurrency}${planPendingBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  `
+                  : `
+                    <div class="pending-balance-row" style="color: #d1fae5;">
+                      <span>Convenio Aplicado:</span>
+                      <span>✓ Saldo Pendiente: ${clinicCurrency}0.00</span>
+                    </div>
+                  `
+              }
             </div>
           </div>
 
-          <!-- PIE Y FIRMAS -->
           <div class="footer-section">
             <div class="legal-text">
-              Este documento es un comprobante de control interno emitido para certificar la recepción del pago detallado en caja.<br/><br/>
+              Este documento certifica la recepción conforme del valor detallado en caja para las prestaciones especificadas.<br/><br/>
               <b>Atendido por:</b> ${cashierName}<br/>
-              <b>¡Gracias por confiar su sonrisa en Carmo Dental!</b>
+              <b>¡Gracias por confiar en ${clinicName}!</b>
             </div>
             
             <div class="signature-box">
@@ -440,7 +514,7 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error("Error al generar PDF de pago:", error)
+    console.error("Error al generar PDF de comprobante:", error)
     return new NextResponse("Error interno al generar el PDF del comprobante.", { status: 500 })
   }
 }

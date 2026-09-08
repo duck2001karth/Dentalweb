@@ -80,7 +80,7 @@ export function IssuedDocumentsView({
   }, [documents, currentPage, pageSize])
   const handleViewInvoicePDF = (doc: any) => {
     const targetId = doc.paymentId || doc.id
-    window.open(`/api/invoices/${targetId}/pdf`, "_blank")
+    window.open(`/comprobantes/${targetId}`, "_blank")
   }
   const handleCancelInvoice = async () => {
     if (!docToCancel) return

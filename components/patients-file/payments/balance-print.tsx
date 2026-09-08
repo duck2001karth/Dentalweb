@@ -16,213 +16,518 @@ interface BalancePrintProps {
   issuedBy?: string
 }
 
-export function BalancePrint({
-  patientFullName,
-  patientDocId,
-  patientAge = "--",
-  totalIncome = 0,
-  totalRefunds = 0,
-  netBalance = 0,
-  pendingDebt = 0,
-  transactions = [],
-  issuedBy = "Administración / Caja",
-}: BalancePrintProps) {
+export const triggerBalancePrint = (data: {
+  patientFullName: string
+  patientDocId: string
+  patientAge?: string | number
+  totalIncome: number
+  totalRefunds: number
+  netBalance: number
+  pendingDebt: number
+  transactions: any[]
+  issuedBy?: string
+  settings?: any
+}) => {
+  const {
+    patientFullName,
+    patientDocId,
+    patientAge = "--",
+    totalIncome,
+    totalRefunds,
+    netBalance,
+    pendingDebt,
+    transactions,
+    issuedBy = "Caja / Recaudación",
+    settings,
+  } = data
+
+  const clinicName = settings?.clinicName?.trim() || "CARMO DENTAL"
+  const clinicSlogan = settings?.slogan?.trim() || "CLÍNICA DE SONRISA"
+  const clinicRuc = settings?.ruc?.trim() || "1700000083134"
+  const rawAddress = [settings?.address, settings?.city, settings?.country].filter(Boolean).join(", ")
+  const clinicAddress = rawAddress || "Solanda, Av Jose Argudo, Quito, Ecuador"
+  const clinicPhone = settings?.phone || settings?.whatsappNumber || "969834557"
+  const clinicEmail = settings?.email || "patriciocapa61@gmail.com"
+  
+  const currencySymbol = "$"
+
+  const logoUrl = settings?.logoUrl || "/logosn.png"
+  const watermarkUrl = settings?.watermarkUrl || logoUrl
+  const watermarkOpacity = ((settings?.watermarkOpacity ?? 6) / 100)
+  const watermarkScale = ((settings?.watermarkScale || 100) / 100)
+  const isMonochrome = settings?.defaultPrintMode === "bw"
+  
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es })
 
-  return (
-    <div id="balance-printable" className="hidden print:block font-sans text-slate-900 bg-white min-h-[297mm] p-12 relative overflow-hidden">
-      <div 
-        aria-hidden="true" 
-        className="fixed inset-0 flex items-center justify-center pointer-events-none opacity-[0.06] select-none z-0"
-      >
-        <img 
-          src="/logosn.png" 
-          alt="Marca de Agua Carmo Dental" 
-          className="w-[450px] object-contain"
-        />
-      </div>
+  const iframe = document.createElement("iframe")
+  iframe.style.position = "fixed"
+  iframe.style.right = "0"
+  iframe.style.bottom = "0"
+  iframe.style.width = "0"
+  iframe.style.height = "0"
+  iframe.style.border = "none"
+  document.body.appendChild(iframe)
 
-      <div className="relative z-10 flex flex-col min-h-[265mm]">
-        
-        {/* CABECERA MEMBRETADA */}
-        <div>
-          <div className="flex justify-between items-start border-b-2 border-[#008bcd] pb-4">
-            <div className="flex items-center gap-4">
-              <img 
-                src="/logosn.png" 
-                alt="Logo Carmo Dental" 
-                className="h-14 w-auto object-contain"
-              />
+  const doc = iframe.contentWindow?.document
+  if (!doc) return
+
+  doc.open()
+  doc.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Estado de Cuenta - ${patientFullName}</title>
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 12mm 15mm; 
+          }
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+          }
+          body {
+            background: #ffffff;
+            color: #1e293b;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .watermark-container {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(${watermarkScale});
+            width: 420px;
+            height: 420px;
+            opacity: ${watermarkOpacity};
+            z-index: 0;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .watermark-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            ${isMonochrome ? "filter: grayscale(100%);" : ""}
+          }
+          .content-wrapper {
+            position: relative;
+            z-index: 1;
+            padding: 5mm 8mm;
+          }
+          
+          /* HEADER */
+          .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #008bcd;
+            padding-bottom: 16px;
+            margin-bottom: 24px;
+          }
+          .brand-box {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+          }
+          .logo-img {
+            width: 60px;
+            height: 60px;
+            object-fit: contain;
+            ${isMonochrome ? "filter: grayscale(100%);" : ""}
+          }
+          .clinic-title {
+            font-size: 24px;
+            font-weight: 800; /* Suavizado */
+            color: #008bcd;
+            text-transform: uppercase;
+            letter-spacing: -0.5px;
+            line-height: 1.1;
+          }
+          .clinic-slogan {
+            font-size: 10.5px;
+            font-weight: 700; /* Suavizado */
+            color: #334155;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 3px;
+          }
+          .clinic-ruc {
+            font-size: 10px;
+            color: #475569;
+            margin-top: 6px;
+          }
+          .right-badge-box {
+            text-align: right;
+          }
+          .badge-outline {
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 10px 16px;
+            display: inline-block;
+          }
+          .badge-text {
+            font-size: 11px;
+            font-weight: 800; /* Suavizado */
+            color: #0f172a;
+            text-transform: uppercase;
+            line-height: 1.3;
+          }
+          .header-date {
+            font-size: 10px;
+            color: #475569;
+            margin-top: 10px;
+          }
+          .header-date b {
+            color: #1e293b;
+          }
+
+          /* TARJETA PACIENTE */
+          .patient-card {
+            display: flex;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin-bottom: 24px;
+          }
+          .patient-left {
+            flex: 1.3;
+          }
+          .patient-right {
+            flex: 1;
+            border-left: 1px solid #e2e8f0;
+            padding-left: 20px;
+          }
+          .label-text {
+            font-size: 10px;
+            font-weight: 700;
+            color: #64748b;
+            text-transform: uppercase;
+          }
+          .name-text {
+            font-size: 16px;
+            font-weight: 800; /* Suavizado */
+            color: #1e293b;
+            margin-top: 6px;
+          }
+          .meta-row {
+            display: flex;
+            margin-top: 12px;
+            font-size: 11.5px;
+            color: #475569;
+          }
+          .meta-col {
+            width: 50%;
+          }
+          .meta-col-label {
+            font-weight: 700;
+            color: #475569;
+            margin-bottom: 4px;
+          }
+
+          /* TARJETAS KPI */
+          .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 30px;
+          }
+          .kpi-box {
+            border-radius: 8px;
+            padding: 14px 16px;
+          }
+          .kpi-label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            line-height: 1.4;
+          }
+          .kpi-value {
+            font-size: 18px;
+            font-weight: 800; /* Suavizado */
+            margin-top: 8px;
+            letter-spacing: -0.5px;
+          }
+
+          /* TABLA */
+          .table-title {
+            font-size: 11.5px;
+            font-weight: 800;
+            color: #008bcd;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+            /* La línea azul ahora está aquí, NO en la tabla, para evitar que se repita */
+            border-bottom: 1.5px solid #008bcd; 
+            padding-bottom: 6px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10.5px;
+          }
+          thead tr {
+            border-bottom: 1px solid #cbd5e1;
+          }
+          th {
+            padding: 8px 8px 12px 8px;
+            text-align: left;
+            font-weight: 700; /* Suavizado (antes 800) */
+            color: #1e293b;
+            text-transform: uppercase;
+            font-size: 9.5px;
+          }
+          tbody tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #f1f5f9;
+            color: #475569;
+            vertical-align: top;
+          }
+          .td-date {
+            color: #64748b;
+            line-height: 1.4;
+          }
+          .td-num {
+            font-weight: 700; /* Suavizado (antes 800) */
+            color: #1e293b;
+          }
+          .td-desc {
+            color: #334155;
+            font-weight: 500;
+          }
+          .td-type-in {
+            color: #059669;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 8.5px;
+          }
+          .td-type-out {
+            color: #d97706;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 8.5px;
+          }
+          .td-amount {
+            text-align: right;
+            font-weight: 800; /* Suavizado (antes 900) */
+            font-size: 11.5px;
+            color: #1e293b;
+          }
+
+          /* FIRMAS Y FOOTER */
+          .footer-section {
+            padding-top: 80px; 
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          .signatures-block {
+            display: flex;
+            justify-content: space-between;
+            padding: 0 50px;
+          }
+          .sig-col {
+            width: 220px;
+            border-top: 1px solid #1e293b; /* Línea de firma más fina */
+            text-align: center;
+            padding-top: 6px;
+          }
+          .sig-name {
+            font-size: 10px;
+            font-weight: 800;
+            color: #1e293b;
+            text-transform: uppercase;
+          }
+          .sig-role {
+            font-size: 9px;
+            color: #64748b;
+            margin-top: 4px;
+          }
+          .footer-info {
+            margin-top: 24px;
+            padding-top: 12px;
+            border-top: 1px solid #008bcd; /* Línea azul sutil de 1px */
+            text-align: center;
+            font-size: 9.5px;
+            color: #475569;
+            line-height: 1.6;
+          }
+          .footer-info b {
+            color: #1e293b;
+          }
+          .footer-italic {
+            font-style: italic;
+            font-size: 9px;
+            color: #64748b;
+            margin-top: 4px;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="watermark-container">
+          <img src="${watermarkUrl}" alt="" />
+        </div>
+
+        <div class="content-wrapper">
+          
+          <div class="header-container">
+            <div class="brand-box">
+              <img src="${logoUrl}" class="logo-img" alt="" onerror="this.style.display='none'" />
               <div>
-                <h1 className="text-2xl font-black text-[#008bcd] tracking-tight leading-none uppercase">
-                  Carmo Dental
-                </h1>
-                <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mt-1">
-                  Clínica de Especialidades Odontológicas
-                </p>
-                <p className="text-[10px] text-slate-500 font-medium mt-0.5">
-                  RUC: 1719231696001 | Solanda, Quito - Ecuador
-                </p>
+                <div class="clinic-title">${clinicName}</div>
+                <div class="clinic-slogan">${clinicSlogan}</div>
+                <div class="clinic-ruc">RUC: ${clinicRuc} | ${clinicAddress}</div>
               </div>
             </div>
-
-            <div className="text-right">
-              <span className="inline-block bg-slate-100 text-slate-800 text-[11px] font-black px-4 py-1.5 rounded-lg uppercase tracking-wider border border-slate-200">
-                Estado de Cuenta Financiero
-              </span>
-              <p className="text-[11px] text-slate-500 font-medium mt-2">
-                Fecha de Emisión: <b className="text-slate-800">{today}</b>
-              </p>
+            <div class="right-badge-box">
+              <div class="badge-outline">
+                <div class="badge-text">ESTADO DE CUENTA<br/>FINANCIERO</div>
+              </div>
+              <div class="header-date">Fecha de Emisión: <b>${today}</b></div>
             </div>
           </div>
 
-          {/* DATOS DE FILIACIÓN DEL PACIENTE */}
-          <div className="grid grid-cols-2 gap-4 my-6 p-4 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-            <div>
-              <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Datos del Paciente</p>
-              <p className="font-extrabold text-slate-900 text-sm mt-0.5">{patientFullName}</p>
-              <div className="flex gap-4 text-slate-600 mt-1">
-                <p><b>Doc. Identidad:</b> {patientDocId}</p>
-                <p><b>Edad:</b> {patientAge ? `${patientAge} Años` : "--"}</p>
+          <div class="patient-card">
+            <div class="patient-left">
+              <div class="label-text">DATOS DEL PACIENTE</div>
+              <div class="name-text">${patientFullName}</div>
+              <div class="meta-row">
+                <div class="meta-col">
+                  <div class="meta-col-label">Doc. Identidad:</div>
+                  <div style="color: #475569;">${patientDocId}</div>
+                </div>
+                <div class="meta-col">
+                  <div class="meta-col-label">Edad: <span style="font-weight: 400;">${patientAge}</span></div>
+                  <div style="color: #475569;">Años</div>
+                </div>
               </div>
             </div>
-
-            <div className="border-l border-slate-200 pl-4">
-              <p className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Detalles de Emisión</p>
-              <p className="font-extrabold text-slate-900 text-sm mt-0.5">{issuedBy}</p>
-              <p className="text-slate-600 mt-1">
-                <b>Tipo:</b> Consolidado de Pagos y Liquidación
-              </p>
+            <div class="patient-right">
+              <div class="label-text">DETALLES DE EMISIÓN</div>
+              <div class="name-text">${issuedBy}</div>
+              <div style="font-size: 11.5px; color: #475569; margin-top: 12px;">
+                <span style="font-weight: 700;">Tipo:</span> Consolidado de Pagos y<br/>Liquidación
+              </div>
             </div>
           </div>
-        </div>
-        <div className="grid grid-cols-4 gap-3 mb-6">
-          <div className="border border-slate-200 p-3 rounded-lg bg-slate-50/50">
-            <p className="text-[10px] font-bold uppercase text-slate-500">Total Cobrado (+)</p>
-            <p className="text-base font-black text-slate-900 mt-0.5">
-              ${totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </p>
+
+          <div class="kpi-grid">
+            <div class="kpi-box" style="border: 1px solid #e2e8f0;">
+              <div class="kpi-label" style="color: #475569;">TOTAL COBRADO (+)</div>
+              <div class="kpi-value" style="color: #1e293b;">
+                ${currencySymbol}${totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div class="kpi-box" style="border: 1px solid #fed7aa;">
+              <div class="kpi-label" style="color: #c2410c;">NOTAS DE CRÉDITO<br/>(-)</div>
+              <div class="kpi-value" style="color: #c2410c;">
+                ${currencySymbol}${totalRefunds.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div class="kpi-box" style="border: 1px solid #bae6fd;">
+              <div class="kpi-label" style="color: #0284c7;">BALANCE NETO<br/>PERCIBIDO</div>
+              <div class="kpi-value" style="color: #0284c7;">
+                ${currencySymbol}${netBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div class="kpi-box" style="border: 1px solid #bbf7d0;">
+              <div class="kpi-label" style="color: #16a34a;">ESTADO CONTABLE</div>
+              <div class="kpi-value" style="color: #16a34a;">
+                ${pendingDebt > 0 ? `${currencySymbol}${pendingDebt.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "Al Día"}
+              </div>
+            </div>
           </div>
 
-          <div className="border border-slate-200 p-3 rounded-lg bg-slate-50/50">
-            <p className="text-[10px] font-bold uppercase text-amber-700">Notas de Crédito (-)</p>
-            <p className="text-base font-black text-amber-700 mt-0.5">
-              ${totalRefunds.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-
-          <div className="border-2 border-[#008bcd]/30 p-3 rounded-lg bg-[#008bcd]/5">
-            <p className="text-[10px] font-bold uppercase text-[#008bcd]">Balance Neto Percibido</p>
-            <p className="text-base font-black text-[#008bcd] mt-0.5">
-              ${netBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </p>
-          </div>
-
-          <div className={`border p-3 rounded-lg ${pendingDebt > 0 ? "border-red-200 bg-red-50/50" : "border-emerald-200 bg-emerald-50/50"}`}>
-            <p className={`text-[10px] font-bold uppercase ${pendingDebt > 0 ? "text-red-700" : "text-emerald-700"}`}>
-              {pendingDebt > 0 ? "Saldo Pendiente" : "Estado Contable"}
-            </p>
-            <p className={`text-base font-black mt-0.5 ${pendingDebt > 0 ? "text-red-700" : "text-emerald-700"}`}>
-              {pendingDebt > 0 ? `$${pendingDebt.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : "Al Día"}
-            </p>
-          </div>
-        </div>
-        <div className="flex-1 mt-2">
-          <h2 className="text-xs font-bold text-[#008bcd] border-b border-[#008bcd] pb-1 uppercase tracking-wider mb-3">
-            Detalle de Movimientos de Caja y Pagos
-          </h2>
-
-          <table className="w-full text-left text-xs border-collapse">
+          <!-- TÍTULO CON LÍNEA AZUL INTEGRADA -->
+          <div class="table-title">DETALLE DE MOVIMIENTOS DE CAJA Y PAGOS</div>
+          
+          <table>
             <thead>
-              <tr className="border-b border-slate-300 text-slate-500 font-bold text-[10px] uppercase">
-                <th className="py-2 px-2">Fecha</th>
-                <th className="py-2 px-2"># Comprobante</th>
-                <th className="py-2 px-2">Concepto / Procedimiento</th>
-                <th className="py-2 px-2">Medio</th>
-                <th className="py-2 px-2 text-center">Tipo</th>
-                <th className="py-2 px-2 text-right">Monto</th>
+              <tr>
+                <th style="width: 14%;">FECHA</th>
+                <th style="width: 16%;">#<br/>COMPROBANTE</th>
+                <th style="width: 28%;">CONCEPTO /<br/>PROCEDIMIENTO</th>
+                <th style="width: 18%;">MEDIO</th>
+                <th style="width: 10%; text-align: center;">TIPO</th>
+                <th style="width: 14%; text-align: right;">MONTO</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 text-[11px]">
-              {transactions.length === 0 ? (
+            <tbody>
+              ${transactions.length === 0 ? `
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-slate-400 italic">
-                    Sin registros financieros asociados a la ficha.
+                  <td colspan="6" style="text-align: center; color: #94a3b8; padding: 20px;">
+                    Sin registros financieros.
                   </td>
                 </tr>
-              ) : (
-                transactions.map((tx: any, idx: number) => {
-                  const isIncome = tx.type === "INCOME"
-                  return (
-                    <tr key={tx.id || idx} className="break-inside-avoid">
-                      <td className="py-2 px-2 text-slate-600">
-                        {format(tx.date, "dd/MM/yyyy HH:mm", { locale: es })}
-                      </td>
-                      <td className="py-2 px-2 font-bold text-slate-800">
-                        {tx.number}
-                      </td>
-                      <td className="py-2 px-2 text-slate-700 font-medium">
-                        {tx.description}
-                      </td>
-                      <td className="py-2 px-2 text-slate-600">
-                        {tx.method}
-                      </td>
-                      <td className="py-2 px-2 text-center">
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                          isIncome ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-                        }`}>
-                          {isIncome ? "Ingreso" : "Nota Crédito"}
-                        </span>
-                      </td>
-                      <td className={`py-2 px-2 text-right font-bold ${
-                        isIncome ? "text-slate-900" : "text-amber-700"
-                      }`}>
-                        {isIncome ? "+" : "-"}${Math.abs(tx.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
+              ` : transactions.map((tx: any) => {
+                const isIncome = tx.type === "INCOME"
+                const txDate = new Date(tx.date)
+                const dateStr = format(txDate, "dd/MM/yyyy")
+                const timeStr = format(txDate, "HH:mm")
+
+                return `
+                  <tr>
+                    <td class="td-date">${dateStr}<br/>${timeStr}</td>
+                    <td class="td-num">${tx.number}</td>
+                    <td class="td-desc">${tx.description}</td>
+                    <td class="td-date">${tx.method}</td>
+                    <td style="text-align: center;">
+                      <span class="${isIncome ? 'td-type-in' : 'td-type-out'}">
+                        ${isIncome ? 'INGRESO' : 'AJUSTE / NC'}
+                      </span>
+                    </td>
+                    <td class="td-amount">
+                      ${isIncome ? '+' : '-'}${currencySymbol}${Math.abs(tx.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                `
+              }).join("")}
             </tbody>
           </table>
-        </div>
-        <div className="mt-14 pt-6 break-inside-avoid">
-          <div className="flex justify-between items-end px-12 mb-6">
-            <div className="text-center border-t border-black w-56 pt-2">
-              <p className="font-bold text-[10px] uppercase text-slate-800">{patientFullName}</p>
-              <p className="text-[9px] text-slate-500 mt-0.5">Firma del Paciente / Titular</p>
+
+          <div class="footer-section">
+            <div class="signatures-block">
+              <div class="sig-col">
+                <div class="sig-name">${patientFullName}</div>
+                <div class="sig-role">Firma del Paciente / Titular</div>
+              </div>
+              <div class="sig-col">
+                <div class="sig-name">${issuedBy}</div>
+                <div class="sig-role">Firma / Sello de Caja y Recaudación</div>
+              </div>
             </div>
-            <div className="text-center border-t border-black w-56 pt-2">
-              <p className="font-bold text-[10px] uppercase text-slate-800">{issuedBy}</p>
-              <p className="text-[9px] text-slate-500 mt-0.5">Firma / Sello de Caja y Recaudación</p>
+
+            <div class="footer-info">
+              <b>${clinicName} - ${clinicSlogan}</b><br/>
+              Dirección: ${clinicAddress} • Cel.: ${clinicPhone} • Quito - Ecuador
+              <div class="footer-italic">
+                Documento emitido electrónicamente como comprobante de balance y conciliación.
+              </div>
             </div>
           </div>
 
-          <div className="border-t border-[#008bcd] pt-3 text-center text-[9px] text-slate-500">
-            <p className="font-bold text-slate-700">CARMO DENTAL - Clínica de Especialidades Odontológicas</p>
-            <p>Dirección: Solanda Sector 4, José Argudo S24-72 y Av. Solanda • Cel.: 0998 990 215 • Quito - Ecuador</p>
-            <p className="mt-0.5 italic">Documento emitido electrónicamente como comprobante de balance y conciliación.</p>
-          </div>
         </div>
+      </body>
+    </html>
+  `)
+  doc.close()
 
-      </div>
-      <style jsx global>{`
-        @media print {
-          body * { visibility: hidden !important; }
-          #balance-printable, #balance-printable * { visibility: visible !important; }
-          #balance-printable {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
-            margin: 0 !important;
-            padding: 15mm 20mm !important;
-            display: block !important;
-            background: white !important;
-          }
-          @page { size: A4 portrait; margin: 0; }
-        }
-      `}</style>
-    </div>
-  )
+  setTimeout(() => {
+    iframe.contentWindow?.focus()
+    iframe.contentWindow?.print()
+    setTimeout(() => {
+      document.body.removeChild(iframe)
+    }, 1500)
+  }, 300)
+}
+
+export function BalancePrint(_props: BalancePrintProps) {
+  return null
 }

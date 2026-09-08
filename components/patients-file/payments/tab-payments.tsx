@@ -217,7 +217,7 @@ export function PaymentsTable({
                         {invoiceStr ? (
                           <button
                             type="button"
-                            onClick={() => window.open(`/api/invoices/${item.id}/pdf`, "_blank")}
+                            onClick={() => window.open(`/comprobantes/${item.id}`, "_blank")}
                             className="inline-flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer shadow-sm"
                             title="Ver Factura Electrónica (PDF)"
                           >

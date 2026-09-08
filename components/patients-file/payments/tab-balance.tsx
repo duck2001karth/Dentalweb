@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from "react"
+import { useSession } from "next-auth/react"
 import { 
   DollarSign, ArrowUpRight, ArrowDownRight, Wallet, 
   Printer, PieChart, CreditCard, Banknote, 
@@ -15,7 +16,8 @@ import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { useGetPatient } from "@/hooks/patients"
-import { BalancePrint } from "@/components/patients-file/payments/balance-print"
+import { useClinicSettings } from "@/config/clinic-settings"
+import { triggerBalancePrint } from "@/components/patients-file/payments/balance-print"
 
 const formatPaymentMethod = (method?: string) => {
   if (!method) return "Efectivo"
@@ -41,6 +43,7 @@ const formatPaymentMethod = (method?: string) => {
       return method
   }
 }
+
 const calculateAge = (birthDateString?: string | Date | null) => {
   if (!birthDateString) return "--"
   const today = new Date()
@@ -84,6 +87,12 @@ export function FinancialBalanceView({
   patientDocId,
   patientAge,
 }: FinancialBalanceViewProps) {
+  const { settings } = useClinicSettings()
+
+  const { data: session } = useSession()
+  const userRole = (session?.user as any)?.role?.toUpperCase() || ""
+  const canPrint = ["ADMIN", "ADMINISTRADOR", "RECEPTION", "RECEPCION"].includes(userRole)
+
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(5)
   const { patient: fetchedPatient } = useGetPatient(patientId)
@@ -103,13 +112,15 @@ export function FinancialBalanceView({
   const resolvedAge = 
     patientAge || 
     calculateAge(currentPatient?.birthDate)
+
   const effectiveBudget = totalBudget > 0 ? totalBudget : totalIncome
   const pendingDebt = Math.max(0, effectiveBudget - netBalance)
   const paymentProgress = effectiveBudget > 0 ? Math.min(100, Math.round((netBalance / effectiveBudget) * 100)) : 100
+
   const methodTotals = payments.reduce((acc: any, p: any) => {
-    const method = (p.method || p.paymentMethod || "CASH").toUpperCase()
+    const formattedMethod = formatPaymentMethod(p.method || p.paymentMethod)
     const amt = Number(p.amount || p.paidAmount || 0)
-    acc[method] = (acc[method] || 0) + amt
+    acc[formattedMethod] = (acc[formattedMethod] || 0) + amt
     return acc
   }, {})
 
@@ -121,22 +132,21 @@ export function FinancialBalanceView({
 
   const getMethodLabel = (m: string) => {
     switch (m) {
-      case "CASH":
-      case "EFECTIVO":
+      case "Efectivo":
         return { label: "Efectivo", icon: Banknote, color: "text-emerald-600 bg-emerald-500/10" }
-      case "TRANSFER":
-      case "TRANSFERENCIA":
-      case "NEQUI":
-        return { label: "Transferencia", icon: ArrowRightLeft, color: "text-blue-600 bg-blue-500/10" }
-      case "CREDIT_CARD":
-      case "DEBIT_CARD":
-      case "TARJETA_CREDITO":
-      case "TARJETA_DEBITO":
-        return { label: "Tarjeta", icon: CreditCard, color: "text-purple-600 bg-purple-500/10" }
+      case "Transferencia Bancaria":
+        return { label: "Transferencia Bancaria", icon: ArrowRightLeft, color: "text-blue-600 bg-blue-500/10" }
+      case "Tarjeta de Crédito":
+        return { label: "Tarjeta de Crédito", icon: CreditCard, color: "text-purple-600 bg-purple-500/10" }
+      case "Tarjeta de Débito":
+        return { label: "Tarjeta de Débito", icon: CreditCard, color: "text-indigo-600 bg-indigo-500/10" }
+      case "Cheque":
+        return { label: "Cheque", icon: Banknote, color: "text-amber-600 bg-amber-500/10" }
       default:
         return { label: m, icon: DollarSign, color: "text-slate-600 bg-slate-500/10" }
     }
   }
+
   const unifiedTransactions = useMemo(() => {
     return [
       ...payments.map(p => ({
@@ -159,6 +169,7 @@ export function FinancialBalanceView({
       }))
     ].sort((a, b) => b.date.getTime() - a.date.getTime())
   }, [payments, refunds])
+
   const totalItems = unifiedTransactions.length
   const totalPages = Math.ceil(totalItems / pageSize) || 1
 
@@ -178,26 +189,30 @@ export function FinancialBalanceView({
     setCurrentPage(1)
   }
 
+  const handlePrint = () => {
+    triggerBalancePrint({
+      patientFullName: resolvedPatientFullName,
+      patientDocId: resolvedDocId,
+      patientAge: resolvedAge,
+      totalIncome,
+      totalRefunds,
+      netBalance,
+      pendingDebt,
+      transactions: unifiedTransactions,
+      issuedBy: "Caja / Recaudación",
+      settings,
+    })
+  }
+
   return (
     <div className="space-y-6 font-sans antialiased animate-in fade-in duration-200">
-      <BalancePrint
-        patientFullName={resolvedPatientFullName}
-        patientDocId={resolvedDocId}
-        patientAge={resolvedAge}
-        totalIncome={totalIncome}
-        totalRefunds={totalRefunds}
-        netBalance={netBalance}
-        pendingDebt={pendingDebt}
-        transactions={unifiedTransactions}
-        issuedBy="Caja / Recaudación"
-      />
-
+      
       {/* CABECERA */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border shadow-xs w-full">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border shadow-xs w-full no-print">
         <div>
           <h2 className="text-xl font-bold text-foreground tracking-tight flex items-center gap-2">
             <div className="bg-[#008bcd]/10 p-1.5 rounded-lg border border-[#008bcd]/20">
-            <Wallet className="w-5 h-5 text-[#008bcd]" /> 
+              <Wallet className="w-5 h-5 text-[#008bcd]" /> 
             </div>
             Estado de Cuenta y Balance Financiero
           </h2>
@@ -205,20 +220,22 @@ export function FinancialBalanceView({
             Consolidado de ingresos brutos, devoluciones/ajustes y saldo neto percibido del paciente.
           </p>
         </div>
-
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => window.print()}
-          className="h-10 text-xs font-bold rounded-xl border-border bg-background hover:bg-muted text-foreground w-full sm:w-auto cursor-pointer"
-        >
-          <Printer className="w-3.5 h-3.5 mr-1.5" /> Imprimir Estado
-        </Button>
+        
+        {canPrint && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handlePrint}
+            className="h-10 text-xs font-bold rounded-xl border-border bg-background hover:bg-muted text-foreground w-full sm:w-auto cursor-pointer"
+          >
+            <Printer className="w-3.5 h-3.5 mr-1.5 text-[#008bcd]" /> Imprimir Estado
+          </Button>
+        )}
       </div>
+
       {/* TARJETAS DE TOTALES */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">       
-        {/* TOTAL COBRADO */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 no-print">       
         <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-2">
           <div className="flex items-center justify-between text-muted-foreground">
             <span className="text-xs font-bold uppercase tracking-wider">Total Cobrado</span>
@@ -232,7 +249,6 @@ export function FinancialBalanceView({
           <p className="text-[11px] text-muted-foreground">Suma de todos los cobros registrados</p>
         </div>
 
-        {/* NOTAS DE CRÉDITO */}
         <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-2">
           <div className="flex items-center justify-between text-muted-foreground">
             <span className="text-xs font-bold uppercase tracking-wider">Notas de Crédito</span>
@@ -246,7 +262,6 @@ export function FinancialBalanceView({
           <p className="text-[11px] text-muted-foreground">Monto total reembolsado o ajustado</p>
         </div>
 
-        {/* BALANCE NETO */}
         <div className="p-5 rounded-2xl bg-card border border-[#008bcd]/30 bg-[#008bcd]/5 shadow-xs space-y-2">
           <div className="flex items-center justify-between text-[#008bcd]">
             <span className="text-xs font-bold uppercase tracking-wider">Balance Neto</span>
@@ -260,7 +275,6 @@ export function FinancialBalanceView({
           <p className="text-[11px] text-muted-foreground">Ingreso real que ingresó a clínica</p>
         </div>
 
-        {/* SALDO PENDIENTE */}
         <div className={cn(
           "p-5 rounded-2xl bg-card border shadow-xs space-y-2",
           pendingDebt > 0 ? "border-rose-500/30 bg-rose-500/5" : "border-emerald-500/30 bg-emerald-500/5"
@@ -289,11 +303,10 @@ export function FinancialBalanceView({
             {pendingDebt > 0 ? "Saldo por liquidar del tratamiento" : "Tratamiento 100% saldado"}
           </p>
         </div>
-
       </div>
+
       {/* COBERTURA Y MÉTODOS DE PAGO */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-        
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 no-print">
         <div className="md:col-span-6 p-6 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -320,6 +333,7 @@ export function FinancialBalanceView({
             </div>
           </div>
         </div>
+
         <div className="md:col-span-6 p-6 rounded-2xl bg-card border border-border shadow-xs space-y-3">
           <span className="text-xs font-bold text-foreground flex items-center gap-1.5 uppercase tracking-wider mb-1">
             <PieChart className="w-4 h-4 text-[#008bcd]" /> Métodos de Pago Utilizados
@@ -353,8 +367,9 @@ export function FinancialBalanceView({
           )}
         </div>
       </div>
+
       {/* TABLA CONSOLIDADA CON PAGINACIÓN */}
-      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
+      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs no-print">
         <div className="p-4 bg-muted/20 border-b border-border flex items-center justify-between">
           <span className="text-xs font-bold text-foreground uppercase tracking-wider">
             Movimientos y Registro de Caja del Paciente
@@ -423,13 +438,13 @@ export function FinancialBalanceView({
             </tbody>
           </table>
         </div>
+
         {totalItems > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-5 py-3.5 bg-muted/15 border-t border-border text-xs">
             <div className="flex items-center gap-3 text-muted-foreground font-medium">
               <span>
                 Mostrando <b className="text-foreground">{(currentPage - 1) * pageSize + 1}</b> a <b className="text-foreground">{Math.min(currentPage * pageSize, totalItems)}</b> de <b className="text-foreground">{totalItems}</b> movimientos
               </span>
-
               <div className="hidden sm:flex items-center gap-2 border-l border-border pl-3">
                 <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
                 <span>Filas:</span>
@@ -445,7 +460,6 @@ export function FinancialBalanceView({
                 </Select>
               </div>
             </div>
-
             <div className="flex items-center gap-1.5">
               <Button
                 variant="outline"
@@ -453,7 +467,6 @@ export function FinancialBalanceView({
                 className="h-8 w-8 rounded-lg border-border bg-background"
                 onClick={() => handlePageChange(1)}
                 disabled={currentPage === 1}
-                title="Primera página"
               >
                 <ChevronsLeft className="w-4 h-4" />
               </Button>
@@ -463,22 +476,18 @@ export function FinancialBalanceView({
                 className="h-8 w-8 rounded-lg border-border bg-background"
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                title="Página anterior"
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-
               <span className="px-3 py-1 bg-background border border-border rounded-lg font-bold text-foreground text-xs">
                 {currentPage} / {totalPages}
               </span>
-
               <Button
                 variant="outline"
                 size="icon"
                 className="h-8 w-8 rounded-lg border-border bg-background"
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                title="Página siguiente"
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
@@ -488,7 +497,6 @@ export function FinancialBalanceView({
                 className="h-8 w-8 rounded-lg border-border bg-background"
                 onClick={() => handlePageChange(totalPages)}
                 disabled={currentPage === totalPages}
-                title="Última página"
               >
                 <ChevronsRight className="w-4 h-4" />
               </Button>
@@ -496,7 +504,6 @@ export function FinancialBalanceView({
           </div>
         )}
       </div>
-
     </div>
   )
 }
