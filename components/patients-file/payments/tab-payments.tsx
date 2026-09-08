@@ -268,10 +268,6 @@ export function PaymentsTable({
                               setSelectedPaymentForReceipt(p)
                               setIsReceiptOpen(true)
                             }}
-                            onPrintDaily={(p) => {
-                              setSelectedPaymentForDaily(p)
-                              setIsDailyOpen(true)
-                            }}
                             onSendEmail={(p) => {
                               setSelectedPaymentForEmail(p)
                               setIsEmailOpen(true)
