@@ -35,10 +35,8 @@ export function BillingStats({ payments = [] }: BillingStatsProps) {
   }, [payments])
 
   const maxMethodValue = Math.max(...Object.values(stats.methodDistribution), 1)
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 print:hidden">
-      
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 print:hidden">     
       {/* 1. TOTAL RECAUDADO */}
       <div className="bg-card p-5 rounded-[22px] border border-border shadow-xs flex items-center justify-between">
         <div>
@@ -56,7 +54,6 @@ export function BillingStats({ payments = [] }: BillingStatsProps) {
           <DollarSign className="w-5 h-5 stroke-[2.5]" />
         </div>
       </div>
-
       {/* 2. EFECTIVO FÍSICO */}
       <div className="bg-card p-5 rounded-[22px] border border-border shadow-xs flex items-center justify-between">
         <div>
@@ -74,7 +71,6 @@ export function BillingStats({ payments = [] }: BillingStatsProps) {
           <Banknote className="w-5 h-5 stroke-[2.2]" />
         </div>
       </div>
-
       {/* 3. DIGITAL / BANCOS */}
       <div className="bg-card p-5 rounded-[22px] border border-border shadow-xs flex items-center justify-between">
         <div>
@@ -118,7 +114,6 @@ export function BillingStats({ payments = [] }: BillingStatsProps) {
           })}
         </div>
       </div>
-
     </div>
   )
 }

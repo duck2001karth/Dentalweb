@@ -49,8 +49,6 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
   const [statusFilter, setStatusFilter] = useState("ACTIVE")
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
-
-  // Modales de Operaciones
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isExpenseOpen, setIsExpenseOpen] = useState(false)
   const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null)
@@ -223,12 +221,6 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
       <PrintArqueoTemplate
         payments={safePaymentsList}
         dateFilter={dateFilter}
-        clinicData={{
-          name: "CARMO DENTAL",
-          ruc: "1790000000001",
-          phone: "+593 992550241",
-          logoUrl: "/logo-carmodental.png",
-        }}
         cashierName={session?.user?.name || "Recepción"}
       />
 

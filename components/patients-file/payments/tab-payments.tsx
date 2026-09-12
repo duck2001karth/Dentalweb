@@ -7,19 +7,19 @@ import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
   Plus, ExternalLink, Receipt, Eye, 
-  ChevronLeft, ChevronRight, WalletCards 
+  ChevronLeft, ChevronRight, WalletCards, FileX2 
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
-import { PaymentActionsMenu } from "./payment-actions-menu"
-import { PaymentReceiptModal } from "./payment-receipt-modal"
-import { PaymentBreakdownModal } from "./payment-breakdown-modal"
-import { ManagePaymentModal } from "./modify-payment-modal"
-import { SendEmailModal } from "./send-email-modal"
-import { CreditNoteModal } from "./credit-note-modal"
-import { DailyReceiptModal } from "./daily-receipt-modal"
-import { NewElectronicDocModal } from "./new-electronic-doc-modal"
+import { PaymentActionsMenu } from "./components/payment-actions-menu"
+import { PaymentReceiptModal } from "./components/payment-receipt-modal"
+import { PaymentBreakdownModal } from "./components/payment-breakdown-modal"
+import { ManagePaymentModal } from "./components/modify-payment-modal"
+import { SendEmailModal } from "./components/send-email-modal"
+import { CreditNoteModal } from "./components/credit-note-modal"
+import { DailyReceiptModal } from "./components/daily-receipt-modal"
+import { NewElectronicDocModal } from "./components/new-electronic-doc-modal"
 
 const formatPaymentMethod = (method?: string) => {
   if (!method) return "Efectivo"
@@ -67,7 +67,7 @@ export function PaymentsTable({
       const isDeleted = item.notes && typeof item.notes === "string" && item.notes.includes("[PAGO ELIMINADO")
       if (isDeleted) return false
       const amount = Number(item.amount || item.paidAmount || 0)
-      const isCreditNote = amount < 0 || (item.notes && typeof item.notes === "string" && item.notes.startsWith("NOTA DE CRÉDITO"))
+      const isCreditNote = amount < 0 || (item.notes && typeof item.notes === "string" && item.notes.toUpperCase().includes("NOTA DE CRÉDITO"))
       return !isCreditNote
     })
   }, [paymentsList])
@@ -130,6 +130,7 @@ export function PaymentsTable({
           Nuevo documento electrónico
         </Button>
       </div>
+
       <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -151,6 +152,7 @@ export function PaymentsTable({
                 paginatedPayments.map((item: any, idx: number) => {
                   const rawNumber = String(item.paymentNumber || item.receiptNumber || item.number || "")
                   const isSriFormat = rawNumber.includes("-") && !rawNumber.toUpperCase().includes("REC")
+                  
                   const invoiceStr = 
                     item.invoiceNumber || 
                     item.taxDocuments?.[0]?.secuencial || 
@@ -161,6 +163,7 @@ export function PaymentsTable({
                     item.receiptNumberFiscal || 
                     (isSriFormat ? rawNumber : null) || 
                     (item.isFiscal ? "Factura Emitida" : null)
+                  const hasCreditNote = Boolean(item.hasCreditNote)
 
                   let displayPaymentNum = `#REC-${item.id?.slice(-6)?.toUpperCase() || idx + 1}`
                   if (!isSriFormat && rawNumber) {
@@ -171,7 +174,12 @@ export function PaymentsTable({
                   
                   const treatmentName = item.treatmentPlan?.name || item.treatmentName
                   const targetPlanId = item.treatmentPlanId || item.treatmentPlan?.id || item.planId
-                  const isPlanDeleted = !treatmentName && !targetPlanId
+                  const isPlanDeleted = targetPlanId && !treatmentName
+                  const isDirectPayment = !targetPlanId
+                  const displayTreatment = isDirectPayment 
+                    ? (item.reference || "Consulta / Pago en Recepción") 
+                    : (treatmentName || "Plan Odontológico")
+
                   const methodSpanish = formatPaymentMethod(item.method || item.paymentMethod)
                   const receiverStr = formatReceiverName(item.processedBy || item.user)
                   const rawAmount = Number(item.amount || item.paidAmount || 0)
@@ -183,16 +191,32 @@ export function PaymentsTable({
                       {/* COLUMNA PAGO INTERNO */}
                       <td className="py-4 px-5 align-middle whitespace-nowrap">
                         <p className="font-bold text-[#008bcd] text-sm tracking-tight">{displayPaymentNum}</p>
-                        {invoiceStr && (
+                        {hasCreditNote ? (
+                          invoiceStr ? (
+                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1 mt-0.5">
+                              Ref: Anulado con NC
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1 mt-0.5">
+                              Ref: Devolución registrada
+                            </span>
+                          )
+                        ) : invoiceStr ? (
                           <span className="text-[10px] text-muted-foreground font-semibold">
                             Ref: SRI Autorizado
                           </span>
-                        )}
+                        ) : null}
                       </td>
+
+                      {/* TRATAMIENTO */}
                       <td className="py-4 px-5 align-middle">
                         {isPlanDeleted ? (
                           <span className="text-xs text-amber-600 dark:text-amber-400 font-semibold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20 italic">
                             Plan eliminado
+                          </span>
+                        ) : isDirectPayment ? (
+                          <span className="font-medium text-foreground text-sm italic opacity-90">
+                            {displayTreatment}
                           </span>
                         ) : targetPlanId ? (
                           <button
@@ -200,30 +224,49 @@ export function PaymentsTable({
                             onClick={(e) => navigateToTreatment(e, targetPlanId)}
                             className="font-semibold text-[#008bcd] hover:text-[#0070a8] text-sm hover:underline cursor-pointer flex items-center gap-1.5 text-left group"
                           >
-                            <span>{treatmentName || "Rehabilitación Oral"}</span>
+                            <span>{displayTreatment}</span>
                             <ExternalLink className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 transition-opacity" />
                           </button>
                         ) : (
-                          <span className="font-medium text-foreground text-sm">{treatmentName || "Rehabilitación Oral"}</span>
+                          <span className="font-medium text-foreground text-sm">{displayTreatment}</span>
                         )}
                       </td>
+
+                      {/* MEDIO DE PAGO */}
                       <td className="py-4 px-5 align-middle space-y-0.5 whitespace-nowrap">
                         <p className="font-semibold text-foreground text-sm">{methodSpanish}</p>
                         <p className="text-[11px] text-muted-foreground font-normal">
                           Por: <b className="text-foreground/90 font-medium">{receiverStr}</b>
                         </p>
                       </td>
+
+                      {/* BOLETA / FACTURA */}
                       <td className="py-4 px-5 align-middle">
                         {invoiceStr ? (
-                          <button
-                            type="button"
-                            onClick={() => window.open(`/comprobantes/${item.id}`, "_blank")}
-                            className="inline-flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer shadow-sm"
-                            title="Ver Factura Electrónica (PDF)"
-                          >
-                            <Receipt className="w-3.5 h-3.5" />
-                            <span>{invoiceStr}</span>
-                          </button>
+                          hasCreditNote ? (
+                            <button
+                              type="button"
+                              onClick={() => window.open(`/comprobantes/${item.id}`, "_blank")}
+                              className="inline-flex items-center gap-1.5 font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer shadow-xs"
+                              title="Factura anulada con Nota de Crédito (Ver RIDE)"
+                            >
+                              <FileX2 className="w-3.5 h-3.5 text-amber-600" />
+                              <span className="line-through">{invoiceStr}</span>
+                              <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 no-underline">
+                                (Anulada)
+                              </span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => window.open(`/comprobantes/${item.id}`, "_blank")}
+                              className="inline-flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 px-2.5 py-1.5 rounded-lg text-[11px] transition-all cursor-pointer shadow-xs"
+                              title="Ver Factura Electrónica (PDF)"
+                            >
+                              <Receipt className="w-3.5 h-3.5" />
+                              <span>{invoiceStr}</span>
+                            </button>
+                          )
                         ) : (
                           <span className="text-[11px] font-medium text-muted-foreground/70 italic bg-muted/50 px-2.5 py-1 rounded-md border border-border">
                             Sin comprobante fiscal
@@ -302,6 +345,7 @@ export function PaymentsTable({
             </tbody>
           </table>
         </div>
+
         {onlyActiveIncomePayments.length > 0 && (
           <div className="px-5 py-3.5 border-t border-border/80 bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
             <div className="text-muted-foreground font-medium">

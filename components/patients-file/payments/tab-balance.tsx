@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils"
 import { useGetPatient } from "@/hooks/patients"
 import { useClinicSettings } from "@/config/clinic-settings"
-import { triggerBalancePrint } from "@/components/patients-file/payments/balance-print"
+import { triggerBalancePrint } from "@/components/patients-file/payments/prints/balance-print"
 
 const formatPaymentMethod = (method?: string) => {
   if (!method) return "Efectivo"

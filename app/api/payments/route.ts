@@ -45,15 +45,13 @@ export async function GET(request: Request) {
     const patientId = searchParams.get("patientId")
     const dateParam = searchParams.get("date")
     const currentShift = searchParams.get("currentShift") === "true"
+
     const lastClose = await prisma.cashRegisterClose.findFirst({
       orderBy: { createdAt: "desc" },
       select: { id: true, createdAt: true, countedCash: true, status: true },
     })
 
     const whereClause: any = {
-      NOT: {
-        notes: { contains: "[PAGO ELIMINADO" },
-      },
     }
 
     if (patientId) {
@@ -74,7 +72,7 @@ export async function GET(request: Request) {
       }
     }
 
-    const payments = await prisma.payment.findMany({
+    const rawPayments = await prisma.payment.findMany({
       where: whereClause,
       include: {
         patient: {
@@ -85,7 +83,7 @@ export async function GET(request: Request) {
             id: true,
             name: true,
             totalPaid: true,
-            items: { /* ... */ },
+            items: true,
           },
         },
         processedBy: {
@@ -95,6 +93,52 @@ export async function GET(request: Request) {
       },
       orderBy: { createdAt: "desc" },
     })
+
+    const refundTransactions = rawPayments.filter((p: any) => {
+      const amt = Number(p.amount || p.paidAmount || 0)
+      const notes = typeof p.notes === "string" ? p.notes.toUpperCase() : ""
+      return amt < 0 || notes.includes("DEVOLUCION") || notes.includes("DEVOLUCIÓN") || notes.includes("NOTA")
+    })
+    const payments = rawPayments.map((payment: any) => {
+      const pId = String(payment.id).toLowerCase()
+      const pReceipt = String(payment.receiptNumber || "").trim().toUpperCase()
+      const pAmount = Math.abs(Number(payment.amount || payment.paidAmount || 0))
+      const hasTaxNC = payment.taxDocuments?.some((d: any) => d.docType === "NOTA_CREDITO")
+      const matchingRefund = refundTransactions.find((ref: any) => {
+        if (ref.id === payment.id) return false
+
+        const refNotes = typeof ref.notes === "string" ? ref.notes.toUpperCase() : ""
+        const refRef = typeof ref.reference === "string" ? ref.reference.toUpperCase() : ""
+        const refRaw = `${refNotes} ${refRef}`
+        const refAmount = Math.abs(Number(ref.amount || ref.paidAmount || 0))
+        const matchesId =
+          ref.paymentId === payment.id ||
+          ref.originalPaymentId === payment.id ||
+          refRaw.toLowerCase().includes(pId)
+        const matchesReceipt = pReceipt && pReceipt !== "S/N" && refRaw.includes(pReceipt)
+        const refReceipt = String(ref.receiptNumber || ref.refundNumber || "").toUpperCase()
+        const matchesGeneratedReceipt = pId.length >= 6 && refReceipt.toLowerCase().includes(pId.slice(-6))
+        const hasFiscalDoc = Boolean(
+          (payment.taxDocuments && payment.taxDocuments.length > 0) ||
+          payment.invoiceNumber
+        )
+        const matchesPlanAndInvoice =
+          hasFiscalDoc &&
+          payment.treatmentPlanId &&
+          ref.treatmentPlanId === payment.treatmentPlanId &&
+          refAmount === pAmount
+
+        return matchesId || matchesReceipt || matchesGeneratedReceipt || matchesPlanAndInvoice
+      })
+
+      const hasCreditNote = Boolean(hasTaxNC || matchingRefund)
+
+      return {
+        ...payment,
+        hasCreditNote,
+      }
+    })
+
     return NextResponse.json({
       payments,
       lastClose: lastClose || null,
@@ -237,7 +281,6 @@ export async function POST(request: Request) {
         remainingMoneyToDistribute -= moneyForThisItem
       }
 
-      // Actualizar totales de los planes de tratamiento afectados
       for (const planId of Array.from(planIdsToUpdate)) {
         const allPlanItems = await tx.treatmentItem.findMany({
           where: { treatmentPlanId: planId },
@@ -267,8 +310,6 @@ export async function POST(request: Request) {
           },
         })
       }
-
-      // Generar secuencia de recibo
       let finalReceiptNumber = receiptNumber?.trim()
       if (!finalReceiptNumber) {
         const totalPaymentsCount = await tx.payment.count()

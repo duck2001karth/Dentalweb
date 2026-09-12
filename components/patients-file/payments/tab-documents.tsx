@@ -19,7 +19,7 @@ import {
   AlertDialogHeader, AlertDialogTitle 
 } from "@/components/ui/alert-dialog"
 
-import { ExportIssuedDocuments } from "./export-issued-documents"
+import { ExportIssuedDocuments } from "./prints/export-issued-documents"
 
 const formatSriStatus = (status?: string, isAuthorized?: boolean) => {
   if (isAuthorized) return "AUTORIZADO"

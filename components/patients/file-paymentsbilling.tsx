@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { Loader2 } from "lucide-react"
 import { PaymentsTable } from "@/components/patients-file/payments/tab-payments"
-import { DeletedPaymentsTab } from "@/components/patients-file/payments/tab-deleted-payments"
+import { DeletedPaymentsTab } from "@/components/patients-file/payments/payments-deleted/tab-payments-deleted"
 import { RefundsView } from "@/components/patients-file/payments/tab-refunds"
 import { FinancialBalanceView } from "@/components/patients-file/payments/tab-balance"
 import { IssuedDocumentsView } from "@/components/patients-file/payments/tab-documents"

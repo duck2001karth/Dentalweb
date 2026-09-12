@@ -3,7 +3,8 @@
 import React from "react"
 import { 
   MoreHorizontal, Printer, Mail, FileCheck,
-  RotateCcw, Edit, Trash2, MessageCircle, ShieldAlert
+  RotateCcw, Edit, Trash2, MessageCircle, ShieldAlert,
+  FileX2
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -40,6 +41,7 @@ export function PaymentActionsMenu({
 }: PaymentActionsMenuProps) {
   const targetId = payment.id
 
+  // 1. Identificar si cuenta con comprobante SRI
   const hasFiscalInvoice = Boolean(
     (payment.taxDocuments && payment.taxDocuments.length > 0) ||
     payment.invoiceNumber ||
@@ -47,8 +49,16 @@ export function PaymentActionsMenu({
     (payment.reference && payment.reference.toUpperCase().includes("SRI"))
   )
 
-  const allowEdit = canEdit && !hasFiscalInvoice
-  const allowDelete = canDelete && !hasFiscalInvoice
+  // 2. Identificar si ya tiene una Nota de Crédito aplicada
+  const hasCreditNote = Boolean(
+    payment.hasCreditNote ||
+    payment.creditNotes?.length > 0 ||
+    payment.taxDocuments?.some((d: any) => d.docType === "NOTA_CREDITO") ||
+    (payment.notes && typeof payment.notes === "string" && payment.notes.toUpperCase().includes("NOTA DE CRÉDITO"))
+  )
+
+  const allowEdit = canEdit && !hasFiscalInvoice && !hasCreditNote
+  const allowDelete = canDelete && !hasFiscalInvoice && !hasCreditNote
 
   const handleOpenDocument = () => {
     if (hasFiscalInvoice) {
@@ -71,7 +81,7 @@ export function PaymentActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       
-      <DropdownMenuContent align="end" className="w-56 rounded-xl font-sans text-xs p-1.5 shadow-xl border-border bg-popover">
+      <DropdownMenuContent align="end" className="w-60 rounded-xl font-sans text-xs p-1.5 shadow-xl border-border bg-popover">
         {/* Documento principal unificado */}
         <DropdownMenuItem 
           onClick={handleOpenDocument} 
@@ -109,7 +119,7 @@ export function PaymentActionsMenu({
           </DropdownMenuItem>
         )}
 
-        {/* Modificar: solo para cobros sin factura */}
+        {/* Modificar: solo permitido para cobros sin factura y sin nota de crédito */}
         {allowEdit && onEdit && (
           <>
             <DropdownMenuSeparator className="my-1" />
@@ -122,23 +132,34 @@ export function PaymentActionsMenu({
           </>
         )}
 
-        {/* Operaciones de anulación */}
+        {/* Operaciones de anulación / Notas de crédito */}
         <DropdownMenuSeparator className="my-1" />
 
         {hasFiscalInvoice ? (
           <>
-            {onCreditNote && (
-              <DropdownMenuItem 
-                onClick={() => onCreditNote(payment)} 
-                className="cursor-pointer font-semibold py-2 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
-              >
-                <RotateCcw className="w-4 h-4 mr-2.5" /> Emitir nota de crédito
-              </DropdownMenuItem>
+            {hasCreditNote ? (
+              // Estado: Ya fue anulada previamente
+              <div className="px-2.5 py-2 text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg flex items-center gap-2">
+                <FileX2 className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>Factura anulada con NC</span>
+              </div>
+            ) : (
+              // Estado: Factura activa disponible para anular con NC
+              <>
+                {onCreditNote && (
+                  <DropdownMenuItem 
+                    onClick={() => onCreditNote(payment)} 
+                    className="cursor-pointer font-semibold py-2 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2.5" /> Emitir nota de crédito
+                  </DropdownMenuItem>
+                )}
+                <div className="px-2 py-1.5 text-[10px] text-muted-foreground flex items-center gap-1.5 bg-muted/40 rounded-md mt-1">
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span>Facturado ante el SRI (Inalterable)</span>
+                </div>
+              </>
             )}
-            <div className="px-2 py-1.5 text-[10px] text-muted-foreground flex items-center gap-1.5 bg-muted/40 rounded-md mt-1">
-              <ShieldAlert className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span>Facturado ante el SRI (Inalterable)</span>
-            </div>
           </>
         ) : (
           allowDelete && onDelete && (

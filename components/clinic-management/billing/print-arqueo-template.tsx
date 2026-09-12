@@ -3,28 +3,28 @@
 import React from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-
-interface ClinicBrandInfo {
-  name?: string
-  ruc?: string
-  phone?: string
-  address?: string
-  logoUrl?: string
-}
+import { useClinicSettings } from "@/config/clinic-settings"
 
 interface PrintArqueoTemplateProps {
   payments: any[]
   dateFilter: string
-  clinicData?: ClinicBrandInfo
   cashierName?: string
 }
 
 export function PrintArqueoTemplate({ 
   payments = [], 
   dateFilter, 
-  clinicData,
   cashierName = "Cajero de Turno"
 }: PrintArqueoTemplateProps) {
+  const { settings } = useClinicSettings()
+  
+  const clinicName = settings?.clinicName?.trim() || "Clinica Salud"
+  const clinicRuc = settings?.ruc?.trim() || "1xxxxx01"
+  const rawAddress = [settings?.address, settings?.city, settings?.country].filter(Boolean).join(", ")
+  const clinicAddress = rawAddress || "Dirección no registrada"
+  const clinicPhone = settings?.phone || settings?.whatsappNumber || "099999991"
+  const logoUrl = settings?.logoUrl || "logo.png"
+  const currencySymbol = settings?.currency === "USD" ? "$" : (settings?.currency || "$")
   const totalEfectivo = payments.filter(p => p.method === "CASH").reduce((a, b) => a + Number(b.amount || 0), 0)
   const totalTransferencias = payments.filter(p => p.method === "TRANSFER").reduce((a, b) => a + Number(b.amount || 0), 0)
   const totalCredito = payments.filter(p => p.method === "CREDIT_CARD").reduce((a, b) => a + Number(b.amount || 0), 0)
@@ -54,30 +54,29 @@ export function PrintArqueoTemplate({
 
   return (
     <div className="hidden print:block absolute inset-0 bg-white text-slate-900 z-[99999] px-8 py-8 font-sans antialiased text-[11px] leading-tight">
-      
-      {/* ENCABEZADO INSTITUCIONAL */}
       <div className="flex justify-between items-center border-b-2 border-slate-800 pb-4 mb-6">
         <div className="flex items-center gap-3">
-          {clinicData?.logoUrl ? (
+          {logoUrl ? (
             <img 
-              src={clinicData.logoUrl} 
-              alt="Logo" 
+              src={logoUrl} 
+              alt={`Logo ${clinicName}`} 
               className="w-14 h-14 object-contain" 
+              onError={(e: any) => { e.currentTarget.style.display = 'none' }}
             />
           ) : (
             <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center font-black text-lg text-slate-800">
-              CD
+              {clinicName.substring(0, 2).toUpperCase()}
             </div>
           )}
           <div>
             <h1 className="text-xl font-black uppercase tracking-wider text-slate-900 leading-none">
-              {clinicData?.name || "CARMO DENTAL"}
+              {clinicName}
             </h1>
             <p className="text-[10px] text-slate-600 mt-1 font-semibold">
-              RUC: {clinicData?.ruc || "1790000000001"} • Telf: {clinicData?.phone || "0992550241"}
+              RUC: {clinicRuc} • Telf: {clinicPhone}
             </p>
             <p className="text-[9px] text-slate-500">
-              {clinicData?.address || "Quito, Ecuador"}
+              {clinicAddress}
             </p>
           </div>
         </div>
@@ -99,31 +98,31 @@ export function PrintArqueoTemplate({
       <div className="grid grid-cols-5 gap-2.5 mb-6">
         <div className="border-2 border-slate-800 rounded-lg p-2.5 bg-slate-50">
           <p className="text-[9px] font-bold text-slate-600 uppercase">Total Recaudado</p>
-          <p className="text-lg font-black text-slate-900">${totalGeneral.toFixed(2)}</p>
+          <p className="text-lg font-black text-slate-900">{currencySymbol}{totalGeneral.toFixed(2)}</p>
           <p className="text-[8px] text-slate-500">{payments.length} transacción(es)</p>
         </div>
 
         <div className="border border-slate-300 rounded-lg p-2.5 bg-white">
           <p className="text-[9px] font-bold text-slate-500 uppercase">Efectivo Físico</p>
-          <p className="text-base font-black text-slate-800">${totalEfectivo.toFixed(2)}</p>
+          <p className="text-base font-black text-slate-800">{currencySymbol}{totalEfectivo.toFixed(2)}</p>
           <p className="text-[8px] text-slate-500">Gaveta monetaria</p>
         </div>
 
         <div className="border border-slate-300 rounded-lg p-2.5 bg-white">
           <p className="text-[9px] font-bold text-slate-500 uppercase">Transferencias</p>
-          <p className="text-base font-black text-slate-800">${totalTransferencias.toFixed(2)}</p>
+          <p className="text-base font-black text-slate-800">{currencySymbol}{totalTransferencias.toFixed(2)}</p>
           <p className="text-[8px] text-slate-500">Bancos / QR</p>
         </div>
 
         <div className="border border-slate-300 rounded-lg p-2.5 bg-white">
           <p className="text-[9px] font-bold text-slate-500 uppercase">T. Débito</p>
-          <p className="text-base font-black text-slate-800">${totalDebito.toFixed(2)}</p>
+          <p className="text-base font-black text-slate-800">{currencySymbol}{totalDebito.toFixed(2)}</p>
           <p className="text-[8px] text-slate-500">Vouchers POS</p>
         </div>
 
         <div className="border border-slate-300 rounded-lg p-2.5 bg-white">
           <p className="text-[9px] font-bold text-slate-500 uppercase">T. Crédito</p>
-          <p className="text-base font-black text-slate-800">${totalCredito.toFixed(2)}</p>
+          <p className="text-base font-black text-slate-800">{currencySymbol}{totalCredito.toFixed(2)}</p>
           <p className="text-[8px] text-slate-500">Corriente / Diferido</p>
         </div>
       </div>
@@ -134,7 +133,7 @@ export function PrintArqueoTemplate({
           <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
             Registro Detallado de Transacciones
           </h3>
-          <span className="text-[9px] text-slate-500">Valores expresados en USD</span>
+          <span className="text-[9px] text-slate-500">Valores expresados en moneda local</span>
         </div>
 
         <table className="w-full text-left border-collapse">
@@ -187,7 +186,7 @@ export function PrintArqueoTemplate({
                     )}
                   </td>
                   <td className="py-2 px-2 text-right font-black text-slate-900 font-mono">
-                    ${Number(p.amount).toFixed(2)}
+                    {currencySymbol}{Number(p.amount).toFixed(2)}
                   </td>
                 </tr>
               ))
@@ -200,7 +199,7 @@ export function PrintArqueoTemplate({
                   Total Liquidado:
                 </td>
                 <td className="py-2.5 px-2 text-right font-mono text-sm text-slate-900">
-                  ${totalGeneral.toFixed(2)}
+                  {currencySymbol}{totalGeneral.toFixed(2)}
                 </td>
               </tr>
             </tfoot>
@@ -208,7 +207,7 @@ export function PrintArqueoTemplate({
         </table>
       </div>
 
-      {/* FIRMAS DE RESPONSABILIDAD (Evita cortes de página con print-together) */}
+      {/* FIRMAS DE RESPONSABILIDAD (Evita cortes de página) */}
       <div className="grid grid-cols-2 gap-24 pt-12 mt-auto break-inside-avoid">
         <div className="text-center">
           <div className="border-t border-slate-400 pt-2 w-3/4 mx-auto">

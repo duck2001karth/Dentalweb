@@ -3,7 +3,8 @@
 import React, { useState, useMemo } from "react"
 import { 
   Trash2, Calendar, Receipt, ChevronLeft, ChevronRight, 
-  ChevronsLeft, ChevronsRight, Search, SlidersHorizontal, AlertCircle, ShieldAlert 
+  ChevronsLeft, ChevronsRight, Search, SlidersHorizontal, AlertCircle, ShieldAlert,
+  Eye
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -19,7 +20,8 @@ import {
   AlertDialogHeader, AlertDialogTitle 
 } from "@/components/ui/alert-dialog"
 
-import { ExportDeletedPayments } from "./export-deleted-payments"
+import { ExportDeletedPayments } from "@/components/patients-file/payments/prints/export-deleted-payments"
+import { DeletedPaymentDetailModal } from "@/components/patients-file/payments/payments-deleted/deleted-payment-modal"
 
 const formatPaymentMethod = (method?: string) => {
   if (!method) return "Efectivo"
@@ -64,15 +66,23 @@ export function DeletedPaymentsTab({
   const [showConfirmDelete, setShowConfirmDelete] = useState(false)
   const [singleDeleteId, setSingleDeleteId] = useState<string | null>(null)
 
+  // Estados para el modal de detalle de auditoría
+  const [selectedPaymentForDetail, setSelectedPaymentForDetail] = useState<any>(null)
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+
   const formatDeletionNote = (notes: string) => {
     if (!notes) return "Sin justificación registrada."
-    return notes.replace(/^\[PAGO ELIMINADO\/ANULADO[^\]]*\]:\s*/, "").split(" | Historial previo:")[0].trim()
+    return notes
+      .replace(/^\[PAGO ELIMINADO\/ANULADO[^\]]*\]:\s*/, "")
+      .split(" | Registro original:")[0]
+      .split(" | Historial previo:")[0]
+      .trim()
   }
 
   const getDeletedBy = (item: any) => {
     if (item.notes && typeof item.notes === "string") {
-      const match = item.notes.match(/por ([^\]]+)\]/)
-      if (match) return match[1]
+      const match = item.notes.match(/por ([^\]]+) el/) || item.notes.match(/por ([^\]]+)\]/)
+      if (match) return match[1].trim()
     }
     return item.processedBy?.name || item.user?.name || "Administrador"
   }
@@ -146,6 +156,7 @@ export function DeletedPaymentsTab({
       setIsDeleting(false)
     }
   }
+
   return (
     <div className="space-y-6 font-sans antialiased animate-in fade-in duration-200">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card p-5 rounded-2xl border border-border shadow-xs">
@@ -196,7 +207,7 @@ export function DeletedPaymentsTab({
         </div>
       </div>
 
-      {/*TABLA DE AUDITORÍA */}
+      {/* TABLA DE AUDITORÍA */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
@@ -217,7 +228,7 @@ export function DeletedPaymentsTab({
                 <th className="py-4 px-4"># Documento</th>
                 <th className="py-4 px-4">Fecha Anulación</th>
                 <th className="py-4 px-4">Eliminado por</th>
-                <th className="py-4 px-4">Comentario / Motivo</th>
+                <th className="py-4 px-4 min-w-[220px]">Comentario / Motivo</th>
                 <th className="py-4 px-4 text-right">Monto</th>
                 {canHardDelete && <th className="py-4 px-4 text-right">Acción</th>}
               </tr>
@@ -233,7 +244,12 @@ export function DeletedPaymentsTab({
                 paginatedData.map((item: any, idx: number) => {
                   const paymentNum = item.paymentNumber || item.receiptNumber || item.number || `#REC-${item.id?.slice(-6) || idx + 1}`
                   const methodStr = formatPaymentMethod(item.method || item.paymentMethod)
-                  const docStr = item.invoiceNumber || item.receiptNumberFiscal || "-"
+                  const docStr = 
+                    item.invoiceNumber || 
+                    item.taxDocuments?.[0]?.secuencial || 
+                    item.taxDocuments?.[0]?.authorizationNum ||
+                    item.receiptNumberFiscal || 
+                    null
                   const deletedDate = item.updatedAt ? new Date(item.updatedAt) : new Date(item.createdAt)
                   const deletedBy = getDeletedBy(item)
                   const reasonText = formatDeletionNote(item.notes)
@@ -262,11 +278,15 @@ export function DeletedPaymentsTab({
                       </td>
 
                       <td className="py-4 px-4 align-middle">
-                        {docStr !== "-" ? (
+                        {docStr ? (
                           <span className="inline-flex items-center gap-1 font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 text-[11px]">
                             <Receipt className="w-3 h-3" /> {docStr}
                           </span>
-                        ) : <span className="text-muted-foreground/70 font-medium">-</span>}
+                        ) : (
+                          <span className="text-[11px] font-medium text-muted-foreground/60 italic bg-muted/40 px-2 py-0.5 rounded border border-border/60">
+                            Sin comprobante fiscal
+                          </span>
+                        )}
                       </td>
 
                       <td className="py-4 px-4 align-middle font-medium text-foreground whitespace-nowrap">
@@ -285,9 +305,26 @@ export function DeletedPaymentsTab({
                         </div>
                       </td>
 
-                      <td className="py-4 px-4 align-middle max-w-[200px]">
-                        <div className="p-2.5 rounded-xl bg-muted/40 border border-border text-foreground font-medium text-xs leading-snug">
-                          <p className="line-clamp-2" title={reasonText}>{reasonText}</p>
+                      {/* Celda de motivo con botón interactivo para abrir modal */}
+                      <td className="py-4 px-4 align-middle max-w-[260px]">
+                        <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-muted/40 border border-border">
+                          <p className="line-clamp-1 font-medium text-foreground text-xs" title={reasonText}>
+                            {reasonText}
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setSelectedPaymentForDetail(item)
+                              setIsDetailModalOpen(true)
+                            }}
+                            className="h-7 px-2 text-[11px] font-bold text-[#008bcd] hover:text-[#0074a8] hover:bg-[#008bcd]/10 rounded-lg shrink-0 flex items-center gap-1 cursor-pointer"
+                            title="Ver justificación completa"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver</span>
+                          </Button>
                         </div>
                       </td>
 
@@ -368,7 +405,17 @@ export function DeletedPaymentsTab({
         )}
       </div>
 
-      {/* MODAL CONFIRMACIÓN */}
+      {/* MODAL DETALLE DE AUDITORÍA DE PAGO */}
+      <DeletedPaymentDetailModal
+        isOpen={isDetailModalOpen}
+        onClose={() => {
+          setIsDetailModalOpen(false)
+          setSelectedPaymentForDetail(null)
+        }}
+        payment={selectedPaymentForDetail}
+      />
+
+      {/* MODAL CONFIRMACIÓN DE PURGA */}
       <AlertDialog open={showConfirmDelete} onOpenChange={(open) => {
         if (!open) {
           setShowConfirmDelete(false)

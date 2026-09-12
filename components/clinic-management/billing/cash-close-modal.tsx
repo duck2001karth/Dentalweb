@@ -61,14 +61,10 @@ export function CashCloseModal({
       setShowErrorNote(false)
     }
   }, [isOpen])
-
-  // Cálculo de diferencia
   const numericCounted = Number(countedCash || 0)
   const difference = Number((numericCounted - expectedCash).toFixed(2))
   const isBalanced = countedCash !== "" && Math.abs(difference) < 0.01
   const hasDiscrepancy = countedCash !== "" && !isBalanced
-
-  // Actualiza total cuando se usa la calculadora de billetes
   const handleCountChange = (val: number, quantity: number) => {
     const updated = { ...counts, [val]: Math.max(0, quantity) }
     setCounts(updated)
