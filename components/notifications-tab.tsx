@@ -28,7 +28,6 @@ export function NotificationsDropdown() {
   const currentUser = session?.user as any
   const userRole = currentUser?.role || "RECEPTIONIST"
 
-  // Calculamos las no leídas
   const unreadNotifications = notifications.filter((n: any) => !n.isRead)
   const unreadCount = unreadNotifications.length
 

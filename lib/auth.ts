@@ -1,177 +1,124 @@
 import { NextAuthOptions } from "next-auth";
+import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import { headers } from "next/headers";
-
 import { prisma } from "@/lib/db";
-import { Prisma, UserRole } from "@prisma/client";
-
-// Helper para capturar cabeceras de red
-async function getRequestMetadata() {
-  try {
-    const headersList = await headers();
-    const forwardedFor = headersList.get("x-forwarded-for");
-    const ipAddress = forwardedFor
-      ? forwardedFor.split(",")[0].trim()
-      : headersList.get("x-real-ip") || "127.0.0.1";
-    const userAgent = headersList.get("user-agent") || "Desconocido";
-    return { ipAddress, userAgent };
-  } catch {
-    return { ipAddress: "127.0.0.1", userAgent: "Desconocido" };
-  }
-}
+import bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
-  adapter: {
-    ...PrismaAdapter(prisma),
-
-    async createUser(data: Prisma.UserCreateInput) {
-      const newUser = await prisma.user.create({
-        data: {
-          ...data,
-          role: UserRole.DOCTOR,
-          isActive: true,
-          lastLogin: new Date(),
-        },
-      });
-      try {
-        const { ipAddress, userAgent } = await getRequestMetadata();
-        await prisma.auditLog.create({
-          data: {
-            userId: newUser.id,
-            action: "CREATE",
-            entity: "USER",
-            entityId: newUser.id,
-            details: `Registro inicial de usuario con Google: ${newUser.email}`,
-            newData: {
-              email: newUser.email,
-              name: newUser.name,
-              role: newUser.role,
-            },
-            ipAddress,
-            userAgent,
-          },
-        });
-      } catch (error) {
-        console.error("Error al auditar createUser en NextAuth:", error);
-      }
-
-      return newUser;
-    },
+  adapter: PrismaAdapter(prisma) as any,
+  session: {
+    strategy: "jwt",
+    maxAge: 8 * 60 * 60, 
   },
-
+  pages: {
+    signIn: "/auth", 
+    error: "/auth",  
+  },
   providers: [
     GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      allowDangerousEmailAccountLinking: true,
     }),
-  ],
-
-  events: {
-    async signIn({ user }) {
-      if (user?.email) {
-        try {
-          const updatedUser = await prisma.user.update({
-            where: { email: user.email },
-            data: { lastLogin: new Date() },
-          });
-          const { ipAddress, userAgent } = await getRequestMetadata();
-          await prisma.auditLog.create({
-            data: {
-              userId: updatedUser.id,
-              action: "LOGIN",
-              entity: "AUTH",
-              entityId: updatedUser.id,
-              details: `Inicio de sesión vía Google OAuth: ${user.email}`,
-              ipAddress,
-              userAgent,
-            },
-          });
-        } catch (error) {
-          console.error("Error en evento signIn / AuditLog:", error);
+    CredentialsProvider({
+      name: "Credentials",
+      credentials: {
+        email: { label: "Correo", type: "email" },
+        password: { label: "Contraseña", type: "password" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          throw new Error("Credenciales incompletas.");
         }
-      }
-    },
 
-    async signOut({ token }) {
-      if (token?.id) {
-        try {
-          const { ipAddress, userAgent } = await getRequestMetadata();
-          await prisma.auditLog.create({
-            data: {
-              userId: token.id as string,
-              action: "LOGOUT",
-              entity: "AUTH",
-              entityId: token.id as string,
-              details: `Cierre de sesión de usuario: ${token.email || token.name || token.id}`,
-              ipAddress,
-              userAgent,
-            },
-          });
-        } catch (error) {
-          console.error("Error en evento signOut / AuditLog:", error);
-        }
-      }
-    },
-  },
-
-  callbacks: {
-    async jwt({ token, user, trigger }) {
-      if (user) {
-        token.id = user.id;
-      }
-      if (token.id && (user || trigger === "update")) {
-        const dbUser = await prisma.user.findUnique({
-          where: {
-            id: token.id as string,
-          },
-          select: {
-            id: true,
-            role: true,
-            isActive: true,
-            phoneNumber: true,
-            specialty: true,
-            image: true,
-            email: true,
-            name: true,
-            lastLogin: true,
-          },
+        const userEmail = credentials.email.toLowerCase().trim();
+        const user = await prisma.user.findUnique({
+          where: { email: userEmail },
         });
 
-        if (dbUser) {
-          token.role = dbUser.role;
-          token.isActive = dbUser.isActive;
-          token.phoneNumber = dbUser.phoneNumber ?? "";
-          token.specialty = dbUser.specialty ?? "";
-          token.picture = dbUser.image ?? "";
-          token.email = dbUser.email ?? "";
-          token.name = dbUser.name ?? "";
+        if (!user || !user.password) {
+          throw new Error("Usuario no encontrado o debe ingresar por Google.");
         }
+
+        if (!user.isActive) {
+          throw new Error("Su cuenta ha sido suspendida. Contacte a administración.");
+        }
+
+        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+
+        if (!isPasswordValid) {
+          throw new Error("La contraseña es incorrecta.");
+        }
+
+        return user;
+      },
+    }),
+  ],
+  callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === "google") {
+        const userEmail = user.email?.toLowerCase().trim();
+        if (!userEmail) return false;
+
+        const existingUser = await prisma.user.findUnique({
+          where: { email: userEmail },
+        });
+
+        if (!existingUser) {
+          return "/auth?error=AccessDenied"; 
+        }
+
+        if (!existingUser.isActive) {
+          return "/auth?error=AccountSuspended";
+        }
+      }
+      return true;
+    },
+
+    async jwt({ token, user, trigger, session }) {
+      if (user) {
+        token.id = user.id;
+        token.role = user.role;
+        token.isActive = user.isActive;
+        token.phoneNumber = user.phoneNumber;
+        token.specialty = user.specialty;
+        token.calendarColor = user.calendarColor;
+      }
+
+      if (trigger === "update" && session?.user) {
+        token.name = session.user.name ?? token.name;
+        token.picture = session.user.image ?? token.picture;
+        token.phoneNumber = session.user.phoneNumber ?? token.phoneNumber;
+        token.calendarColor = session.user.calendarColor ?? token.calendarColor;
       }
 
       return token;
     },
 
     async session({ session, token }) {
-      if (session.user && token) {
+      if (session.user) {
         session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
+        session.user.role = token.role as any;
         session.user.isActive = token.isActive as boolean;
-        session.user.phoneNumber = token.phoneNumber as string;
-        session.user.specialty = token.specialty as string;
-        session.user.image = token.picture as string;
-        session.user.email = token.email as string;
-        session.user.name = token.name as string;
+        session.user.phoneNumber = token.phoneNumber as string | null;
+        session.user.specialty = token.specialty as string | null;
+        session.user.calendarColor = token.calendarColor as string | null;
+        session.user.image = token.picture as string | null;
       }
-
       return session;
     },
   },
-
-  session: {
-    strategy: "jwt",
+  
+  useSecureCookies: process.env.NODE_ENV === "production",
+  cookies: {
+    sessionToken: {
+      name: process.env.NODE_ENV === "production" ? "__Secure-next-auth.session-token" : "next-auth.session-token",
+      options: {
+        httpOnly: true, 
+        sameSite: "lax", 
+        path: "/",
+        secure: process.env.NODE_ENV === "production", 
+      },
+    },
   },
-
-  secret: process.env.NEXTAUTH_SECRET,
 };

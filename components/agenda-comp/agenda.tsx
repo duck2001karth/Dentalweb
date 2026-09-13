@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import Link from "next/link"
 import { format } from "date-fns"
@@ -44,6 +44,7 @@ export function DashboardAgenda() {
   const { data: session } = useSession()
   const currentUser = session?.user as any
   const isAdminOrStaff = currentUser?.role === "ADMIN" || currentUser?.role === "RECEPTIONIST"
+  const defaultUserColor = currentUser?.calendarColor || "#008bcd"
   const { settings } = useClinicSettings()
 
   const [date, setDate] = useState<Date | undefined>(new Date())
@@ -58,12 +59,29 @@ export function DashboardAgenda() {
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
-            setDoctorsList(data.filter(u => u.role === "DOCTOR"))
+            setDoctorsList(
+              data.filter(u => u.role === "DOCTOR").map(d => ({
+                id: d.id,
+                name: d.name,
+                specialty: d.specialty,
+                calendarColor: d.calendarColor || "#008bcd",
+              }))
+            )
           }
         })
         .catch(err => console.error("Error cargando doctores:", err))
     }
   }, [isAdminOrStaff])
+  const doctorColorsMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    doctorsList.forEach(doc => {
+      map[doc.id] = doc.calendarColor || "#008bcd"
+    })
+    if (currentUser?.id) {
+      map[currentUser.id] = defaultUserColor
+    }
+    return map
+  }, [doctorsList, currentUser, defaultUserColor])
 
   const { appointments = [], isLoading, error: isError, refetch } = useGetAppointments({ 
     fecha: date,
@@ -78,11 +96,14 @@ export function DashboardAgenda() {
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4 border-b border-border/80 pb-4">
         <div>
           <h3 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <CalendarCheck className="h-6 w-6 text-[#008bcd]" />
+            <CalendarCheck className="h-6 w-6" style={{ color: defaultUserColor }} />
             Agenda Diaria
           </h3>
           <p className="text-sm text-muted-foreground mt-1 font-medium">
-            Planificación para el <span className="text-[#008bcd] font-bold">{date ? format(date, "EEEE, d 'de' MMMM yyyy", { locale: es }) : "día seleccionado"}</span>
+            Planificación para el{" "}
+            <span className="font-bold" style={{ color: defaultUserColor }}>
+              {date ? format(date, "EEEE, d 'de' MMMM yyyy", { locale: es }) : "día seleccionado"}
+            </span>
           </p>
           {isAdminOrStaff && (
             <div className="mt-3 flex items-center gap-3 bg-card p-1.5 px-3 rounded-xl border border-border/80 shadow-xs w-max">
@@ -95,7 +116,13 @@ export function DashboardAgenda() {
                   <SelectItem value="all" className="font-bold text-xs">👥 Todos los especialistas</SelectItem>
                   {doctorsList.map((doc) => (
                     <SelectItem key={doc.id} value={doc.id} className="font-medium text-xs">
-                      👨‍⚕️ {doc.name} {doc.specialty ? `(${doc.specialty})` : ""}
+                      <span className="flex items-center gap-2">
+                        <span 
+                          className="w-2.5 h-2.5 rounded-full inline-block shrink-0" 
+                          style={{ backgroundColor: doc.calendarColor || "#008bcd" }} 
+                        />
+                        {doc.name} {doc.specialty ? `(${doc.specialty})` : ""}
+                      </span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -112,18 +139,18 @@ export function DashboardAgenda() {
               setSelectedAppointment(null) 
               setIsRescheduleOpen(true)
             }}
-            className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 hover:border-[#008bcd]/30 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
+            className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground hover:bg-accent/60 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
           >
-            <RefreshCcw className="h-5 w-5 mr-2 text-muted-foreground group-hover:text-[#008bcd] transition-colors" /> 
+            <RefreshCcw className="h-5 w-5 mr-2 text-muted-foreground transition-colors group-hover:text-foreground" /> 
             <span>Reprogramar</span>
           </Button>
           
           <Link href="/agenda-global" className="flex-1 md:flex-none">
             <Button 
               variant="ghost" 
-              className="w-full bg-transparent border border-border/80 text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 hover:border-[#008bcd]/30 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
+              className="w-full bg-transparent border border-border/80 text-foreground hover:bg-accent/60 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
             >
-              <CalendarCheck className="h-5 w-5 mr-2 text-muted-foreground group-hover:text-[#008bcd] transition-colors" /> 
+              <CalendarCheck className="h-5 w-5 mr-2 text-muted-foreground transition-colors group-hover:text-foreground" /> 
               <span>Agenda Global</span>
             </Button>
           </Link>
@@ -150,7 +177,11 @@ export function DashboardAgenda() {
               <h4 className="font-extrabold text-xs text-muted-foreground uppercase tracking-wider">Navegador</h4>
             </div>
             <div className="p-3 flex flex-col items-center justify-center">
-              <div className="w-full flex justify-center [&_.rdp]:w-full [&_.rdp-months]:w-full [&_.rdp-month]:w-full [&_.rdp-table]:w-full [&_.rdp-day_selected]:bg-[#008bcd] [&_.rdp-day_selected]:text-white [&_.rdp-day_selected:hover]:bg-[#0070a8] [&_.rdp-day]:rounded-xl">
+              {/* Calendario con el día seleccionado teñido con el color del usuario */}
+              <div 
+                style={{ "--calendar-accent": defaultUserColor } as React.CSSProperties}
+                className="w-full flex justify-center [&_.rdp]:w-full [&_.rdp-months]:w-full [&_.rdp-month]:w-full [&_.rdp-table]:w-full [&_.rdp-day_selected]:bg-[var(--calendar-accent)] [&_.rdp-day_selected]:text-white [&_.rdp-day_selected:hover]:opacity-90 [&_.rdp-day]:rounded-xl"
+              >
                 <Calendar mode="single" selected={date} onSelect={setDate} className="bg-transparent" />
               </div>
               
@@ -192,8 +223,15 @@ export function DashboardAgenda() {
 
           {!isLoading && !isError && citasActivas.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-border/80 rounded-2xl bg-card/50 shadow-xs">
-              <div className="w-16 h-16 bg-muted/60 rounded-2xl flex items-center justify-center mb-3 border border-border/60">
-                <CalendarCheck className="h-8 w-8 text-[#008bcd]" />
+              <div 
+                className="w-16 h-16 rounded-2xl flex items-center justify-center mb-3 border"
+                style={{
+                  backgroundColor: `${defaultUserColor}15`,
+                  borderColor: `${defaultUserColor}30`,
+                  color: defaultUserColor,
+                }}
+              >
+                <CalendarCheck className="h-8 w-8" />
               </div>
               <p className="text-base font-bold text-foreground">Sin citas asignadas</p>
               <p className="text-xs mt-1 max-w-xs text-center font-medium opacity-80">
@@ -215,10 +253,14 @@ export function DashboardAgenda() {
                 };
                 const StatusIcon = statusInfo.icon;
 
+                // Color dinámico asignado al doctor de esta cita
+                const docId = cita.doctorId || cita.doctor?.id;
+                const appointmentDocColor = doctorColorsMap[docId] || cita.doctor?.calendarColor || defaultUserColor;
+
                 return (
                   <div 
                     key={cita.id} 
-                    className="group flex flex-col md:flex-row items-stretch md:items-center bg-card rounded-2xl border border-border/80 hover:border-[#008bcd]/60 hover:shadow-lg hover:shadow-[#008bcd]/5 transition-all duration-200 overflow-hidden relative"
+                    className="group flex flex-col md:flex-row items-stretch md:items-center bg-card rounded-2xl border border-border/80 hover:shadow-lg transition-all duration-200 overflow-hidden relative"
                   >
                     
                     {/* BARRA LATERAL DE ESTADO */}
@@ -227,7 +269,7 @@ export function DashboardAgenda() {
                     {/* HORARIO */}
                     <div className="flex md:flex-col items-center justify-between md:justify-center px-5 py-3.5 md:py-5 bg-muted/20 md:w-32 md:border-r border-b md:border-b-0 border-border/80 shrink-0 ml-1.5">
                       <div className="flex items-center gap-2 md:hidden text-muted-foreground font-bold text-[10px] uppercase tracking-wider mb-0.5">
-                        <Clock className="w-3.5 h-3.5 text-[#008bcd]" /> Horario
+                        <Clock className="w-3.5 h-3.5" style={{ color: appointmentDocColor }} /> Horario
                       </div>
                       <div className="text-center">
                         <div className="text-lg font-black text-foreground tracking-tight">{cita.startTime}</div>
@@ -242,13 +284,20 @@ export function DashboardAgenda() {
                       
                       <div className="flex justify-between items-start gap-4">
                         <div className="flex gap-3.5 items-start">
-                          <div className="w-10 h-10 rounded-xl bg-[#008bcd]/10 text-[#008bcd] flex items-center justify-center font-bold border border-[#008bcd]/20 shrink-0 mt-0.5 group-hover:scale-105 transition-transform">
+                          <div 
+                            className="w-10 h-10 rounded-xl flex items-center justify-center font-bold border shrink-0 mt-0.5 group-hover:scale-105 transition-transform"
+                            style={{
+                              backgroundColor: `${appointmentDocColor}18`,
+                              borderColor: `${appointmentDocColor}35`,
+                              color: appointmentDocColor,
+                            }}
+                          >
                             {cita.patient?.firstName?.charAt(0) || "P"}
                           </div>
                           <div>
                             <Link 
                               href={`/paciente/${cita.patientId}`} 
-                              className="text-sm font-bold text-foreground group-hover:text-[#008bcd] transition-colors line-clamp-1"
+                              className="text-sm font-bold text-foreground transition-colors line-clamp-1 hover:underline"
                             >
                               {cita.patient?.firstName} {cita.patient?.lastName}
                             </Link>
@@ -264,7 +313,7 @@ export function DashboardAgenda() {
                             {statusInfo.label}
                           </span>
                           <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mt-0.5">
-                            <User className="w-3.5 h-3.5 text-[#008bcd]" /> {cita.doctor?.name || "Dr. Asignado"}
+                            <User className="w-3.5 h-3.5" style={{ color: appointmentDocColor }} /> {cita.doctor?.name || "Dr. Asignado"}
                           </div>
                         </div>
                       </div>
@@ -274,7 +323,7 @@ export function DashboardAgenda() {
                           <Phone className="w-3.5 h-3.5 text-muted-foreground/80" /> {cita.patient?.phone || "Sin contacto"}
                         </span>
                         <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
-                          <MapPin className="w-3.5 h-3.5 text-[#008bcd]" /> Sillón / Box:{" "}
+                          <MapPin className="w-3.5 h-3.5" style={{ color: appointmentDocColor }} /> Sillón / Box:{" "}
                           <span className="font-bold text-foreground">
                             {cita.box || (settings?.availableBoxes?.[0] ?? "Box 1")}
                           </span>
@@ -309,9 +358,9 @@ export function DashboardAgenda() {
                           setSelectedAppointment(cita)
                           setIsRescheduleOpen(true)
                         }}
-                        className="w-full h-8 text-xs font-bold text-muted-foreground hover:text-[#008bcd] hover:bg-accent/60 rounded-xl transition-all cursor-pointer"
+                        className="w-full h-8 text-xs font-bold text-muted-foreground hover:text-foreground hover:bg-accent/60 rounded-xl transition-all cursor-pointer"
                       >
-                        <RefreshCcw className="w-3 h-3 mr-1 text-[#008bcd]" /> Reprogramar
+                        <RefreshCcw className="w-3 h-3 mr-1" style={{ color: appointmentDocColor }} /> Reprogramar
                       </Button>
                     </div>
 
@@ -335,6 +384,5 @@ export function DashboardAgenda() {
   )
 }
 
-// Exportaciones compatibles
 export { DashboardAgenda as Agenda }
 export default DashboardAgenda

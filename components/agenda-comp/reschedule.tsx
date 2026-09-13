@@ -1,12 +1,13 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import { format, subDays, startOfDay } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
   RefreshCw, Clock, User, Loader2, Search, CheckCircle2, 
   CreditCard, AlignLeft, CalendarIcon, MapPin 
 } from "lucide-react"
+import { useSession } from "next-auth/react"
 
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, 
@@ -25,7 +26,6 @@ import { useRescheduleAppointment } from "@/hooks/appointments"
 import { cn } from "@/lib/utils"
 
 import { useClinicSettings } from "@/config/clinic-settings"
-import { appointmentStatuses } from "@/constants/status"
 
 interface RescheduleModalProps {
   isOpen: boolean
@@ -40,6 +40,10 @@ export function RescheduleModal({
   selectedAppointment, 
   onSuccessCallback 
 }: RescheduleModalProps) {
+  const { data: session } = useSession()
+  const currentUser = session?.user as any
+  const defaultUserColor = currentUser?.calendarColor || "#008bcd"
+
   const { toast } = useToast()
   const { rescheduleAppointment: reschedule, isLoading: isPending } = useRescheduleAppointment()
   const { settings } = useClinicSettings()
@@ -61,6 +65,12 @@ export function RescheduleModal({
   const availableBoxes = settings?.availableBoxes && settings.availableBoxes.length > 0 
     ? settings.availableBoxes 
     : ["Box 1 (Principal)", "Box 2 (Ortodoncia)", "Box 3 (Cirugía)"]
+  const activeColor = useMemo(() => {
+    if (targetAppointment?.doctor?.calendarColor) {
+      return targetAppointment.doctor.calendarColor
+    }
+    return defaultUserColor
+  }, [targetAppointment, defaultUserColor])
 
   const calculateEndTime = (startTime: string, durationMinutes: string) => {
     if (!startTime) return ""
@@ -141,7 +151,7 @@ export function RescheduleModal({
       return
     }
 
-    if (!newDateObj || !newTime) {
+    if (!newDateObj || !newTime?.trim()) {
       toast({ 
         title: "Campos obligatorios incompletos", 
         description: "Por favor seleccione la nueva fecha y la hora de inicio.", 
@@ -153,7 +163,7 @@ export function RescheduleModal({
     if (reasonCategory === "CUSTOM" && !customReasonNote.trim()) {
       toast({ 
         title: "Detalle requerido", 
-        description: "Escriba el motivo técnico de la reprogramación.", 
+        description: "Escriba la observación técnica de la reprogramación.", 
         variant: "destructive" 
       })
       return
@@ -163,9 +173,9 @@ export function RescheduleModal({
     const formattedDate = format(newDateObj, "yyyy-MM-dd")
     
     const finalReason = reasonCategory === "CUSTOM" 
-      ? customReasonNote 
-      : customReasonNote 
-        ? `${reasonCategory} — ${customReasonNote}`
+      ? customReasonNote.trim() 
+      : customReasonNote.trim() 
+        ? `${reasonCategory} — ${customReasonNote.trim()}`
         : reasonCategory
 
     reschedule({
@@ -199,10 +209,22 @@ export function RescheduleModal({
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="sm:max-w-[760px] bg-card border border-border/80 shadow-2xl rounded-2xl p-0 overflow-hidden">
         
-        {/* ENCABEZADO */}
-        <DialogHeader className="px-6 py-4 border-b border-border/80 bg-gradient-to-r from-[#008bcd]/10 via-transparent to-transparent">
+        {/* ENCABEZADO CON COLOR DINÁMICO */}
+        <DialogHeader 
+          className="px-6 py-4 border-b border-border/80 transition-all duration-300"
+          style={{
+            background: `linear-gradient(to right, ${activeColor}18, transparent)`,
+          }}
+        >
           <DialogTitle className="text-xl font-black text-foreground flex items-center gap-2.5">
-            <div className="p-2 bg-[#008bcd]/15 border border-[#008bcd]/30 text-[#008bcd] rounded-xl shrink-0">
+            <div 
+              className="p-2 border rounded-xl shrink-0 transition-colors"
+              style={{
+                backgroundColor: `${activeColor}18`,
+                borderColor: `${activeColor}35`,
+                color: activeColor,
+              }}
+            >
               <RefreshCw className="w-5 h-5" />
             </div>
             Reprogramación de Cita
@@ -219,8 +241,11 @@ export function RescheduleModal({
           <div className="space-y-4">
             {!selectedAppointment && (
               <div className="space-y-2">
-                <Label className="text-[11px] font-black uppercase text-[#008bcd] tracking-widest block">
-                  1. Buscar Cita del Paciente <span className="text-red-500">*</span>
+                <Label 
+                  style={{ color: activeColor }}
+                  className="text-[11px] font-black uppercase tracking-widest block transition-colors"
+                >
+                  1. Buscar Cita del Paciente <span className="text-destructive">*</span>
                 </Label>
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -228,7 +253,7 @@ export function RescheduleModal({
                     placeholder="Buscar por C.I. o Nombre..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 bg-background border-border/80 h-10 rounded-xl text-xs font-semibold focus-visible:ring-[#008bcd] shadow-xs"
+                    className="pl-9 bg-background border-border/80 h-10 rounded-xl text-xs font-semibold shadow-xs"
                   />
                 </div>
 
@@ -236,7 +261,7 @@ export function RescheduleModal({
                   <div className="max-h-[170px] overflow-y-auto border border-border/80 rounded-xl divide-y divide-border/60 bg-background shadow-xl custom-scrollbar mt-1">
                     {isSearching ? (
                       <div className="p-3 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
-                        <Loader2 className="w-4 h-4 animate-spin text-[#008bcd]" /> Buscando citas recientes...
+                        <Loader2 className="w-4 h-4 animate-spin" style={{ color: activeColor }} /> Buscando citas recientes...
                       </div>
                     ) : filteredAppointments.length === 0 ? (
                       <div className="p-3 text-center text-xs text-muted-foreground font-medium">
@@ -245,6 +270,8 @@ export function RescheduleModal({
                     ) : (
                       filteredAppointments.map((app: any) => {
                         const patientCI = app.patient?.ci || app.patient?.documentNumber || "Sin C.I."
+                        const isSelected = targetAppointment?.id === app.id
+
                         return (
                           <div
                             key={app.id}
@@ -255,24 +282,27 @@ export function RescheduleModal({
                               if (app.box) setSelectedBox(app.box)
                               setSearchTerm("")
                             }}
-                            className={`p-2.5 text-xs flex items-center justify-between cursor-pointer transition-colors ${
-                              targetAppointment?.id === app.id 
-                                ? "bg-[#008bcd]/15 border-l-4 border-l-[#008bcd]" 
-                                : "hover:bg-accent/60"
-                            }`}
+                            style={{
+                              backgroundColor: isSelected ? `${activeColor}15` : undefined,
+                              borderLeftColor: isSelected ? activeColor : undefined,
+                            }}
+                            className={cn(
+                              "p-2.5 text-xs flex items-center justify-between cursor-pointer transition-colors",
+                              isSelected ? "border-l-4 font-bold" : "hover:bg-accent/60"
+                            )}
                           >
                             <div className="space-y-0.5">
                               <p className="font-bold text-foreground">
                                 {app.patient?.firstName} {app.patient?.lastName}
                               </p>
                               <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
-                                <span className="text-[#008bcd] font-bold">C.I.: {patientCI}</span>
+                                <span className="font-bold" style={{ color: activeColor }}>C.I.: {patientCI}</span>
                                 <span>•</span>
                                 <span>{format(new Date(app.date || Date.now()), "dd/MM/yyyy")} ({app.startTime || "10:00"} hs)</span>
                               </div>
                             </div>
-                            {targetAppointment?.id === app.id && (
-                              <CheckCircle2 className="w-4 h-4 text-[#008bcd] shrink-0" />
+                            {isSelected && (
+                              <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: activeColor }} />
                             )}
                           </div>
                         )
@@ -285,23 +315,45 @@ export function RescheduleModal({
 
             {/* TARJETA PACIENTE CONFIRMADO */}
             {targetAppointment ? (
-              <div className="bg-[#008bcd]/10 p-4 rounded-2xl border border-[#008bcd]/30 space-y-2 animate-in fade-in duration-200">
-                <div className="flex items-center justify-between border-b border-[#008bcd]/20 pb-2">
-                  <span className="text-[10px] font-black uppercase tracking-wider text-[#008bcd]">
+              <div 
+                className="p-4 rounded-2xl border space-y-2 animate-in fade-in duration-200"
+                style={{
+                  backgroundColor: `${activeColor}12`,
+                  borderColor: `${activeColor}30`,
+                }}
+              >
+                <div 
+                  className="flex items-center justify-between border-b pb-2"
+                  style={{ borderBottomColor: `${activeColor}25` }}
+                >
+                  <span 
+                    className="text-[10px] font-black uppercase tracking-wider"
+                    style={{ color: activeColor }}
+                  >
                     Paciente Confirmado
                   </span>
-                  <span className="px-2 py-0.5 rounded-md bg-[#008bcd]/20 text-[#008bcd] font-black text-[10px] flex items-center gap-1">
+                  <span 
+                    className="px-2 py-0.5 rounded-md font-black text-[10px] flex items-center gap-1 border"
+                    style={{
+                      backgroundColor: `${activeColor}18`,
+                      color: activeColor,
+                      borderColor: `${activeColor}30`,
+                    }}
+                  >
                     <CreditCard className="w-3 h-3" />
                     C.I.: {targetAppointment.patient?.ci || targetAppointment.patient?.documentNumber || "N/A"}
                   </span>
                 </div>
 
                 <p className="text-sm font-extrabold text-foreground flex items-center gap-2 pt-0.5">
-                  <User className="w-4 h-4 text-[#008bcd] shrink-0" />
+                  <User className="w-4 h-4 shrink-0" style={{ color: activeColor }} />
                   {targetAppointment.patient?.firstName || targetAppointment.patientName} {targetAppointment.patient?.lastName || ''}
                 </p>
 
-                <p className="text-xs text-muted-foreground font-medium flex items-center gap-2 pt-1 border-t border-[#008bcd]/15">
+                <p 
+                  className="text-xs text-muted-foreground font-medium flex items-center gap-2 pt-1 border-t"
+                  style={{ borderTopColor: `${activeColor}20` }}
+                >
                   <Clock className="w-3.5 h-3.5 text-amber-500 shrink-0" /> 
                   Cita previa: <b className="text-foreground">{format(new Date(targetAppointment.date || Date.now()), "dd 'de' MMMM yyyy", { locale: es })} ({targetAppointment.startTime || "10:00"} hs)</b>
                 </p>
@@ -315,49 +367,68 @@ export function RescheduleModal({
 
           {/* COLUMNA DERECHA: CAMPOS DE REPROGRAMACIÓN */}
           <div className="space-y-4 md:border-l md:border-border/80 md:pl-6">
-            <Label className="text-[11px] font-black uppercase text-[#008bcd] tracking-widest block">
+            <Label 
+              style={{ color: activeColor }}
+              className="text-[11px] font-black uppercase tracking-widest block transition-colors"
+            >
               2. Nuevo Horario, Box y Detalle
             </Label>
             
-            {/* NUEVA FECHA */}
+            {/* NUEVA FECHA (OBLIGATORIA) */}
             <div className="space-y-1.5">
               <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <CalendarIcon className="w-3.5 h-3.5 text-[#008bcd]" /> Nueva Fecha <span className="text-red-500">*</span>
+                <CalendarIcon className="w-3.5 h-3.5" style={{ color: activeColor }} /> 
+                Nueva Fecha <span className="text-destructive font-black">*</span>
               </span>
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" className={cn("w-full justify-start text-left font-semibold bg-background border-border/80 hover:bg-muted/50 h-10 rounded-xl text-xs text-foreground shadow-xs", !newDateObj && "text-muted-foreground")}>
+                  <Button 
+                    variant="outline" 
+                    className={cn(
+                      "w-full justify-start text-left font-semibold bg-background border-border/80 hover:bg-muted/50 h-10 rounded-xl text-xs text-foreground shadow-xs cursor-pointer",
+                      !newDateObj && "text-muted-foreground"
+                    )}
+                  >
                     {newDateObj ? format(newDateObj, "EEEE, d 'de' MMMM yyyy", { locale: es }) : <span>Seleccionar nueva fecha</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0 z-[120] rounded-2xl shadow-xl border-border/80" align="start">
-                  <Calendar 
-                    mode="single" 
-                    selected={newDateObj} 
-                    onSelect={setNewDateObj} 
-                    disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))} 
-                  />
+                  <div 
+                    style={{ "--calendar-accent": activeColor } as React.CSSProperties}
+                    className="[&_.rdp-day_selected]:bg-[var(--calendar-accent)] [&_.rdp-day_selected]:text-white [&_.rdp-day_selected:hover]:opacity-90"
+                  >
+                    <Calendar 
+                      mode="single" 
+                      selected={newDateObj} 
+                      onSelect={setNewDateObj} 
+                      disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))} 
+                    />
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
 
-            {/* HORA Y DURACIÓN */}
+            {/* HORA Y DURACIÓN (OBLIGATORIOS) */}
             <div className="grid grid-cols-2 gap-3 bg-muted/20 p-3 rounded-xl border border-border/80">
               <div className="space-y-1">
-                <span className="text-[11px] font-bold text-muted-foreground">Hora Inicio <span className="text-red-500">*</span></span>
+                <span className="text-[11px] font-bold text-muted-foreground">
+                  Hora Inicio <span className="text-destructive font-black">*</span>
+                </span>
                 <Input
                   type="time"
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
-                  className="bg-background border-border/80 h-9 rounded-lg text-xs font-bold focus-visible:ring-[#008bcd]"
+                  className="bg-background border-border/80 h-9 rounded-lg text-xs font-bold"
                   required
                 />
               </div>
 
               <div className="space-y-1">
-                <span className="text-[11px] font-bold text-muted-foreground">Duración <span className="text-red-500">*</span></span>
+                <span className="text-[11px] font-bold text-muted-foreground">
+                  Duración <span className="text-destructive font-black">*</span>
+                </span>
                 <Select value={duration} onValueChange={setDuration}>
-                  <SelectTrigger className="bg-background border-border/80 h-9 text-xs font-bold rounded-lg focus:ring-[#008bcd]">
+                  <SelectTrigger className="bg-background border-border/80 h-9 text-xs font-bold rounded-lg">
                     <SelectValue placeholder="Duración" />
                   </SelectTrigger>
                   <SelectContent className="bg-card border-border/80 rounded-xl text-xs font-semibold">
@@ -372,18 +443,18 @@ export function RescheduleModal({
               </div>
             </div>
 
-            {/* 🌟 SELECTOR DINÁMICO DE SILLÓN / BOX */}
+            {/* SILLÓN / BOX ASIGNADO */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-[#008bcd]" /> Sillón / Box Asignado
+                <MapPin className="w-3.5 h-3.5" style={{ color: activeColor }} /> Sillón / Box Asignado
               </Label>
               <Select value={selectedBox} onValueChange={setSelectedBox}>
-                <SelectTrigger className="bg-background border-border/80 h-10 text-xs font-semibold rounded-xl focus:ring-[#008bcd]">
+                <SelectTrigger className="bg-background border-border/80 h-10 text-xs font-semibold rounded-xl">
                   <SelectValue placeholder="Seleccione el Box..." />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border/80 rounded-xl text-xs font-semibold">
                   {availableBoxes.map((boxName, index) => (
-                    <SelectItem key={index} value={boxName}>
+                    <SelectItem key={index} value={boxName} className="cursor-pointer">
                       {boxName}
                     </SelectItem>
                   ))}
@@ -394,10 +465,10 @@ export function RescheduleModal({
             {/* CATEGORÍA DEL MOTIVO */}
             <div className="space-y-1.5">
               <Label className="text-xs font-bold text-foreground">
-                Categoría del Motivo <span className="text-red-500">*</span>
+                Categoría del Motivo <span className="text-destructive font-black">*</span>
               </Label>
               <Select value={reasonCategory} onValueChange={setReasonCategory}>
-                <SelectTrigger className="bg-background border-border/80 h-10 text-xs font-semibold rounded-xl focus:ring-[#008bcd]">
+                <SelectTrigger className="bg-background border-border/80 h-10 text-xs font-semibold rounded-xl">
                   <SelectValue placeholder="Seleccione el motivo" />
                 </SelectTrigger>
                 <SelectContent className="bg-card border-border/80 rounded-xl text-xs font-semibold">
@@ -413,15 +484,18 @@ export function RescheduleModal({
             {/* DETALLE TÉCNICO SI ES PERSONALIZADO */}
             {reasonCategory === "CUSTOM" && (
               <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1 duration-200">
-                <Label className="text-xs font-bold text-[#008bcd] flex items-center gap-1.5">
+                <Label 
+                  style={{ color: activeColor }}
+                  className="text-xs font-bold flex items-center gap-1.5"
+                >
                   <AlignLeft className="w-3.5 h-3.5" />
-                  Observación o Término Técnico <span className="text-red-500">*</span>
+                  Observación o Término Técnico <span className="text-destructive font-black">*</span>
                 </Label>
                 <Input
                   value={customReasonNote}
                   onChange={(e) => setCustomReasonNote(e.target.value)}
                   placeholder="Ej: Ajuste por tiempo de fraguado / Extensión..."
-                  className="bg-background border-border/80 h-10 text-xs font-semibold rounded-xl shadow-xs focus-visible:ring-[#008bcd]"
+                  className="bg-background border-border/80 h-10 text-xs font-semibold rounded-xl shadow-xs"
                   required
                   autoFocus
                 />
@@ -437,7 +511,7 @@ export function RescheduleModal({
             variant="ghost"
             onClick={handleClose}
             disabled={isPending}
-            className="font-bold rounded-xl text-muted-foreground hover:bg-muted text-xs h-10 px-5 transition-colors"
+            className="font-bold rounded-xl text-muted-foreground hover:bg-muted text-xs h-10 px-5 transition-colors cursor-pointer"
           >
             Cancelar
           </Button>
@@ -445,7 +519,11 @@ export function RescheduleModal({
             type="button"
             onClick={handleSubmit}
             disabled={isPending || !targetAppointment}
-            className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold px-6 shadow-md shadow-[#008bcd]/20 rounded-xl text-xs h-10 transition-all cursor-pointer active:scale-95"
+            style={{
+              backgroundColor: activeColor,
+              boxShadow: `0 8px 16px -4px ${activeColor}40`,
+            }}
+            className="text-white font-bold px-6 rounded-xl text-xs h-10 transition-all cursor-pointer active:scale-95 hover:opacity-90"
           >
             {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
             Guardar Reprogramación

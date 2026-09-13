@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { Stethoscope } from "lucide-react" 
+import { useSession } from "next-auth/react"
 import { useGetPatients } from "@/hooks/patients"
 
 const loadingMessages = [
@@ -12,8 +13,13 @@ const loadingMessages = [
 ]
 
 export const GlobalLoader = () => {
+  const { data: session } = useSession()
   const { isLoading } = useGetPatients()
   const [messageIndex, setMessageIndex] = useState(0)
+
+  const user = session?.user as any
+  const brandColor = user?.calendarColor || "#008bcd"
+
   useEffect(() => {
     if (!isLoading) return;
     const interval = setInterval(() => {
@@ -28,10 +34,22 @@ export const GlobalLoader = () => {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md animate-in fade-in duration-300">
       <div className="flex flex-col items-center justify-center gap-8">
         <div className="relative flex items-center justify-center">
-          <div className="absolute h-24 w-24 rounded-full border-2 border-[#008bcd]/30 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"></div>
-          <div className="absolute h-32 w-32 rounded-full border border-[#008bcd]/10 animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite_1s]"></div>
+          <div 
+            className="absolute h-24 w-24 rounded-full border-2 animate-[ping_2s_cubic-bezier(0,0,0.2,1)_infinite]"
+            style={{ borderColor: `${brandColor}4D` }} 
+          />
+          <div 
+            className="absolute h-32 w-32 rounded-full border animate-[ping_3s_cubic-bezier(0,0,0.2,1)_infinite_1s]"
+            style={{ borderColor: `${brandColor}1A` }} 
+          />
           
-          <div className="bg-gradient-to-tr from-[#008bcd] to-blue-400 p-5 rounded-full shadow-xl shadow-blue-500/20 relative z-10 animate-pulse">
+          <div 
+            className="p-5 rounded-full shadow-xl relative z-10 animate-pulse transition-colors duration-300"
+            style={{ 
+              backgroundColor: brandColor,
+              boxShadow: `0 20px 25px -5px ${brandColor}33`
+            }}
+          >
              <Stethoscope className="h-10 w-10 text-white" />
           </div>
         </div>

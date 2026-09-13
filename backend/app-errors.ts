@@ -1,11 +1,13 @@
-
 export class AppError extends Error {
   public statusCode: number;
-  
+  public isOperational: boolean;
+
   constructor(message: string, statusCode: number = 500) {
     super(message);
     this.name = "AppError";
     this.statusCode = statusCode;
+    this.isOperational = true;
+
     if (Error.captureStackTrace) {
       Error.captureStackTrace(this, this.constructor);
     }
@@ -20,7 +22,7 @@ export class AuthenticationError extends AppError {
 }
 
 export class AuthorizationError extends AppError {
-  constructor(message: string = "Acceso denegado. No tienes permisos de administrador.") {
+  constructor(message: string = "Acceso denegado. No cuentas con los permisos necesarios.") {
     super(message, 403);
     this.name = "AuthorizationError";
   }

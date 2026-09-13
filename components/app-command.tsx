@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Search, Loader2, User, ArrowRight } from "lucide-react" 
 import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 
 import { cn } from "@/lib/utils"
 import { useGetPatients } from "@/hooks/patients" 
@@ -25,6 +26,10 @@ function useDebounce<T>(value: T, delay: number) {
 
 export function AppCommand({ className, ...props }: any) {
   const router = useRouter()
+  const { data: session } = useSession()
+  const currentUser = session?.user as any
+  const accentColor = currentUser?.calendarColor || "#008bcd"
+
   const ref = React.useRef<HTMLInputElement>(null)
   const containerRef = React.useRef<HTMLDivElement>(null)
   
@@ -59,7 +64,6 @@ export function AppCommand({ className, ...props }: any) {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  // CORRECCIÓN: Atajo unificado a Ctrl + B (o Cmd + B)
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if ((e.key === "b" || e.key === "B") && (e.metaKey || e.ctrlKey)) {
@@ -78,6 +82,7 @@ export function AppCommand({ className, ...props }: any) {
     router.push(`/paciente?q=${encodeURIComponent(query)}`)
     ref.current?.blur()
   }
+
   const navigateToPatient = (id: string) => {
     setIsOpen(false)
     setQuery("")
@@ -88,13 +93,22 @@ export function AppCommand({ className, ...props }: any) {
   return (
     <div ref={containerRef} className={cn("relative w-full max-w-[600px] z-50 print:hidden", className)}>
       <form onSubmit={handleSubmit} className="w-full relative transition-all duration-300">
-
-        <div className={cn(
-          "relative flex items-center w-full rounded-full border bg-background transition-all duration-300",
-          isFocused ? "border-[#008bcd]/50 shadow-md shadow-blue-500/10 ring-4 ring-[#008bcd]/10" : "border-border shadow-sm hover:border-slate-300"
-        )}>
+        <div 
+          style={{
+            borderColor: isFocused ? `${accentColor}80` : undefined,
+            boxShadow: isFocused ? `0 0 0 4px ${accentColor}18, 0 4px 12px ${accentColor}12` : undefined,
+          }}
+          className={cn(
+            "relative flex items-center w-full rounded-full border bg-background transition-all duration-300",
+            !isFocused && "border-border shadow-xs hover:border-border/80"
+          )}
+        >
           <div className="pl-4 pr-2 text-muted-foreground">
-            <Search size={18} className={isFocused ? "text-[#008bcd]" : ""} />
+            <Search 
+              size={18} 
+              style={{ color: isFocused ? accentColor : undefined }}
+              className="transition-colors" 
+            />
           </div>
 
           <input
@@ -116,11 +130,11 @@ export function AppCommand({ className, ...props }: any) {
 
           <div className="pr-3 flex items-center">
             {isLoading ? (
-               <Loader2 className="animate-spin text-[#008bcd]" size={18} />
+              <Loader2 className="animate-spin" style={{ color: accentColor }} size={18} />
             ) : (
-               <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border bg-muted/50 px-2 text-[10px] font-medium text-muted-foreground opacity-70">
-                 <span className="text-xs">⌘</span>B
-               </kbd>
+              <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border bg-muted/50 px-2 text-[10px] font-medium text-muted-foreground opacity-70 select-none">
+                <span className="text-xs">⌘</span>B
+              </kbd>
             )}
           </div>
         </div>
@@ -128,10 +142,13 @@ export function AppCommand({ className, ...props }: any) {
 
       {/* DROPDOWN DE RESULTADOS */}
       {isOpen && query.trim().length > 0 && (
-        <div className="absolute top-full left-0 mt-2 w-full bg-card border border-border shadow-2xl rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+        <div 
+          style={{ "--accent-brand": accentColor } as React.CSSProperties}
+          className="absolute top-full left-0 mt-2 w-full bg-card border border-border shadow-2xl rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-2"
+        >
           {isLoading ? (
             <div className="p-4 flex items-center justify-center text-muted-foreground text-sm font-medium">
-              <Loader2 className="w-4 h-4 animate-spin mr-2 text-[#008bcd]" /> Buscando pacientes...
+              <Loader2 className="w-4 h-4 animate-spin mr-2" style={{ color: accentColor }} /> Buscando pacientes...
             </div>
           ) : filteredPatients.length > 0 ? (
             <div className="flex flex-col">
@@ -143,21 +160,28 @@ export function AppCommand({ className, ...props }: any) {
                   type="button"
                   key={patient.id}
                   onClick={() => navigateToPatient(patient.id)}
-                  className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 text-left transition-colors border-b border-border/50 last:border-0 group"
+                  className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 text-left transition-colors border-b border-border/50 last:border-0 group cursor-pointer"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-[#008bcd]/10 text-[#008bcd] flex items-center justify-center font-bold text-xs shrink-0">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div 
+                      style={{
+                        backgroundColor: `${accentColor}18`,
+                        color: accentColor,
+                        borderColor: `${accentColor}30`,
+                      }}
+                      className="w-9 h-9 rounded-full border flex items-center justify-center font-bold text-xs shrink-0 transition-transform group-hover:scale-105"
+                    >
                       {patient.firstName?.charAt(0)}{patient.lastName?.charAt(0)}
                     </div>
                     <div className="flex flex-col overflow-hidden">
-                      <span className="font-bold text-foreground text-sm group-hover:text-[#008bcd] transition-colors truncate">
+                      <span className="font-bold text-foreground text-sm group-hover:text-[var(--accent-brand)] transition-colors truncate">
                         {patient.firstName} {patient.lastName}
                       </span>
-                      <span className="text-xs text-muted-foreground font-medium">CI: {patient.ci}</span>
+                      <span className="text-xs text-muted-foreground font-medium">CI: {patient.ci || "Sin documento"}</span>
                     </div>
                   </div>
-                  <div className="w-6 h-6 rounded-full bg-background border border-border flex items-center justify-center group-hover:border-[#008bcd]/30 group-hover:bg-[#008bcd]/5 transition-colors">
-                    <ArrowRight className="w-3 h-3 text-muted-foreground group-hover:text-[#008bcd]" />
+                  <div className="w-6 h-6 rounded-full bg-background border border-border flex items-center justify-center group-hover:border-[var(--accent-brand)] group-hover:bg-[var(--accent-brand)]/10 transition-colors shrink-0">
+                    <ArrowRight className="w-3 h-3 text-muted-foreground group-hover:text-[var(--accent-brand)] transition-colors" />
                   </div>
                 </button>
               ))}

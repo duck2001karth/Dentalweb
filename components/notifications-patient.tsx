@@ -12,10 +12,13 @@ import { useGetAppointments } from "@/hooks/appointments"
 export function NextPatientDropdown() {
   const router = useRouter()
   const { data: session } = useSession()
+
+  const currentUser = session?.user as any
+  const accentColor = currentUser?.calendarColor || "#008bcd"
   
   const { appointments, isLoading } = useGetAppointments({
     fecha: new Date(),
-    doctorId: (session?.user as any)?.id,
+    doctorId: currentUser?.id,
   })
 
   const nextAppointment = useMemo(() => {
@@ -37,35 +40,61 @@ export function NextPatientDropdown() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-      <Button variant="ghost" size="icon" className="relative h-12 w-12 rounded-full text-muted-foreground hover:text-[#008bcd] hover:bg-blue-50 transition-colors">
-        <CalendarClock size={28} />
-        {nextAppointment && (
-          <span className="absolute top-2.5 right-2.5 w-2.5 h-2.5 bg-amber-500 rounded-full border-2 border-background animate-pulse" />
-        )}
-      </Button>
-    </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72 rounded-2xl p-0 border-border shadow-2xl overflow-hidden mt-2">
-        <div className="bg-[#008bcd]/10 px-4 py-3 border-b border-[#008bcd]/20">
-          <span className="font-bold text-sm text-[#008bcd] flex items-center gap-2">
+        <Button variant="ghost" size="icon" className="relative h-12 w-12 rounded-full text-muted-foreground hover:text-[#008bcd] hover:bg-blue-50 dark:hover:bg-blue-950/20 transition-colors">
+          <CalendarClock size={28} />
+          {nextAppointment && (
+            <span 
+              className="absolute top-2.5 right-2.5 w-2.5 h-2.5 rounded-full border-2 border-background animate-pulse" 
+              style={{ backgroundColor: accentColor }}
+            />
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-72 rounded-2xl p-0 border-border shadow-2xl overflow-hidden mt-2 bg-popover">
+        <div 
+          className="px-4 py-3 border-b"
+          style={{ 
+            backgroundColor: `${accentColor}18`,
+            borderBottomColor: `${accentColor}30`
+          }}
+        >
+          <span 
+            className="font-bold text-sm flex items-center gap-2"
+            style={{ color: accentColor }}
+          >
             <Clock size={16} /> Próximo Paciente
           </span>
         </div>
         
         {isLoading ? (
           <div className="p-8 flex justify-center">
-            <Loader2 className="w-6 h-6 animate-spin text-[#008bcd]" />
+            <Loader2 className="w-6 h-6 animate-spin" style={{ color: accentColor }} />
           </div>
         ) : nextAppointment ? (
           <div className="p-4">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-muted-foreground font-bold shrink-0">
+              <div 
+                className="w-10 h-10 rounded-full flex items-center justify-center font-bold shrink-0 border"
+                style={{
+                  backgroundColor: `${accentColor}15`,
+                  borderColor: `${accentColor}30`,
+                  color: accentColor,
+                }}
+              >
                 {nextAppointment.patient?.firstName?.charAt(0)}{nextAppointment.patient?.lastName?.charAt(0)}
               </div>
               <div className="overflow-hidden">
                 <p className="font-bold text-foreground truncate">
                   {nextAppointment.patient?.firstName} {nextAppointment.patient?.lastName}
                 </p>
-                <p className="text-xs font-semibold text-emerald-600 bg-emerald-50 w-fit px-2 py-0.5 rounded-md mt-0.5 border border-emerald-100">
+                <p 
+                  className="text-xs font-semibold w-fit px-2 py-0.5 rounded-md mt-0.5 border"
+                  style={{
+                    backgroundColor: `${accentColor}12`,
+                    borderColor: `${accentColor}25`,
+                    color: accentColor,
+                  }}
+                >
                   Hoy, {nextAppointment.startTime}
                 </p>
               </div>
@@ -76,7 +105,8 @@ export function NextPatientDropdown() {
             </div>
             <Button 
               onClick={() => router.push(`/paciente/${nextAppointment.patientId}`)}
-              className="w-full bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl transition-transform active:scale-95"
+              style={{ backgroundColor: accentColor }}
+              className="w-full text-white font-bold rounded-xl transition-transform active:scale-95 hover:opacity-90 cursor-pointer"
             >
               Ir a Ficha Clínica <ArrowRight size={16} className="ml-2" />
             </Button>

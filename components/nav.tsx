@@ -60,7 +60,10 @@ export const Nav = () => {
   const [activeOpenModule, setActiveOpenModule] = React.useState<ModuleKey | null>(null)
   
   const { data: session } = useSession()
-  const userRole = (session?.user as any)?.role || "ADMIN"
+  const currentUser = session?.user as any
+  const userRole = currentUser?.role || "ADMIN"
+  const accentColor = currentUser?.calendarColor || "#008bcd"
+
   const { settings } = useClinicSettings()
   const visibleAdminItems = React.useMemo(() => {
     return adminNavItems.filter(item => !item.roles || item.roles.includes(userRole))
@@ -72,7 +75,6 @@ export const Nav = () => {
   
   const showAdminModule = visibleAdminItems.length > 0
   const showConfigModule = visibleConfigItems.length > 0
-  
 
   const [logoScale, setLogoScale] = React.useState(100)
 
@@ -86,6 +88,7 @@ export const Nav = () => {
     window.addEventListener("logoScaleUpdated", updateScale)
     return () => window.removeEventListener("logoScaleUpdated", updateScale)
   }, [settings?.logoScale])
+
   React.useEffect(() => {
     if (!pathname) return
 
@@ -96,7 +99,7 @@ export const Nav = () => {
     } else if (visibleConfigItems.some(i => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
       setActiveOpenModule("config")
     }
-  }, [pathname])
+  }, [pathname, visibleAdminItems, visibleConfigItems])
 
   const toggleModule = (moduleKey: ModuleKey) => {
     setActiveOpenModule(prev => (prev === moduleKey ? null : moduleKey))
@@ -147,7 +150,10 @@ export const Nav = () => {
                 />
               </div>
             ) : (
-              <div className="h-11 w-11 flex items-center justify-center rounded-2xl bg-gradient-to-tr from-[#008bcd] to-sky-400 shadow-md text-white font-black text-xl">
+              <div 
+                style={{ backgroundColor: accentColor }}
+                className="h-11 w-11 flex items-center justify-center rounded-2xl shadow-md text-white font-black text-xl transition-colors"
+              >
                 {settings?.clinicName?.charAt(0) || "C"}
               </div>
             )}
@@ -160,7 +166,7 @@ export const Nav = () => {
         <div className="flex flex-col gap-1 px-3">
           
           {mainNavItems.map((item) => (
-            <NavItem key={item.name} item={item} isExpanded={isHovered} />
+            <NavItem key={item.name} item={item} isExpanded={isHovered} accentColor={accentColor} />
           ))}
 
           <div className="mt-5 mb-2">
@@ -180,9 +186,10 @@ export const Nav = () => {
             isExpanded={isHovered} 
             isOpen={activeOpenModule === "clinica"} 
             onToggle={() => toggleModule("clinica")}
+            accentColor={accentColor}
           >
             {clinicaNavItems.map((item) => (
-              <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
+              <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} accentColor={accentColor} />
             ))}
           </NavSection>
 
@@ -194,9 +201,10 @@ export const Nav = () => {
               isExpanded={isHovered} 
               isOpen={activeOpenModule === "admin"} 
               onToggle={() => toggleModule("admin")}
+              accentColor={accentColor}
             >
               {visibleAdminItems.map((item) => (
-                <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
+                <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} accentColor={accentColor} />
               ))}
             </NavSection>
           )}
@@ -209,9 +217,10 @@ export const Nav = () => {
               isExpanded={isHovered} 
               isOpen={activeOpenModule === "config"} 
               onToggle={() => toggleModule("config")}
+              accentColor={accentColor}
             >
               {visibleConfigItems.map((item) => (
-                <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} />
+                <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} accentColor={accentColor} />
               ))}
             </NavSection>
           )}
@@ -226,7 +235,17 @@ export const Nav = () => {
 // 3. COMPONENTE: ITEM DE NAVEGACIÓN
 // ============================================================================
 
-export const NavItem = ({ item, isSubItem, isExpanded }: { item: NavItemConfig, isSubItem?: boolean, isExpanded: boolean }) => {
+export const NavItem = ({ 
+  item, 
+  isSubItem, 
+  isExpanded, 
+  accentColor 
+}: { 
+  item: NavItemConfig
+  isSubItem?: boolean
+  isExpanded: boolean
+  accentColor: string
+}) => {
   const pathname = usePathname()
   const isActive =
     item.href === "/" || item.href === "/ajustes"
@@ -239,25 +258,36 @@ export const NavItem = ({ item, isSubItem, isExpanded }: { item: NavItemConfig, 
     <div className="relative group/navitem w-full">
       <Link
         href={item.href}
+        style={{
+          background: isActive ? `linear-gradient(to right, ${accentColor}26, transparent)` : undefined,
+          color: isActive ? accentColor : undefined,
+        }}
         className={cn(
           "relative flex items-center rounded-xl py-2.5 transition-all duration-200 outline-none cursor-pointer z-10",
           !isExpanded ? "justify-center w-14 mx-auto" : "justify-start px-4 w-full gap-3",
-          isActive 
-            ? "bg-gradient-to-r from-[#008bcd]/15 to-transparent text-[#008bcd] font-bold" 
-            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground font-medium"
+          isActive ? "font-bold" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground font-medium"
         )}
       >
         {isActive && (
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-[#008bcd] rounded-r-full shadow-[1px_0_8px_rgba(0,139,205,0.5)]" />
+          <div 
+            style={{ 
+              backgroundColor: accentColor,
+              boxShadow: `1px 0 8px ${accentColor}80` 
+            }}
+            className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 rounded-r-full" 
+          />
         )}
 
         <div className="flex items-center justify-center shrink-0">
-          <Icon className={cn(
-            "transition-transform duration-300",
-            isActive ? "text-[#008bcd] stroke-[2.5]" : "text-muted-foreground group-hover/navitem:text-foreground",
-            isSubItem && !isExpanded ? "h-5 w-5" : "h-[20px] w-[20px]",
-            !isExpanded && "group-hover/navitem:scale-110"
-          )} />
+          <Icon 
+            style={{ color: isActive ? accentColor : undefined }}
+            className={cn(
+              "transition-transform duration-300",
+              isActive ? "stroke-[2.5]" : "text-muted-foreground group-hover/navitem:text-foreground",
+              isSubItem && !isExpanded ? "h-5 w-5" : "h-[20px] w-[20px]",
+              !isExpanded && "group-hover/navitem:scale-110"
+            )} 
+          />
         </div>
 
         {isExpanded && (
@@ -287,7 +317,8 @@ const NavSection = ({
   isExpanded, 
   isOpen, 
   onToggle, 
-  children 
+  children,
+  accentColor
 }: { 
   title: string
   icon: LucideIcon
@@ -295,6 +326,7 @@ const NavSection = ({
   isOpen: boolean
   onToggle: () => void
   children: React.ReactNode 
+  accentColor: string
 }) => {
   return (
     <div className="mt-1 w-full"> 
@@ -308,11 +340,14 @@ const NavSection = ({
         )}
       >
         <div className="flex items-center gap-3 overflow-hidden">
-          <Icon className={cn(
-            "h-5 w-5 shrink-0 transition-colors duration-300",
-            isOpen ? "text-[#008bcd] stroke-[2.5]" : "text-muted-foreground group-hover:text-foreground",
-            isExpanded && "hidden" 
-          )} />
+          <Icon 
+            style={{ color: isOpen ? accentColor : undefined }}
+            className={cn(
+              "h-5 w-5 shrink-0 transition-colors duration-300",
+              isOpen ? "stroke-[2.5]" : "text-muted-foreground group-hover:text-foreground",
+              isExpanded && "hidden" 
+            )} 
+          />
 
           {isExpanded && (
             <span className={cn(

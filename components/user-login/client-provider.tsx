@@ -8,10 +8,11 @@ function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
+        staleTime: 1000 * 60 * 1, 
         refetchOnWindowFocus: false,
-        refetchOnMount: false,
-        refetchOnReconnect: false,
-        staleTime: 1000 * 60 * 60 * 24,
+        refetchOnMount: true,
+        refetchOnReconnect: true,
+        retry: 1,
       },
     },
   })
@@ -20,7 +21,7 @@ function makeQueryClient() {
 let browserQueryClient: QueryClient | undefined = undefined
 
 function getQueryClient() {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return makeQueryClient()
   } else {
     if (!browserQueryClient) browserQueryClient = makeQueryClient()
@@ -34,8 +35,9 @@ export default function ClientProvider({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       {children}
-      
-      <ReactQueryDevtools initialIsOpen={false} />
+      {process.env.NODE_ENV === "development" && (
+        <ReactQueryDevtools initialIsOpen={false} />
+      )}
     </QueryClientProvider>
   )
 }

@@ -5,7 +5,7 @@ import { format, addDays, subDays, isToday } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
   ChevronLeft, ChevronRight, Calendar as CalendarIcon, 
-  Plus, Loader2, User, Clock, MapPin, CheckCircle2, 
+  Plus, Loader2, Clock, 
   CalendarDays, Stethoscope, ArrowUpRight
 } from "lucide-react"
 import { useSession } from "next-auth/react" 
@@ -47,6 +47,7 @@ export default function AgendaGlobalPage() {
 
   const currentUser = session?.user as any
   const isGlobalStaff = currentUser?.role === "ADMIN" || currentUser?.role === "RECEPTIONIST"
+  const defaultUserColor = currentUser?.calendarColor || "#008bcd"
 
   useEffect(() => {
     if (isGlobalStaff) {
@@ -55,11 +56,14 @@ export default function AgendaGlobalPage() {
         .then(res => res.json())
         .then(data => {
           if (Array.isArray(data)) {
-            const soloDoctores = data.filter(u => u.role === "DOCTOR").map(d => ({
-              id: d.id,
-              name: d.name,
-              especialidad: d.specialty || "Odontología General"
-            }))
+            const soloDoctores = data
+              .filter(u => u.role === "DOCTOR")
+              .map(d => ({
+                id: d.id,
+                name: d.name,
+                especialidad: d.specialty || "Odontología General",
+                calendarColor: d.calendarColor || "#008bcd",
+              }))
             setDoctoresDeLaClinica(soloDoctores)
           }
         })
@@ -76,12 +80,19 @@ export default function AgendaGlobalPage() {
       { 
         id: currentUser?.id || "doctor_default", 
         name: currentUser?.name ? `${currentUser.name} (Tú)` : "Dr. Asignado", 
-        especialidad: currentUser?.specialty || "Odontología General" 
+        especialidad: currentUser?.specialty || "Odontología General",
+        calendarColor: defaultUserColor,
       }
     ]
-  }, [isGlobalStaff, doctoresDeLaClinica, currentUser])
+  }, [isGlobalStaff, doctoresDeLaClinica, currentUser, defaultUserColor])
 
-  // --- GRID MAP CON SNAPPING INTELIGENTE ---
+  const doctorColorsMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    DOCTORES.forEach(d => {
+      map[d.id] = d.calendarColor || "#008bcd"
+    })
+    return map
+  }, [DOCTORES])
   const gridMap = useMemo(() => {
     const map: Record<string, Record<string, any>> = {}
     
@@ -133,6 +144,11 @@ export default function AgendaGlobalPage() {
 
     return map
   }, [appointments, DOCTORES, currentUser])
+  const selectedCitaDoctorColor = useMemo(() => {
+    if (!selectedCita) return defaultUserColor
+    const docId = selectedCita.doctorId || selectedCita.doctor?.id
+    return doctorColorsMap[docId] || selectedCita.doctor?.calendarColor || defaultUserColor
+  }, [selectedCita, doctorColorsMap, defaultUserColor])
 
   return (
     <AppLayout>
@@ -143,7 +159,14 @@ export default function AgendaGlobalPage() {
           
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-xl bg-[#008bcd]/10 text-[#008bcd] flex items-center justify-center font-bold border border-[#008bcd]/20 shadow-xs">
+              <div 
+                className="w-10 h-10 rounded-xl flex items-center justify-center font-bold border shadow-xs transition-colors"
+                style={{
+                  backgroundColor: `${defaultUserColor}15`,
+                  borderColor: `${defaultUserColor}30`,
+                  color: defaultUserColor,
+                }}
+              >
                 <CalendarDays className="w-5 h-5 stroke-[2.2]" />
               </div>
               <div>
@@ -157,13 +180,11 @@ export default function AgendaGlobalPage() {
             </div>
 
             <div className="h-6 w-[1px] bg-border/80 mx-2 hidden sm:block" />
-
-            {/* CONTROL DE FECHA */}
             <div className="flex items-center gap-1.5 bg-muted/20 border border-border/80 p-1 rounded-xl">
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 text-foreground hover:bg-background rounded-lg" 
+                className="h-8 w-8 text-foreground hover:bg-background rounded-lg cursor-pointer" 
                 onClick={diaAnterior}
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -171,8 +192,8 @@ export default function AgendaGlobalPage() {
               
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" className="h-8 px-3 font-bold text-xs text-foreground hover:bg-background rounded-lg flex items-center gap-2">
-                    <CalendarIcon className="h-3.5 w-3.5 text-[#008bcd]" />
+                  <Button variant="ghost" className="h-8 px-3 font-bold text-xs text-foreground hover:bg-background rounded-lg flex items-center gap-2 cursor-pointer">
+                    <CalendarIcon className="h-3.5 w-3.5" style={{ color: defaultUserColor }} />
                     {format(date, "EEEE, d 'de' MMMM yyyy", { locale: es }).toUpperCase()}
                   </Button>
                 </PopoverTrigger>
@@ -184,7 +205,7 @@ export default function AgendaGlobalPage() {
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 text-foreground hover:bg-background rounded-lg" 
+                className="h-8 w-8 text-foreground hover:bg-background rounded-lg cursor-pointer" 
                 onClick={diaSiguiente}
               >
                 <ChevronRight className="h-4 w-4" />
@@ -194,16 +215,21 @@ export default function AgendaGlobalPage() {
             <Button 
               variant="outline" 
               onClick={hoy} 
+              style={{
+                backgroundColor: isToday(date) ? `${defaultUserColor}15` : undefined,
+                color: isToday(date) ? defaultUserColor : undefined,
+                borderColor: isToday(date) ? `${defaultUserColor}40` : undefined,
+              }}
               className={cn(
-                "h-8 px-3 text-xs font-bold rounded-xl border border-border/80 transition-all",
-                isToday(date) ? "bg-[#008bcd]/10 text-[#008bcd] border-[#008bcd]/30 font-black" : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                "h-8 px-3 text-xs font-bold rounded-xl border border-border/80 transition-all cursor-pointer",
+                !isToday(date) && "text-muted-foreground hover:text-foreground hover:bg-muted/40"
               )}
             >
               Hoy
             </Button>
 
             {(isLoading || isLoadingDoctores) && (
-              <Loader2 className="h-4 w-4 animate-spin text-[#008bcd] ml-1" />
+              <Loader2 className="h-4 w-4 animate-spin ml-1" style={{ color: defaultUserColor }} />
             )}
           </div>
 
@@ -217,8 +243,7 @@ export default function AgendaGlobalPage() {
           
           <div className="overflow-auto flex-1 custom-scrollbar relative">
             <table className="w-full border-collapse min-w-[760px] table-fixed">
-              
-              {/* ENCABEZADOS DE DOCTORES (STICKY TOP) */}
+
               <thead className="sticky top-0 bg-card/95 backdrop-blur-md z-30 shadow-xs border-b border-border/80">
                 <tr>
                   <th className="w-20 p-3 text-center text-[11px] font-black uppercase tracking-widest text-muted-foreground border-r border-border/70 bg-muted/20 sticky left-0 z-40">
@@ -227,18 +252,29 @@ export default function AgendaGlobalPage() {
                   
                   {DOCTORES.map(doc => {
                     const citasDoctor = appointments.filter((c: any) => (c.doctorId === doc.id || (!c.doctorId && doc.id === currentUser?.id)) && c.status !== "CANCELLED").length
+                    const docColor = doc.calendarColor || "#008bcd"
 
                     return (
                       <th key={doc.id} className="p-3.5 text-center border-r border-border/70 last:border-r-0">
                         <div className="flex items-center justify-center gap-2.5">
-                          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-[#008bcd] to-sky-400 text-white flex items-center justify-center font-black text-xs shadow-xs shrink-0">
+                          <div 
+                            className="w-8 h-8 rounded-xl text-white flex items-center justify-center font-black text-xs shadow-xs shrink-0 transition-colors"
+                            style={{ backgroundColor: docColor }}
+                          >
                             {doc.name.charAt(0)}
                           </div>
                           <div className="text-left overflow-hidden">
                             <p className="font-extrabold text-xs text-foreground truncate leading-tight">{doc.name}</p>
                             <p className="text-[10px] text-muted-foreground font-medium truncate">{doc.especialidad}</p>
                           </div>
-                          <span className="ml-1 px-2 py-0.5 rounded-md bg-muted text-muted-foreground text-[10px] font-bold font-mono">
+                          <span 
+                            className="ml-1 px-2 py-0.5 rounded-md text-[10px] font-bold font-mono border"
+                            style={{
+                              backgroundColor: `${docColor}15`,
+                              color: docColor,
+                              borderColor: `${docColor}30`,
+                            }}
+                          >
                             {citasDoctor}
                           </span>
                         </div>
@@ -252,8 +288,6 @@ export default function AgendaGlobalPage() {
               <tbody className="relative">
                 {HORARIOS.map((hora) => (
                   <tr key={hora} className="hover:bg-muted/10 transition-colors">
-                    
-                    {/* ETIQUETA HORARIA LATERAL */}
                     <td className="p-2 text-center text-xs font-mono font-bold text-muted-foreground/80 border-b border-r border-border/70 bg-muted/10 sticky left-0 z-20 h-16 select-none">
                       {hora}
                     </td>
@@ -261,6 +295,7 @@ export default function AgendaGlobalPage() {
                     {/* CELDAS POR ESPECIALISTA */}
                     {DOCTORES.map(doc => {
                       const cellData = gridMap[hora][doc.id]
+                      const docColor = doc.calendarColor || "#008bcd"
 
                       if (cellData.type === 'skip') {
                         return null
@@ -282,19 +317,24 @@ export default function AgendaGlobalPage() {
                                 setSelectedCita(cita)
                                 setIsViewModalOpen(true)
                               }}
+                              style={{
+                                borderLeftColor: docColor,
+                                backgroundColor: `${docColor}12`,
+                              }}
                               className={cn(
                                 "w-full h-full min-h-[58px] rounded-xl p-2.5 flex flex-col justify-between transition-all duration-200 cursor-pointer relative overflow-hidden group shadow-xs hover:shadow-md active:scale-[0.99] border-l-4",
-                                statusConfig.bg,
-                                statusConfig.color.replace("text-", "border-l-")
+                                statusConfig.bg
                               )}
                             >
                               <div className="flex items-start justify-between gap-2">
                                 <div className="overflow-hidden">
-                                  <p className="text-xs font-black text-foreground truncate leading-tight group-hover:text-[#008bcd] transition-colors">
+                                  <p 
+                                    className="text-xs font-black text-foreground truncate leading-tight transition-colors"
+                                  >
                                     {cita.patient?.firstName} {cita.patient?.lastName}
                                   </p>
                                   <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground font-semibold mt-0.5">
-                                    <Clock className="w-3 h-3 text-[#008bcd]" />
+                                    <Clock className="w-3 h-3" style={{ color: docColor }} />
                                     <span>{cita.startTime} - {cita.endTime}</span>
                                     <span>•</span>
                                     <span className="text-foreground font-bold">{cita.box || (settings?.availableBoxes?.[0] ?? "Box 1")}</span>
@@ -316,19 +356,24 @@ export default function AgendaGlobalPage() {
                           </td>
                         )
                       }
-
-                      // BLOQUE VACÍO (SLOT DISPONIBLE)
                       return (
                         <td 
                           key={`${hora}-${doc.id}`} 
-                          className="p-1 border-b border-r border-border/70 last:border-r-0 h-16 relative group transition-colors hover:bg-[#008bcd]/5"
+                          className="p-1 border-b border-r border-border/70 last:border-r-0 h-16 relative group transition-colors"
                         >
                           <NewAppointmentModal 
                             defaultDate={date}
                             defaultStartTime={hora}
                             defaultDoctorId={doc.id}
                             customTrigger={
-                              <div className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all rounded-lg cursor-pointer bg-[#008bcd]/10 text-[#008bcd] border border-dashed border-[#008bcd]/40">
+                              <div 
+                                style={{
+                                  borderColor: `${docColor}40`,
+                                  backgroundColor: `${docColor}10`,
+                                  color: docColor,
+                                }}
+                                className="w-full h-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all rounded-lg cursor-pointer border border-dashed"
+                              >
                                 <Plus className="h-4 w-4 mr-1 stroke-[3]" />
                                 <span className="text-[10px] font-black uppercase tracking-wider">Agendar</span>
                               </div>
@@ -349,10 +394,22 @@ export default function AgendaGlobalPage() {
       {/* --- MODAL DETALLES DE CITA --- */}
       <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
         <DialogContent className="sm:max-w-[440px] bg-card border-border/80 text-foreground rounded-[24px] shadow-2xl p-0 overflow-hidden">
-          <div className="bg-gradient-to-r from-[#008bcd]/10 via-transparent to-transparent px-6 py-5 border-b border-border/80">
+          <div 
+            className="px-6 py-5 border-b border-border/80"
+            style={{
+              background: `linear-gradient(to right, ${selectedCitaDoctorColor}18, transparent)`,
+            }}
+          >
             <DialogHeader>
               <DialogTitle className="text-lg font-black text-foreground flex items-center gap-2.5">
-                <div className="p-2 rounded-xl bg-[#008bcd]/15 text-[#008bcd] border border-[#008bcd]/30">
+                <div 
+                  className="p-2 rounded-xl border"
+                  style={{
+                    backgroundColor: `${selectedCitaDoctorColor}18`,
+                    borderColor: `${selectedCitaDoctorColor}35`,
+                    color: selectedCitaDoctorColor,
+                  }}
+                >
                   <CalendarDays className="w-5 h-5" />
                 </div>
                 Detalle de Cita Médica
@@ -363,7 +420,13 @@ export default function AgendaGlobalPage() {
           {selectedCita && (
             <div className="space-y-4 p-6">
               <div className="flex items-center gap-3.5 bg-muted/20 border border-border/60 p-3.5 rounded-2xl">
-                <div className="w-12 h-12 rounded-xl bg-[#008bcd] text-white flex items-center justify-center font-black text-lg shadow-md shadow-[#008bcd]/20 shrink-0">
+                <div 
+                  className="w-12 h-12 rounded-xl text-white flex items-center justify-center font-black text-lg shadow-md shrink-0"
+                  style={{
+                    backgroundColor: selectedCitaDoctorColor,
+                    boxShadow: `0 8px 16px -4px ${selectedCitaDoctorColor}40`,
+                  }}
+                >
                   {selectedCita.patient?.firstName?.charAt(0)}{selectedCita.patient?.lastName?.charAt(0)}
                 </div>
                 <div className="min-w-0">
@@ -411,7 +474,7 @@ export default function AgendaGlobalPage() {
           <DialogFooter className="px-6 py-4 border-t border-border/80 bg-muted/10 sm:justify-between gap-2">
             <Button 
               variant="ghost" 
-              className="text-xs font-bold rounded-xl h-10 px-4" 
+              className="text-xs font-bold rounded-xl h-10 px-4 cursor-pointer" 
               onClick={() => setIsViewModalOpen(false)}
             >
               Cerrar
@@ -419,7 +482,13 @@ export default function AgendaGlobalPage() {
             
             {selectedCita && (
               <Link href={`/paciente/${selectedCita.patientId}?tab=evoluciones`}>
-                <Button className="bg-[#008bcd] hover:bg-[#0070a8] text-white rounded-xl font-bold text-xs h-10 px-5 shadow-md shadow-[#008bcd]/20 cursor-pointer">
+                <Button 
+                  style={{
+                    backgroundColor: selectedCitaDoctorColor,
+                    boxShadow: `0 8px 16px -4px ${selectedCitaDoctorColor}40`,
+                  }}
+                  className="text-white rounded-xl font-bold text-xs h-10 px-5 hover:opacity-90 transition-opacity cursor-pointer"
+                >
                   <Stethoscope className="w-3.5 h-3.5 mr-1.5" /> Ir a Ficha Clínica
                 </Button>
               </Link>

@@ -8,6 +8,7 @@ declare module "next-auth" {
     isActive: boolean;
     phoneNumber?: string | null;
     specialty?: string | null;
+    calendarColor?: string | null;
     createdAt?: Date | string;
   }
 
@@ -18,6 +19,7 @@ declare module "next-auth" {
       isActive: boolean;
       phoneNumber?: string | null;
       specialty?: string | null;
+      calendarColor?: string | null;
       createdAt?: Date | string;
     } & DefaultSession["user"];
   }
@@ -30,6 +32,7 @@ declare module "next-auth/jwt" {
     isActive: boolean;
     phoneNumber?: string | null;
     specialty?: string | null;
+    calendarColor?: string | null;
     createdAt?: Date | string;
   }
 }

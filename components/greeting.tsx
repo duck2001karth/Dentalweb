@@ -46,8 +46,10 @@ export const Greeting = () => {
 
   const user = data?.user as any
   const rawFirstName = user?.name?.split(" ")[0] || "Patricio"
-  const prefix = user?.gender === "female" ? "Dra." : "Dr."
-  const doctorName = `${prefix} ${rawFirstName}`
+  const isDoctor = user?.role === "DOCTOR"
+  const prefix = isDoctor ? (user?.gender === "female" ? "Dra." : "Dr.") : ""
+  const displayName = prefix ? `${prefix} ${rawFirstName}` : rawFirstName
+  const doctorColor = user?.calendarColor || "#008bcd"
 
   const currentDate = dayjs().format("dddd, D [de] MMMM")
   const capitalizedDate = currentDate.charAt(0).toUpperCase() + currentDate.slice(1)
@@ -78,7 +80,7 @@ export const Greeting = () => {
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight">
               {greetingText}, <br />
               <span className="opacity-100 text-transparent bg-clip-text bg-gradient-to-r from-blue-100 via-cyan-200 to-white">
-                {doctorName}
+                {displayName}
               </span>{" "}
               <span className="inline-block animate-bounce">{emoji}</span>
             </h1>
@@ -94,11 +96,11 @@ export const Greeting = () => {
           </div>
         </div> 
 
-        {/* LADO DERECHO: TARJETAS MÉTRICAS CON EFECTO HOVER HOMOGÉNEO EN #008bcd */}
+        {/* LADO DERECHO: TARJETAS MÉTRICAS */}
         <div className="grid grid-cols-2 gap-3 lg:gap-4 w-full content-center">
           
           {/* TARJETA 1: CITAS HOY */}
-          <div className="bg-white/10 backdrop-blur-xl border border-white/15 hover:border-[#008bcd]/60 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-lg hover:bg-white/20 hover:shadow-cyan-500/10 transition-all duration-200 cursor-default group">
+          <div className="bg-white/10 backdrop-blur-xl border border-white/15 hover:border-white/40 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-lg hover:bg-white/20 transition-all duration-200 cursor-default group">
             <div className="flex items-center justify-between text-blue-100 mb-2">
               <span className="text-xs sm:text-sm font-bold tracking-wide group-hover:text-cyan-200 transition-colors">Citas Hoy</span>
               <Calendar className="h-4 w-4 opacity-70 group-hover:opacity-100 group-hover:text-cyan-300 transition-all" />
@@ -112,7 +114,7 @@ export const Greeting = () => {
           </div>
 
           {/* TARJETA 2: NUEVOS PACIENTES */}
-          <div className="bg-white/10 backdrop-blur-xl border border-white/15 hover:border-[#008bcd]/60 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-lg hover:bg-white/20 hover:shadow-cyan-500/10 transition-all duration-200 cursor-default group">
+          <div className="bg-white/10 backdrop-blur-xl border border-white/15 hover:border-white/40 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-lg hover:bg-white/20 transition-all duration-200 cursor-default group">
             <div className="flex items-center justify-between text-blue-100 mb-2">
               <span className="text-xs sm:text-sm font-bold tracking-wide group-hover:text-cyan-200 transition-colors">Nuevos Sem.</span>
               <Users className="h-4 w-4 opacity-70 group-hover:opacity-100 group-hover:text-cyan-300 transition-all" />
@@ -127,9 +129,12 @@ export const Greeting = () => {
             </div>
           </div>
 
-          {/* TARJETA 3: PRÓXIMO PACIENTE */}
-          <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-xl border border-white/25 hover:border-cyan-400/80 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-lg hover:bg-white/25 transition-all duration-200 cursor-default relative overflow-hidden group">
-            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-cyan-400"></div>
+          {/* TARJETA 3: PRÓXIMO PACIENTE (CON COLOR DINÁMICO DEL DOCTOR) */}
+          <div className="bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-xl border border-white/25 hover:border-white/50 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-lg hover:bg-white/25 transition-all duration-200 cursor-default relative overflow-hidden group">
+            <div 
+              className="absolute left-0 top-0 bottom-0 w-2 transition-colors duration-300"
+              style={{ backgroundColor: doctorColor }}
+            />
             <div className="flex items-center justify-between text-blue-100 mb-2 pl-2">
               <span className="text-xs sm:text-sm font-bold tracking-wide group-hover:text-cyan-200 transition-colors">Próximo Paciente</span>
               <Clock className="h-4 w-4 text-cyan-300" />
@@ -162,7 +167,7 @@ export const Greeting = () => {
           {/* TARJETA 4: EXPEDIENTES / DIRECTORIO */}
           <Link 
             href="/pacientes" 
-            className="bg-white/10 backdrop-blur-xl border border-white/15 hover:border-[#008bcd]/60 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-lg hover:bg-white/20 hover:shadow-cyan-500/10 transition-all duration-200 cursor-pointer group"
+            className="bg-white/10 backdrop-blur-xl border border-white/15 hover:border-white/40 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-lg hover:bg-white/20 transition-all duration-200 cursor-pointer group"
           >
             <div className="flex items-center justify-between text-blue-100 mb-2">
               <span className="text-xs sm:text-sm font-bold tracking-wide group-hover:text-cyan-200 transition-colors">Expedientes</span>
@@ -181,9 +186,11 @@ export const Greeting = () => {
         </div>
       </div>
 
-      {/* EFECTOS DE LUZ AMBIENTAL */}
-      <div className="absolute top-0 right-0 -mt-20 -mr-20 w-96 h-96 bg-cyan-400/25 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-0 left-10 -mb-20 -ml-20 w-80 h-80 bg-blue-600/35 rounded-full blur-[100px] pointer-events-none"></div>
+      <div 
+        className="absolute top-0 right-0 -mt-20 -mr-20 w-96 h-96 rounded-full blur-[120px] pointer-events-none opacity-40 transition-colors duration-500"
+        style={{ backgroundColor: doctorColor }}
+      />
+      <div className="absolute bottom-0 left-10 -mb-20 -ml-20 w-80 h-80 bg-blue-600/35 rounded-full blur-[100px] pointer-events-none" />
     </div>
   )
 }

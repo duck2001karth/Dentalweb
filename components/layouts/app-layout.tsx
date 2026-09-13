@@ -2,13 +2,12 @@
 
 import { ReactNode, useEffect, useState } from "react"
 import dynamic from 'next/dynamic'
-import { Menu, HelpCircle, BookOpen, MessageCircle } from "lucide-react" 
+import { Menu } from "lucide-react" 
+import { useSession } from "next-auth/react"
 import { useSearch } from "../providers/search-provider"
 import { cn } from "@/lib/utils"
 
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-
+import { NotificationsHelp } from "@/components/notifications-help"
 import { NotificationsDropdown } from "@/components/notifications-tab"
 import { DynamicBreadcrumbs } from "@/components/breadcrumbs"
 import { QuickActions } from "@/components/quick-actions"
@@ -63,7 +62,12 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
 }
 
 const Header = () => {
+  const { data: session } = useSession()
   const [isOnline, setIsOnline] = useState(true)
+
+  const currentUser = session?.user as any
+  const accentColor = currentUser?.calendarColor || "#008bcd"
+
   useEffect(() => {
     setIsOnline(navigator.onLine)
     const handleOnline = () => setIsOnline(true)
@@ -118,37 +122,36 @@ const Header = () => {
           <span>{isOnline ? "Online" : "Offline"}</span>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="hidden sm:flex h-10 w-10 rounded-xl text-muted-foreground hover:text-[#008bcd] hover:bg-accent/60 transition-all cursor-pointer"
-            >
-              <HelpCircle className="w-5 h-5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 rounded-2xl bg-card border border-border shadow-2xl p-1.5">
-            <DropdownMenuLabel className="text-[10px] text-muted-foreground uppercase tracking-wider font-extrabold px-2.5 py-1.5">Centro de Ayuda</DropdownMenuLabel>
-            <DropdownMenuSeparator className="my-1" />
-            <DropdownMenuItem className="cursor-pointer font-semibold text-xs py-2 px-2.5 rounded-xl gap-2 hover:bg-accent">
-              <BookOpen className="w-4 h-4 text-[#008bcd]" /> Tutoriales y Guías
-            </DropdownMenuItem>
-            <DropdownMenuItem className="cursor-pointer font-semibold text-xs py-2 px-2.5 rounded-xl gap-2 hover:bg-accent">
-              <MessageCircle className="w-4 h-4 text-emerald-500" /> Soporte Técnico
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <div className="flex items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:hover:bg-accent/60 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:text-muted-foreground [&_button:hover_svg]:text-[#008bcd] [&_svg]:transition-colors">
+        {/* CENTRO DE AYUDA (NOTIFICATIONS-HELP) */}
+        <div 
+          style={{ "--hover-accent": accentColor } as React.CSSProperties}
+          className="flex items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:hover:bg-accent/60 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:text-muted-foreground [&_button:hover_svg]:text-[var(--hover-accent)] [&_svg]:transition-colors"
+        >
+          <NotificationsHelp />
+        </div>
+
+        {/* PRÓXIMO PACIENTE */}
+        <div 
+          style={{ "--hover-accent": accentColor } as React.CSSProperties}
+          className="flex items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:hover:bg-accent/60 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:text-muted-foreground [&_button:hover_svg]:text-[var(--hover-accent)] [&_svg]:transition-colors"
+        >
           <NextPatientDropdown />
         </div>
-        <div className="flex items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:hover:bg-accent/60 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:text-muted-foreground [&_button:hover_svg]:text-[#008bcd] [&_svg]:transition-colors">
+
+        {/* NOTIFICACIONES */}
+        <div 
+          style={{ "--hover-accent": accentColor } as React.CSSProperties}
+          className="flex items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:bg-transparent [&_button]:border-none [&_button]:shadow-none [&_button]:hover:bg-accent/60 [&_svg]:w-5 [&_svg]:h-5 [&_svg]:text-muted-foreground [&_button:hover_svg]:text-[var(--hover-accent)] [&_svg]:transition-colors"
+        >
           <NotificationsDropdown />
         </div>
+        
         <div className="hidden sm:block w-[1px] h-6 bg-border/60 mx-1" />
+        
         <div className="flex items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:hover:bg-accent/60 [&_svg]:w-5 [&_svg]:h-5">
           <ThemeToggle />
         </div>
+        
         <div className="pl-1 flex items-center justify-center">
           <ProfilePicture />
         </div>
