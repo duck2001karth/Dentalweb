@@ -137,8 +137,6 @@ export function InventoryTab() {
 
   return (
     <div className="flex flex-col flex-1 font-sans antialiased animate-in fade-in duration-300 pb-10">
-      
-      {/* 1. HEADER CARD (PALETA CLÍNICA AZUL) */}
       <div className="bg-card border border-border/50 rounded-[24px] p-6 md:p-8 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 shadow-sm relative overflow-hidden mb-8">
         <div className="absolute -top-24 -right-24 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
         <div className="flex items-center gap-5 relative z-10 w-full lg:w-auto">
@@ -230,8 +228,6 @@ export function InventoryTab() {
 
       {/* 3. TABLAS DE DATOS */}
       <div className="bg-card border border-border/60 rounded-[20px] shadow-sm flex flex-col flex-1">
-        
-        {/* VISTA PRODUCTOS */}
         {activeTab === "PRODUCTS" && (
           <>
             <div className="overflow-x-auto min-h-[400px] flex-1">
@@ -274,7 +270,12 @@ export function InventoryTab() {
                             <DropdownMenuContent align="end" className="w-48 rounded-xl shadow-xl border-border/80 p-1.5">
                               <DropdownMenuItem onClick={() => openProductModal(p)} className="cursor-pointer text-xs font-bold py-2.5 rounded-lg"><Edit className="w-4 h-4 mr-2 text-[#008bcd]" /> Editar Insumo</DropdownMenuItem>
                               <DropdownMenuSeparator className="bg-border/60 my-1" />
-                              <DropdownMenuItem onClick={() => { setSelectedItem(p); setIsDeleteModalOpen(true); }} className="cursor-pointer text-xs font-bold py-2.5 rounded-lg text-rose-600 focus:bg-rose-50"><Trash2 className="w-4 h-4 mr-2" /> Eliminar / Archivar</DropdownMenuItem>
+                              <DropdownMenuItem 
+                                onClick={() => { setSelectedItem(p); setIsDeleteModalOpen(true); }} 
+                                className="cursor-pointer text-xs font-bold py-2.5 rounded-lg text-rose-600 dark:text-rose-400 focus:text-rose-600 dark:focus:text-rose-400 focus:bg-rose-500/10 dark:focus:bg-rose-500/15"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2 text-rose-600 dark:text-rose-400" /> Eliminar / Archivar
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </td>
