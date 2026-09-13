@@ -83,6 +83,25 @@ export const authOptions: NextAuthOptions = {
         token.phoneNumber = user.phoneNumber;
         token.specialty = user.specialty;
         token.calendarColor = user.calendarColor;
+      } else if (token?.id) {
+        try {
+          const dbUser = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: { isActive: true, role: true, phoneNumber: true, specialty: true, calendarColor: true }
+          });
+
+          if (!dbUser || !dbUser.isActive) {
+            token.isActive = false;
+          } else {
+            token.isActive = dbUser.isActive;
+            token.role = dbUser.role;
+            token.phoneNumber = dbUser.phoneNumber;
+            token.specialty = dbUser.specialty;
+            token.calendarColor = dbUser.calendarColor;
+          }
+        } catch (error) {
+          console.error("Error verificando estado del usuario en JWT:", error);
+        }
       }
 
       if (trigger === "update" && session?.user) {

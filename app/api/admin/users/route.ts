@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { logAudit } from "@/lib/log"
+import bcrypt from "bcryptjs"
 
 export async function GET() {
   try {
@@ -31,10 +32,14 @@ export async function POST(req: Request) {
     const session = await getServerSession(authOptions)
     const ip = req.headers.get("x-forwarded-for") || "Local"
     const body = await req.json()
-    const { name, email, role, specialty, isActive } = body
+    const { name, email, password, role, specialty, isActive } = body
 
     if (!name || !email) {
       return NextResponse.json({ error: "Nombre y correo son obligatorios" }, { status: 400 })
+    }
+
+    if (!password || password.length < 6) {
+      return NextResponse.json({ error: "La contraseña es obligatoria y debe tener al menos 6 caracteres" }, { status: 400 })
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } })
@@ -42,10 +47,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "El correo ya está registrado" }, { status: 400 })
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10)
+
     const newUser = await prisma.user.create({
       data: {
         name,
         email,
+        password: hashedPassword,
         role: role || "DOCTOR",
         specialty: specialty || null,
         isActive: isActive ?? true
@@ -59,10 +67,12 @@ export async function POST(req: Request) {
       userId: session?.user?.id,
       ipAddress: ip
     })
+    const { password: _, ...userWithoutPassword } = newUser
 
-    return NextResponse.json(newUser, { status: 201 })
+    return NextResponse.json(userWithoutPassword, { status: 201 })
   } catch (error) {
-    return NextResponse.json({ error: "Error al crear usuario" }, { status: 500 })
+    console.error("Error al crear usuario:", error)
+    return NextResponse.json({ error: "Error interno al crear usuario" }, { status: 500 })
   }
 }
 
@@ -71,15 +81,20 @@ export async function PATCH(req: Request) {
     const session = await getServerSession(authOptions)
     const ip = req.headers.get("x-forwarded-for") || "Local"
     const body = await req.json()
-    const { id, name, email, role, isActive, specialty } = body
+    const { id, name, email, password, role, isActive, specialty } = body
 
     if (!id) return NextResponse.json({ error: "Falta ID" }, { status: 400 })
+    let hashedPassword: string | undefined = undefined
+    if (password && password.trim().length >= 6) {
+      hashedPassword = await bcrypt.hash(password, 10)
+    }
 
     const updatedUser = await prisma.user.update({
       where: { id },
       data: {
         ...(name !== undefined && { name }),
         ...(email !== undefined && { email }),
+        ...(hashedPassword && { password: hashedPassword }),
         ...(role !== undefined && { role }),
         ...(isActive !== undefined && { isActive }),
         ...(specialty !== undefined && { specialty: specialty || null })
@@ -94,8 +109,11 @@ export async function PATCH(req: Request) {
       ipAddress: ip
     })
 
-    return NextResponse.json(updatedUser)
+    const { password: _, ...userWithoutPassword } = updatedUser
+
+    return NextResponse.json(userWithoutPassword)
   } catch (error) {
+    console.error("Error al actualizar usuario:", error)
     return NextResponse.json({ error: "Error al actualizar usuario" }, { status: 500 })
   }
 }
@@ -123,6 +141,7 @@ export async function DELETE(req: Request) {
 
     return NextResponse.json({ success: true, message: "Usuario eliminado" })
   } catch (error) {
+    console.error("Error al eliminar usuario:", error)
     return NextResponse.json({ error: "Error al eliminar usuario" }, { status: 500 })
   }
 }
