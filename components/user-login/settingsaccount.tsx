@@ -51,7 +51,6 @@ const PRESET_COLORS = [
   "#4f46e5",
 ]
 
-// Función para enmascarar correos (ej: patriciocapa61@gmail.com -> pa•••••••61@gmail.com)
 const maskEmail = (email?: string | null) => {
   if (!email || !email.includes("@")) return "Sin correo asignado"
 

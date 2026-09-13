@@ -7,7 +7,6 @@ import { headers } from "next/headers"
 export const dynamic = "force-dynamic"
 const SETTINGS_ID = "default-clinic-settings"
 
-// Helper para capturar metadatos y registrar auditoría
 async function createAuditEntry(
   tx: any,
   data: {

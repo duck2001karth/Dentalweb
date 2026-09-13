@@ -41,17 +41,17 @@ export const triggerBalancePrint = (data: {
     settings,
   } = data
 
-  const clinicName = settings?.clinicName?.trim() || "CARMO DENTAL"
-  const clinicSlogan = settings?.slogan?.trim() || "CLÍNICA DE SONRISA"
-  const clinicRuc = settings?.ruc?.trim() || "1700000083134"
+  const clinicName = settings?.clinicName?.trim() || "no registradoL"
+  const clinicSlogan = settings?.slogan?.trim() || "no registrado"
+  const clinicRuc = settings?.ruc?.trim() || "no registrado"
   const rawAddress = [settings?.address, settings?.city, settings?.country].filter(Boolean).join(", ")
-  const clinicAddress = rawAddress || "Solanda, Av Jose Argudo, Quito, Ecuador"
-  const clinicPhone = settings?.phone || settings?.whatsappNumber || "969834557"
-  const clinicEmail = settings?.email || "patriciocapa61@gmail.com"
+  const clinicAddress = rawAddress || "no registrado"
+  const clinicPhone = settings?.phone || settings?.whatsappNumber || "no registrado"
+  const clinicEmail = settings?.email || "no registrado"
   
   const currencySymbol = "$"
 
-  const logoUrl = settings?.logoUrl || "/logosn.png"
+  const logoUrl = settings?.logoUrl || "no registrado"
   const watermarkUrl = settings?.watermarkUrl || logoUrl
   const watermarkOpacity = ((settings?.watermarkOpacity ?? 6) / 100)
   const watermarkScale = ((settings?.watermarkScale || 100) / 100)

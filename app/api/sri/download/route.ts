@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server"
+import { getServerSession } from "next-auth/next"
+import { headers } from "next/headers"
 import { prisma } from "@/lib/db"
+import { authOptions } from "@/lib/auth"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
 export async function GET(req: Request) {
   try {
+    const session = await getServerSession(authOptions)
     const { searchParams } = new URL(req.url)
     const docId = searchParams.get("id")
     const type = searchParams.get("type") // "pdf" | "xml"
@@ -12,36 +16,64 @@ export async function GET(req: Request) {
     if (!docId) {
       return NextResponse.json({ error: "ID de documento requerido" }, { status: 400 })
     }
-
-    const doc = await prisma.taxDocument.findUnique({
-      where: { id: docId },
-      include: { patient: true }
-    })
+    const [doc, settings] = await Promise.all([
+      prisma.taxDocument.findUnique({
+        where: { id: docId },
+        include: { patient: true }
+      }),
+      prisma.clinicSettings.findFirst()
+    ])
 
     if (!doc) {
       return NextResponse.json({ error: "Documento tributario no encontrado" }, { status: 404 })
     }
 
+    const clinicRuc = settings?.ruc || "1719231696001"
+    const clinicName = settings?.clinicName || "Carmo Dental"
+    const clinicRazonSocial = settings?.razonSocial || clinicName
+    const clinicAddress = settings?.address ? `${settings.address}, ${settings.city || "Ecuador"}` : "Quito, Ecuador"
+    const obligado = settings?.obligadoContab ? "SI" : "NO"
+    if (session?.user && (session.user as any).id) {
+      const headersList = await headers()
+      const forwardedFor = headersList.get("x-forwarded-for")
+      const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
+      const userAgent = headersList.get("user-agent") || "Desconocido"
+
+      await prisma.auditLog.create({
+        data: {
+          userId: (session.user as any).id,
+          action: type === "xml" ? "DOWNLOAD_TAX_XML" : "VIEW_TAX_RIDE",
+          entity: "TaxDocument",
+          entityId: doc.id,
+          patientId: doc.patientId,
+          details: `Descarga/Consulta de ${doc.docType} #${doc.secuencial} en formato ${type === "xml" ? "XML" : "RIDE (HTML/PDF)"}`,
+          ipAddress,
+          userAgent
+        }
+      }).catch((e) => console.error("Error al registrar log de descarga:", e))
+    }
+
+    // 3. Generación de XML
     if (type === "xml") {
       const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <factura id="comprobante" version="1.1.0">
   <infoTributaria>
-    <ambiente>2</ambiente>
+    <ambiente>${doc.environment === "PRODUCTION" ? "2" : "1"}</ambiente>
     <tipoEmision>1</tipoEmision>
-    <razonSocial>CARMO DENTAL</razonSocial>
-    <nombreComercial>CARMO DENTAL</nombreComercial>
-    <ruc>1719231696001</ruc>
+    <razonSocial>${clinicRazonSocial.toUpperCase()}</razonSocial>
+    <nombreComercial>${clinicName.toUpperCase()}</nombreComercial>
+    <ruc>${clinicRuc}</ruc>
     <claveAcceso>${doc.accessKey || doc.authorizationNum || "1508202601171923169600120010010000001231234567811"}</claveAcceso>
-    <codDoc>01</codDoc>
-    <estab>001</estab>
-    <ptoEmi>001</ptoEmi>
+    <codDoc>${doc.docType === "NOTA_CREDITO" ? "04" : "01"}</codDoc>
+    <estab>${settings?.estabCode || "001"}</estab>
+    <ptoEmi>${settings?.ptoEmiCode || "001"}</ptoEmi>
     <secuencial>${doc.secuencial.replace(/[^0-9]/g, "").slice(-9).padStart(9, "0")}</secuencial>
-    <dirMatriz>Quito, Ecuador</dirMatriz>
+    <dirMatriz>${clinicAddress}</dirMatriz>
   </infoTributaria>
   <infoFactura>
     <fechaEmision>${format(doc.authorizationDate || doc.createdAt, "dd/MM/yyyy")}</fechaEmision>
-    <dirEstablecimiento>Quito, Ecuador</dirEstablecimiento>
-    <obligadoContabilidad>NO</obligadoContabilidad>
+    <dirEstablecimiento>${clinicAddress}</dirEstablecimiento>
+    <obligadoContabilidad>${obligado}</obligadoContabilidad>
     <tipoIdentificacionComprador>${doc.idType === "RUC" ? "04" : "05"}</tipoIdentificacionComprador>
     <razonSocialComprador>${doc.businessName}</razonSocialComprador>
     <identificacionComprador>${doc.identification}</identificacionComprador>
@@ -57,7 +89,7 @@ export async function GET(req: Request) {
     </totalConImpuestos>
     <propina>0.00</propina>
     <importeTotal>${Number(doc.total).toFixed(2)}</importeTotal>
-    <moneda>DOLAR</moneda>
+    <moneda>${settings?.currency || "USD"}</moneda>
   </infoFactura>
   <detalles>
     <detalle>
@@ -88,8 +120,11 @@ export async function GET(req: Request) {
         }
       })
     }
+
+    // 4. Generación de RIDE (HTML imprimible A4)
     const formattedDate = format(doc.authorizationDate || doc.createdAt, "dd 'de' MMMM 'de' yyyy", { locale: es })
     const formattedTotal = Number(doc.total || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })
+    const isVoided = doc.status === "VOIDED"
 
     const rideHtml = `
       <!DOCTYPE html>
@@ -99,7 +134,7 @@ export async function GET(req: Request) {
         <title>RIDE - ${doc.secuencial}</title>
         <style>
           @page { size: A4; margin: 12mm; }
-          body { font-family: Arial, sans-serif; font-size: 11px; color: #1e293b; padding: 15px; margin: 0; }
+          body { font-family: Arial, sans-serif; font-size: 11px; color: #1e293b; padding: 15px; margin: 0; position: relative; }
           .header-grid { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
           .box { border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; }
           .box-left { width: 48%; }
@@ -113,25 +148,40 @@ export async function GET(req: Request) {
           .total-table { width: 260px; border-collapse: collapse; }
           .total-table td { border: 1px solid #cbd5e1; padding: 6px 10px; }
           .auth-box { font-family: monospace; font-size: 10px; word-break: break-all; margin-top: 5px; }
+          .voided-stamp {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-25deg);
+            font-size: 65px;
+            font-weight: 900;
+            color: rgba(225, 29, 72, 0.25);
+            border: 5px dashed rgba(225, 29, 72, 0.4);
+            padding: 10px 40px;
+            border-radius: 12px;
+            pointer-events: none;
+            text-transform: uppercase;
+          }
           @media print { body { padding: 0; } }
         </style>
       </head>
       <body onload="window.print()">
+        ${isVoided ? '<div class="voided-stamp">DOCUMENTO ANULADO</div>' : ''}
         <div class="header-grid">
           <div class="box box-left">
-            <div class="title">CARMO DENTAL</div>
-            <p class="bold">CLÍNICA DE ESPECIALIDADES ODONTOLÓGICAS</p>
-            <p><b>RUC:</b> 1719231696001</p>
-            <p><b>Dirección Matriz:</b> Quito, Ecuador</p>
-            <p><b>Obligado a llevar Contabilidad:</b> NO</p>
+            <div class="title">${clinicName.toUpperCase()}</div>
+            <p class="bold">${clinicRazonSocial}</p>
+            <p><b>RUC:</b> ${clinicRuc}</p>
+            <p><b>Dirección Matriz:</b> ${clinicAddress}</p>
+            <p><b>Obligado a llevar Contabilidad:</b> ${obligado}</p>
           </div>
           <div class="box box-right">
-            <p class="bold" style="font-size: 14px; color: #0f172a;">R.U.C. 1719231696001</p>
-            <p class="bold" style="font-size: 13px; color: #008bcd;">FACTURA ELECTRÓNICA</p>
+            <p class="bold" style="font-size: 14px; color: #0f172a;">R.U.C. ${clinicRuc}</p>
+            <p class="bold" style="font-size: 13px; color: #008bcd;">${doc.docType === "NOTA_CREDITO" ? "NOTA DE CRÉDITO ELECTRÓNICA" : "FACTURA ELECTRÓNICA"}</p>
             <p><b>Nº:</b> ${doc.secuencial}</p>
             <p><b>Nº Autorización:</b></p>
             <div class="auth-box">${doc.authorizationNum || doc.accessKey || "PENDIENTE-DE-AUTORIZACION-SRI"}</div>
-            <p style="margin-top: 6px;"><b>Ambiente:</b> PRODUCCIÓN</p>
+            <p style="margin-top: 6px;"><b>Ambiente:</b> ${doc.environment === "PRODUCTION" ? "PRODUCCIÓN" : "PRUEBAS"}</p>
             <p><b>Emisión:</b> NORMAL</p>
           </div>
         </div>
