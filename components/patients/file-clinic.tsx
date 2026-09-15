@@ -1,7 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useSearchParams, useRouter, usePathname } from "next/navigation"
+import { useSession } from "next-auth/react"
 import { cn } from "@/lib/utils"
 
 import { HistorialTab } from "@/components/patients-file/history/history-tab"
@@ -30,17 +31,33 @@ export function FichaClinicaLayout({ patientId }: { patientId: string }) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
+  const { data: session } = useSession()
+
+  const currentUser = session?.user as any
+  const userRole = String(currentUser?.role || "").toUpperCase().trim()
+  const isReceptionist = userRole === "RECEPTIONIST"
+
+  const visibleTabs = useMemo(() => {
+    if (isReceptionist) {
+      return SUB_TABS.filter((tab) => ["historial", "rx", "recetas"].includes(tab.id))
+    }
+    return SUB_TABS
+  }, [isReceptionist])
+
   const tabFromUrl = searchParams.get("tab")
+  const defaultTab = visibleTabs[0]?.id || "historial"
 
   const [activeTab, setActiveTab] = useState(
-    tabFromUrl && SUB_TABS.some(t => t.id === tabFromUrl) ? tabFromUrl : "historial"
+    tabFromUrl && visibleTabs.some((t) => t.id === tabFromUrl) ? tabFromUrl : defaultTab
   )
 
   useEffect(() => {
-    if (tabFromUrl && SUB_TABS.some(t => t.id === tabFromUrl)) {
+    if (tabFromUrl && visibleTabs.some((t) => t.id === tabFromUrl)) {
       setActiveTab(tabFromUrl)
+    } else if (tabFromUrl && !visibleTabs.some((t) => t.id === tabFromUrl)) {
+      handleTabChange(defaultTab)
     }
-  }, [tabFromUrl])
+  }, [tabFromUrl, visibleTabs, defaultTab])
 
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId)
@@ -51,11 +68,9 @@ export function FichaClinicaLayout({ patientId }: { patientId: string }) {
 
   return (
     <div className="animate-in fade-in duration-300 flex flex-col h-full w-full">
-      
-      {/* Barra de Sub-Navegación Horizontal */}
       <div className="w-full border-b border-border/80 mb-6 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] print:hidden">
         <div className="flex w-max min-w-full px-2 gap-2">
-          {SUB_TABS.map((tab) => {
+          {visibleTabs.map((tab) => {
             const isActive = activeTab === tab.id
 
             return (
@@ -65,8 +80,8 @@ export function FichaClinicaLayout({ patientId }: { patientId: string }) {
                 onClick={() => handleTabChange(tab.id)}
                 className={cn(
                   "px-5 py-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 relative -mb-[1px] cursor-pointer select-none outline-none",
-                  isActive 
-                    ? "border-[#008bcd] text-[#008bcd] font-bold" 
+                  isActive
+                    ? "border-[#008bcd] text-[#008bcd] font-bold"
                     : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
                 )}
               >
@@ -77,19 +92,17 @@ export function FichaClinicaLayout({ patientId }: { patientId: string }) {
         </div>
       </div>
 
-      {/* Renderizado de Módulos Clínicos */}
       <div className="flex-1 w-full">
         {activeTab === "historial" && <HistorialTab patientId={patientId} />}
-        {activeTab === "evoluciones" && <EvolucionesTab patientId={patientId} />}
-        {activeTab === "anamnesis" && <FichaAnamnesisTab patientId={patientId} />}
-        {activeTab === "odontograma" && <OdontogramaTab patientId={patientId} />}
-        {activeTab === "periodontograma" && <PeriodontogramaTab patientId={patientId} />}
+        {activeTab === "evoluciones" && !isReceptionist && <EvolucionesTab patientId={patientId} />}
+        {activeTab === "anamnesis" && !isReceptionist && <FichaAnamnesisTab patientId={patientId} />}
+        {activeTab === "odontograma" && !isReceptionist && <OdontogramaTab patientId={patientId} />}
+        {activeTab === "periodontograma" && !isReceptionist && <PeriodontogramaTab patientId={patientId} />}
         {activeTab === "rx" && <RxDocumentsTab patientId={patientId} />}
         {activeTab === "recetas" && <RecetasTab patientId={patientId} />}
-        {activeTab === "documentos" && <DocumentosClinicosTab patientId={patientId} />}
-        {activeTab === "consentimientos" && <ConsentimientosTab patientId={patientId} />}
+        {activeTab === "documentos" && !isReceptionist && <DocumentosClinicosTab patientId={patientId} />}
+        {activeTab === "consentimientos" && !isReceptionist && <ConsentimientosTab patientId={patientId} />}
       </div>
-
     </div>
   )
 }

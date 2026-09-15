@@ -83,11 +83,14 @@ export function DashboardAgenda() {
     return map
   }, [doctorsList, currentUser, defaultUserColor])
 
-  const { appointments = [], isLoading, error: isError, refetch } = useGetAppointments({ 
-    fecha: date,
-    doctorId: selectedDoctor === "all" ? undefined : selectedDoctor 
-  })
+    const effectiveDoctorId = isAdminOrStaff 
+      ? (selectedDoctor === "all" ? undefined : selectedDoctor)
+      : currentUser?.id
 
+    const { appointments = [], isLoading, error: isError, refetch } = useGetAppointments({ 
+      fecha: date,
+      doctorId: effectiveDoctorId 
+    })
   const citasActivas = appointments.filter((cita: any) => cita.status !== "CANCELLED")
   const anulacionesCount = appointments.filter((cita: any) => cita.status === "CANCELLED").length
 
@@ -341,13 +344,27 @@ export function DashboardAgenda() {
                     {/* BOTONES DE ACCIÓN */}
                     <div className="p-3 md:p-5 md:pl-0 flex flex-row md:flex-col justify-end gap-2 md:w-36 shrink-0 border-t md:border-t-0 border-border/80 bg-muted/10 md:bg-transparent">
                       {cita.payment === 'DEBT' ? (
-                        <Button variant="destructive" className="w-full rounded-xl h-9 text-xs font-bold shadow-xs transition-all">
-                          <AlertCircle className="w-3.5 h-3.5 mr-1.5" /> Deudas
-                        </Button>
-                      ) : (
+                        currentUser?.role === "RECEPTIONIST" || currentUser?.role === "ADMIN" ? (
+                          <Link href={`/paciente/${cita.patientId}?tab=pagos`} className="w-full">
+                            <Button variant="destructive" className="w-full rounded-xl h-9 text-xs font-bold shadow-xs transition-all cursor-pointer">
+                              <AlertCircle className="w-3.5 h-3.5 mr-1.5" /> Cobrar Deuda
+                            </Button>
+                          </Link>
+                        ) : (
+                          <Button variant="destructive" className="w-full rounded-xl h-9 text-xs font-bold shadow-xs transition-all cursor-not-allowed opacity-90">
+                            <AlertCircle className="w-3.5 h-3.5 mr-1.5" /> Con Deuda
+                          </Button>
+                        )
+                      ) : currentUser?.role === "DOCTOR" || currentUser?.role === "ADMIN" ? (
                         <Link href={`/paciente/${cita.patientId}?tab=evoluciones`} className="w-full">
                           <Button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-9 text-xs font-bold shadow-xs transition-all cursor-pointer">
                             <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" /> Atender
+                          </Button>
+                        </Link>
+                      ) : (
+                        <Link href={`/paciente/${cita.patientId}`} className="w-full">
+                          <Button variant="outline" className="w-full rounded-xl h-9 text-xs font-bold border-border/80 hover:bg-muted transition-all cursor-pointer">
+                            Ver Ficha
                           </Button>
                         </Link>
                       )}

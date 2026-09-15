@@ -17,6 +17,10 @@ import {
 import { PaymentStatusBadge, PaymentMethodBadge } from "./payment-badge"
 import { ExportBillingMenu } from "./export-billing-menu"
 
+import { useSession } from "next-auth/react"
+
+
+
 interface BillingTableProps {
   isLoading: boolean
   payments?: any[]
@@ -64,6 +68,10 @@ export function BillingTable({
 }: BillingTableProps) {
   const safePayments = payments || []
   const safeCurrentPayments = currentPayments || []
+  const { data: session } = useSession()
+  const currentUser = session?.user as any
+  const role = String(currentUser?.role || "").toUpperCase().trim()
+  const isAdmin = role === "ADMIN" || role === "ADMINISTRADOR"
 
   return (
     <div className="space-y-4">
@@ -165,61 +173,62 @@ export function BillingTable({
                   const isVoided = typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO")
                   
                   return (
-                    <tr 
-                      key={p.id} 
-                      className={`transition-colors group ${isVoided ? "bg-rose-500/5 hover:bg-rose-500/10" : "hover:bg-muted/40"}`}
-                    >
-                      <td className="py-4 px-6 align-middle">
-                        <p className={`font-bold ${isVoided ? "text-rose-600/60 line-through" : "text-foreground"}`}>
-                          {p.createdAt ? format(new Date(p.createdAt), "HH:mm 'hrs'", { locale: es }) : "-"}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
-                          {p.createdAt ? format(new Date(p.createdAt), "dd MMM yyyy", { locale: es }) : "-"}
-                        </p>
-                      </td>
+                  <tr 
+                    key={p.id} 
+                    className={`transition-colors group ${isVoided ? "bg-rose-500/5 hover:bg-rose-500/10" : "hover:bg-muted/40"}`}
+                  >
+                    <td className="py-4 px-6 align-middle">
+                      <p className={`font-bold ${isVoided ? "text-rose-600/60 line-through" : "text-foreground"}`}>
+                        {p.createdAt ? format(new Date(p.createdAt), "HH:mm 'hrs'", { locale: es }) : "-"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                        {p.createdAt ? format(new Date(p.createdAt), "dd MMM yyyy", { locale: es }) : "-"}
+                      </p>
+                    </td>
 
-                      <td className={`py-4 px-6 align-middle font-mono text-[13px] font-bold ${isVoided ? "text-muted-foreground/60" : "text-foreground"}`}>
-                        {p.receiptNumber || `#REC-${p.id ? p.id.slice(-6).toUpperCase() : "000000"}`}
-                      </td>
+                    <td className={`py-4 px-6 align-middle font-mono text-[13px] font-bold ${isVoided ? "text-muted-foreground/60" : "text-foreground"}`}>
+                      {p.receiptNumber || `#REC-${p.id ? p.id.slice(-6).toUpperCase() : "000000"}`}
+                    </td>
 
-                      <td className="py-4 px-6 align-middle">
-                        <p className={`font-bold text-[13px] ${isVoided ? "text-muted-foreground/70" : "text-foreground"}`}>
-                          {p.patient?.firstName} {p.patient?.lastName}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
-                          CI: {p.patient?.ci || "S/N"}
-                        </p>
-                      </td>
+                    <td className="py-4 px-6 align-middle">
+                      <p className={`font-bold text-[13px] ${isVoided ? "text-muted-foreground/70" : "text-foreground"}`}>
+                        {p.patient?.firstName} {p.patient?.lastName}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                        CI: {p.patient?.ci || "S/N"}
+                      </p>
+                    </td>
 
-                      <td className={`py-4 px-6 align-middle ${isVoided ? "opacity-50" : ""}`}>
-                        <PaymentMethodBadge method={p.method} />
-                      </td>
+                    <td className={`py-4 px-6 align-middle ${isVoided ? "opacity-50" : ""}`}>
+                      <PaymentMethodBadge method={p.method} />
+                    </td>
 
-                      <td className="py-4 px-6 align-middle text-right">
-                        <span className={`font-black text-[15px] ${isVoided ? "text-rose-600 line-through opacity-70" : "text-foreground"}`}>
-                          ${Number(p.amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    <td className="py-4 px-6 align-middle text-right">
+                      <span className={`font-black text-[15px] ${isVoided ? "text-rose-600 line-through opacity-70" : "text-foreground"}`}>
+                        ${Number(p.amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </span>
+                    </td>
+
+                    <td className="py-4 px-6 align-middle text-center">
+                      {isVoided ? (
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 border border-rose-500/20">
+                          Anulado
                         </span>
-                      </td>
+                      ) : (
+                        <PaymentStatusBadge status={p.status} />
+                      )}
+                    </td>
 
-                      <td className="py-4 px-6 align-middle text-center">
-                        {isVoided ? (
-                          <span className="px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider bg-rose-500/10 text-rose-600 border border-rose-500/20">
-                            Anulado
-                          </span>
-                        ) : (
-                          <PaymentStatusBadge status={p.status} />
-                        )}
-                      </td>
-
-                      <td className="py-4 px-6 align-middle text-center">
-                        {!isVoided ? (
-                          <div className="flex justify-center items-center gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                    <td className="py-4 px-6 align-middle text-center">
+                      {!isVoided ? (
+                        isAdmin ? (
+                          <div className="flex justify-center items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => onEdit(p)}
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg"
-                              title="Editar"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg cursor-pointer"
+                              title="Editar Cobro"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </Button>
@@ -227,17 +236,22 @@ export function BillingTable({
                               variant="ghost"
                               size="icon"
                               onClick={() => onDelete(p.id)}
-                              className="h-8 w-8 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg"
-                              title="Anular"
+                              className="h-8 w-8 text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10 rounded-lg cursor-pointer"
+                              title="Anular Cobro"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
                           </div>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground italic">Solo lectura</span>
-                        )}
-                      </td>
-                    </tr>
+                          <span className="text-[10px] text-muted-foreground font-bold px-2 py-0.5 bg-muted/40 rounded-md border border-border/60">
+                            Registrado
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground italic font-medium">Solo lectura</span>
+                      )}
+                    </td>
+                  </tr>
                   )
                 })
               )}

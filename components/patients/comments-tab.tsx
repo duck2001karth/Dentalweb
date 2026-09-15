@@ -16,7 +16,15 @@ export function ComentariosTab({ patientId, patient }: { patientId: string; pati
   const { data: session } = useSession()
   const { toast } = useToast()
   const currentUser = session?.user as any
-  const canDelete = currentUser?.role === "ADMIN" || currentUser?.role === "DOCTOR"
+
+const canDeleteComment = (comment: any) => {
+  if (!currentUser) return false
+  
+  const role = String(currentUser.role || "").toUpperCase().trim()
+  if (role === "ADMIN" || role === "ADMINISTRADOR") return true
+  
+  return Boolean(comment?.authorId && comment.authorId === currentUser.id)
+}
 
   const { comments = [], isLoading } = useGetPatientComments(patientId)
   const { createComment, isLoading: isSubmitting } = useCreatePatientComment()
@@ -119,7 +127,7 @@ export function ComentariosTab({ patientId, patient }: { patientId: string; pati
                     </div>
                   </div>
                   
-                  {canDelete && (
+                  {canDeleteComment(com) && (
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive h-7 w-7 p-0 rounded-lg cursor-pointer">

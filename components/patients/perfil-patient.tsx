@@ -32,7 +32,7 @@ export function DatosPersonalesTab({
   
   const currentUser = session?.user as any
   const canEditPatient = ["ADMIN", "DOCTOR", "RECEPTIONIST"].includes(currentUser?.role)
-  const canDeletePatient = currentUser?.role === "ADMIN" || currentUser?.role === "DOCTOR"
+  const canDeletePatient = currentUser?.role === "ADMIN" 
 
   const { updatePatient } = useUpdatePatient()
   const { appointments: patientAppointments = [], isLoading: isLoadingAppointments } = useGetAppointments({ patientId })

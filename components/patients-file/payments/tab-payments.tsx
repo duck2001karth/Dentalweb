@@ -51,12 +51,14 @@ export function PaymentsTable({
 }: any) {
   const router = useRouter()
   const { data: session } = useSession()
-  const userRole = (session?.user as any)?.role || "DOCTOR"
-  const isAdmin = userRole === "ADMIN"
-  const isRecepcion = userRole === "RECEPTIONIST" || userRole === "RECEPCION"
   
-  const canEditPayment = isAdmin || isRecepcion
-  const canDeletePayment = isAdmin || isRecepcion
+  const userRole = String((session?.user as any)?.role || "").toUpperCase().trim()
+  const isAdmin = userRole === "ADMIN" || userRole === "ADMINISTRADOR"
+  const isRecepcion = userRole === "RECEPTIONIST" || userRole === "RECEPCION"
+  const isDoctor = userRole === "DOCTOR"
+
+  const canEditPayment = isAdmin
+  const canDeletePayment = isAdmin
 
   const [isElectronicDocOpen, setIsElectronicDocOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
@@ -121,14 +123,17 @@ export function PaymentsTable({
           </p>
         </div>
 
-        <Button 
-          type="button"
-          onClick={() => setIsElectronicDocOpen(true)}
-          className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold text-xs rounded-xl h-10 px-4 shadow-sm flex items-center gap-2 cursor-pointer transition-all shrink-0"
-        >
-          <Plus className="w-4 h-4 stroke-[2.5]" />
-          Nuevo documento electrónico
-        </Button>
+        {/* Solo visible para Recepción y Administrador */}
+        {!isDoctor && (
+          <Button 
+            type="button"
+            onClick={() => setIsElectronicDocOpen(true)}
+            className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold text-xs rounded-xl h-10 px-4 shadow-sm flex items-center gap-2 cursor-pointer transition-all shrink-0"
+          >
+            <Plus className="w-4 h-4 stroke-[2.5]" />
+            Nuevo documento electrónico
+          </Button>
+        )}
       </div>
 
       <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
@@ -296,7 +301,7 @@ export function PaymentsTable({
                           className="text-[10px] font-bold text-[#008bcd] hover:underline flex items-center justify-end gap-1 ml-auto mt-0.5 cursor-pointer uppercase tracking-wider"
                         >
                           <span>Ver detalle</span>
-                          <Eye className="w-3 h-3 stroke-[2.5]" />
+                          <Eye className="w-3.5 h-3.5 stroke-[2.5]" />
                         </button>
                       </td>
 

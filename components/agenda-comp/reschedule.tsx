@@ -44,6 +44,8 @@ export function RescheduleModal({
   const currentUser = session?.user as any
   const defaultUserColor = currentUser?.calendarColor || "#008bcd"
 
+  const isAdminOrStaff = currentUser?.role === "ADMIN" || currentUser?.role === "RECEPTIONIST"
+
   const { toast } = useToast()
   const { rescheduleAppointment: reschedule, isLoading: isPending } = useRescheduleAppointment()
   const { settings } = useClinicSettings()
@@ -95,12 +97,18 @@ export function RescheduleModal({
     }
   }, [selectedAppointment, isOpen, availableBoxes])
 
-  useEffect(() => {
+ useEffect(() => {
     if (isOpen && !selectedAppointment) {
       const fetchActiveAppointments = async () => {
         setIsSearching(true)
         try {
-          const res = await fetch("/api/citas?statuses=SCHEDULED,WAITING,NO_SHOW")
+          const isAdminOrStaff = currentUser?.role === "ADMIN" || currentUser?.role === "RECEPTIONIST"
+          
+          const url = isAdminOrStaff
+            ? "/api/citas?statuses=SCHEDULED,WAITING,NO_SHOW"
+            : `/api/citas?statuses=SCHEDULED,WAITING,NO_SHOW&doctorId=${currentUser?.id}`
+
+          const res = await fetch(url)
           if (res.ok) {
             const data = await res.json()
             setAppointmentsList(data.citas || data || [])
@@ -113,7 +121,7 @@ export function RescheduleModal({
       }
       fetchActiveAppointments()
     }
-  }, [isOpen, selectedAppointment])
+  }, [isOpen, selectedAppointment, currentUser?.role, currentUser?.id])
 
   const fifteenDaysAgo = startOfDay(subDays(new Date(), 15))
   

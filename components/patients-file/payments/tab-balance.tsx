@@ -91,7 +91,7 @@ export function FinancialBalanceView({
 
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role?.toUpperCase() || ""
-  const canPrint = ["ADMIN", "ADMINISTRADOR", "RECEPTION", "RECEPCION"].includes(userRole)
+  const canPrint = ["ADMIN", "ADMINISTRADOR", "RECEPTIONIST", "RECEPTION", "RECEPCION", "DOCTOR"].includes(userRole)
 
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(5)

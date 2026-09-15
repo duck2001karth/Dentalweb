@@ -40,6 +40,20 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
     updatePayment, 
     deletePayment 
   } = usePayments()
+  const userRole = session?.user?.role as string
+  const isAuthorized = userRole === "ADMIN" || userRole === "RECEPTIONIST"
+
+  if (!isAuthorized) {
+    return (
+      <div className="p-12 text-center border border-dashed rounded-2xl bg-card">
+        <Lock className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+        <h3 className="font-bold text-base text-foreground">Acceso Restringido a Caja</h3>
+        <p className="text-xs text-muted-foreground mt-1">
+          Este módulo es de uso exclusivo para Recepción, Caja y Administración.
+        </p>
+      </div>
+    )
+  }
   
   const { patients: apiPatients = [] } = useGetPatients({})
 
@@ -219,10 +233,10 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
 
       {/* PLANTILLA DE IMPRESIÓN */}
       <PrintArqueoTemplate
-        payments={safePaymentsList}
-        dateFilter={dateFilter}
-        cashierName={session?.user?.name || "Recepción"}
-      />
+          payments={safePaymentsList}
+          dateFilter={dateFilter}
+          cashierName={session?.user?.name || "Cajero de Turno"} 
+        />
 
       {/* MODAL NUEVO COBRO / EDITAR */}
       <PaymentModal
