@@ -16,6 +16,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useGetPatient } from "@/hooks/patients"
 import { PrescriptionPrint } from "./recetas-print"
 import { PrescriptionEditor } from "./recetas-editor"
+import { RecipeShareModal } from "./recipe-share-modal"
 
 const calculateAge = (birthDateString?: string | Date | null) => {
   if (!birthDateString) return ""
@@ -109,6 +110,10 @@ export function RecetasTab({ patientId }: { patientId: string }) {
 
   const [printingDoc, setPrintingDoc] = useState<any>(null)
   const [signingRecipe, setSigningRecipe] = useState<any>(null)
+  const [pendingActionAfterSign, setPendingActionAfterSign] = useState<"print" | "whatsapp" | null>(null)
+
+  const [sharingRecipe, setSharingRecipe] = useState<any>(null)
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
 
   const patientFullName = patient ? `${patient.firstName} ${patient.lastName}` : "Cargando..."
   const patientDocId = patient?.ci || "No registrado"
@@ -175,7 +180,7 @@ export function RecetasTab({ patientId }: { patientId: string }) {
       setIsDirty(false)
       
       if (!isAutoSave) {
-        toast({ title: editingId ? "Receta actualizada" : "Receta creada con éxito", variant: "success" })
+        toast({ title: editingId ? "Receta actualizada" : "Receta creada con éxito", variant: "default" })
         handleNewRecipe()
         await fetchPrescriptions()
       } else {
@@ -226,28 +231,27 @@ export function RecetasTab({ patientId }: { patientId: string }) {
   }
 
   const handleWhatsApp = (p: any) => {
-    if (!patientPhone) return toast({ title: "Atención", description: "El paciente no tiene celular registrado.", variant: "destructive" })
-
-    const htmlToWA = (html: string) => {
-      if (!html) return ""
-      let t = html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/div>/gi, '\n').replace(/<div[^>]*>/gi, '')
-      t = t.replace(/<\/p>/gi, '\n').replace(/<p[^>]*>/gi, '')
-      t = t.replace(/<\/li>/gi, '\n').replace(/<li[^>]*>/gi, '- ')
-      t = t.replace(/<ul>/gi, '').replace(/<\/ul>/gi, '')
-      t = t.replace(/<b>(.*?)<\/b>/gi, '*$1*').replace(/<strong>(.*?)<\/strong>/gi, '*$1*')
-      t = t.replace(/<i>(.*?)<\/i>/gi, '_$1_').replace(/<em>(.*?)<\/em>/gi, '_$1_')
-      return t.replace(/<[^>]+>/g, '').trim()
+    if (!p.doctorSignature && canEditClinicalData) {
+      setPendingActionAfterSign("whatsapp")
+      setSigningRecipe(p)
+      return
     }
 
-    let msg = `Hola *${patientFullName}*,\nAquí tienes tu receta médica de *Carmodental*:\n\n💊 *Medicamentos (R.P.):*\n${htmlToWA(p.medications)}\n\n📋 *Indicaciones:*\n${htmlToWA(p.indications)}`
-    
-    if (p.observations) {
-      msg += `\n\n⚠️ *Observaciones / Recomendaciones:*\n${htmlToWA(p.observations)}`
+    setSharingRecipe(p)
+    setIsShareModalOpen(true)
+  }
+
+  const handlePrintClick = (p: any) => {
+    if (!p.doctorSignature && canEditClinicalData) {
+      setPendingActionAfterSign("print")
+      setSigningRecipe(p)
+    } else { 
+      setPrintingDoc(p)
+      setTimeout(() => { 
+        window.print()
+        setPrintingDoc(null) 
+      }, 300) 
     }
-
-    msg += `\n\n_Que te mejores pronto._`
-
-    window.open(`https://wa.me/${patientPhone}?text=${encodeURIComponent(msg)}`, '_blank')
   }
 
   const filteredPrescriptions = prescriptions.filter(p => {
@@ -270,7 +274,16 @@ export function RecetasTab({ patientId }: { patientId: string }) {
         patientAllergies={patientAllergies} 
       />
 
-      <Dialog open={!!signingRecipe} onOpenChange={(open) => !open && setSigningRecipe(null)}>
+      {/* 2. MODAL DE FIRMA DIGITAL */}
+      <Dialog 
+        open={!!signingRecipe} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setSigningRecipe(null)
+            setPendingActionAfterSign(null)
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-xl bg-card border-border rounded-[24px] shadow-2xl p-0 overflow-hidden">
           <DialogHeader className="px-6 py-4 border-b border-border/70 bg-muted/15">
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
@@ -280,8 +293,11 @@ export function RecetasTab({ patientId }: { patientId: string }) {
           <div className="p-6">
             {signingRecipe && (
               <SignaturePad 
-                title="Firme aquí para validar la receta digital antes de imprimir" 
-                onCancel={() => setSigningRecipe(null)} 
+                title="Firme aquí para validar la receta digital antes de imprimir o compartir" 
+                onCancel={() => {
+                  setSigningRecipe(null)
+                  setPendingActionAfterSign(null)
+                }} 
                 onSave={async (img: string) => {
                   try {
                     await fetch(`/api/prescriptions/${signingRecipe.id}`, { 
@@ -290,13 +306,20 @@ export function RecetasTab({ patientId }: { patientId: string }) {
                       body: JSON.stringify({ doctorSignature: img }) 
                     })
                     const docConFirma = { ...signingRecipe, doctorSignature: img }
-                    setPrintingDoc(docConFirma) 
                     setSigningRecipe(null)
                     fetchPrescriptions()
-                    setTimeout(() => { 
-                      window.print()
-                      setPrintingDoc(null) 
-                    }, 300)
+
+                    if (pendingActionAfterSign === "whatsapp") {
+                      setSharingRecipe(docConFirma)
+                      setIsShareModalOpen(true)
+                    } else {
+                      setPrintingDoc(docConFirma) 
+                      setTimeout(() => { 
+                        window.print()
+                        setPrintingDoc(null) 
+                      }, 300) 
+                    }
+                    setPendingActionAfterSign(null)
                   } catch (e) {
                     toast({ title: "Error al guardar firma", variant: "destructive" })
                   }
@@ -307,14 +330,13 @@ export function RecetasTab({ patientId }: { patientId: string }) {
         </DialogContent>
       </Dialog> 
 
-      {/* CABECERA Y ACCIONES */}
+      {/* 3. CABECERA Y ACCIONES */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-5 bg-card p-5 rounded-2xl border border-border shadow-sm sticky top-0 z-20 print:hidden">
-        
         <div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2.5 flex-wrap">
               <h2 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-                <Pill className="w-5 h-5 text-[#008bcd] " /> Recetas y Prescripciones
+                <Pill className="w-5 h-5 text-[#008bcd]" /> Recetas y Prescripciones
               </h2>
               {!canEditClinicalData && (
                 <span className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-bold px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 tracking-wider">
@@ -346,7 +368,6 @@ export function RecetasTab({ patientId }: { patientId: string }) {
         </div>
         
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
-          
           <div className="relative w-full sm:w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input 
@@ -381,6 +402,7 @@ export function RecetasTab({ patientId }: { patientId: string }) {
         </div>
       </div>
 
+      {/* 4. CONTENIDO PRINCIPAL */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
         
         {/* EDITOR */}
@@ -474,18 +496,9 @@ export function RecetasTab({ patientId }: { patientId: string }) {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => {
-                        if (!p.doctorSignature && canEditClinicalData) {
-                          setSigningRecipe(p)
-                        } else { 
-                          setPrintingDoc(p)
-                          setTimeout(() => { 
-                            window.print()
-                            setPrintingDoc(null) 
-                          }, 300) 
-                        }
-                      }} 
-                      className="text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 border-border h-8 text-xs font-bold rounded-lg">
+                      onClick={() => handlePrintClick(p)} 
+                      className="text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 border-border h-8 text-xs font-bold rounded-lg"
+                    >
                       <Printer size={14} className="mr-1.5"/> Imprimir
                     </Button>
                     {canEditClinicalData && (
@@ -535,6 +548,23 @@ export function RecetasTab({ patientId }: { patientId: string }) {
           )}
         </div>
       </div>
+
+      {/* 5. MODAL DE COMPARTIR RECETA */}
+      {sharingRecipe && (
+        <RecipeShareModal 
+          isOpen={isShareModalOpen}
+          onClose={() => {
+            setIsShareModalOpen(false)
+            setSharingRecipe(null)
+          }}
+          patientName={patientFullName}
+          patientPhone={patientPhone}
+          patientAge={patientAge}
+          patientAllergies={patientAllergies}
+          recipeData={sharingRecipe}
+          patientDocId={patientDocId}
+        />
+      )}
     </div>
   )
 }

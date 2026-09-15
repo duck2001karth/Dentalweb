@@ -25,24 +25,22 @@ export function PrescriptionPrint({
   const today = format(new Date(), "dd/MM/yyyy")
 
   // Datos dinámicos de configuración de clínica
-  const clinicName = settings?.clinicName?.trim() || "Carmodental"
-  const clinicSlogan = settings?.slogan?.trim() || "Clínica de Especialidades Odontológicas"
-  const clinicRuc = settings?.ruc?.trim() || "1719231696001"
-  const clinicHolder = settings?.razonSocial?.trim() || "Dr. José Napoleón Cargua Ríos"
-  const clinicAddress = settings?.address?.trim() || "Solanda Sector 4, José Argudo S24-72 y Av. Solanda"
-  const clinicPhone = settings?.phone?.trim() || settings?.whatsappNumber?.trim() || "0998 990 215"
-  const clinicEmail = settings?.email?.trim() || "carmodental@gmail.com"
+  const clinicName = settings?.clinicName?.trim() || ""
+  const clinicSlogan = settings?.slogan?.trim() || ""
+  const clinicRuc = settings?.ruc?.trim() || ""
+  const clinicHolder = settings?.razonSocial?.trim() || ""
+  const clinicAddress = settings?.address?.trim() || ""
+  const clinicPhone = settings?.phone?.trim() || settings?.whatsappNumber?.trim() || ""
+  const clinicEmail = settings?.email?.trim() || ""
   
-  const clinicCity = (settings as any)?.city?.trim() || "Quito"
-  const clinicCountry = (settings as any)?.country?.trim() || "Ecuador"
+  const clinicCity = (settings as any)?.city?.trim() || ""
+  const clinicCountry = (settings as any)?.country?.trim() || ""
   const clinicLocation = `${clinicCity} - ${clinicCountry}`
 
-  const logoUrl = settings?.logoUrl || "/logosn.png"
-  const watermarkUrl = settings?.watermarkUrl || "/logosn.png"
+  const logoUrl = settings?.logoUrl || ""
+  const watermarkUrl = settings?.watermarkUrl || ""
   const watermarkOpacity = ((settings as any)?.watermarkOpacity ?? 12) / 100
   const watermarkScale = ((settings as any)?.watermarkScale || 100) / 100
-
-  // Modo monocromático / B&N
   const isMonochrome = settings?.defaultPrintMode === "bw"
   const filterStyle = isMonochrome ? "grayscale(100%)" : "none"
 
