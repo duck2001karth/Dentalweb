@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useMemo } from "react"
 import { useSession } from "next-auth/react"
 import { useToast } from "@/hooks/use-toast"
 import { useTreatmentState } from "./hooks/use-treatment-state"
@@ -25,7 +25,11 @@ interface TreatmentPlanDetailProps {
 }
 
 export function TreatmentPlanDetail({
-  plan, patient, onBack, onSaveComment, isSavingComment = false
+  plan,
+  patient,
+  onBack,
+  onSaveComment,
+  isSavingComment = false
 }: TreatmentPlanDetailProps) {
   const { data: session } = useSession()
   const { toast } = useToast()
@@ -33,6 +37,15 @@ export function TreatmentPlanDetail({
 
   const { state, setters, handlers } = useTreatmentState(plan, patient, currentUser, toast)
   const { settings } = useClinicSettings()
+
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
+  const [sectionToDelete, setSectionToDelete] = useState<{ id: string; name: string } | null>(null)
+
+  const activeSectionName = useMemo(() => {
+    if (!activeSectionId) return null
+    const sec = (state.currentPlan?.sections || []).find((s: any) => s.id === activeSectionId)
+    return sec?.name || null
+  }, [activeSectionId, state.currentPlan?.sections])
 
   const calculateAge = (birthDate: string | Date | undefined) => {
     if (!birthDate) return undefined
@@ -45,6 +58,7 @@ export function TreatmentPlanDetail({
   }
 
   const patientAge = patient?.age || calculateAge(patient?.birthDate)
+
   const handlePrint = (mode: PrintMode = "COMPLETO") => {
     const subtotal = state.calculatedTotals.subtotal
     const discountPct = state.discountPercent
@@ -72,18 +86,15 @@ export function TreatmentPlanDetail({
     <div className="w-full font-sans antialiased animate-in fade-in duration-300 relative">
       <div className="print:hidden space-y-6">
         <TreatmentDetailHeader 
-          planId={plan.id} 
-          patient={patient} 
-          onBack={onBack} 
+          planId={plan.id}
+          patient={patient}
+          onBack={onBack}
           onRefreshData={handlers.refreshPlanData}
-          onSelectRegion={(region: string) => {
-            setters.setTargetToothOrRegion(region)
-            setters.setIsCatalogModalOpen(true)
-          }}
           onClearPlan={() => {
             setters.setDeleteMode("ALL")
             setters.setIsDeleteModalOpen(true)
           }}
+          onPrintPDF={() => handlePrint("COMPLETO")}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -109,7 +120,7 @@ export function TreatmentPlanDetail({
             />
           </div>
 
-          {/* COLUMNA DERECHA: ODONTOGRAMA, TABLA Y FIRMAS */}
+          {/* COLUMNA DERECHA */}
           <div className="lg:col-span-8 xl:col-span-9 space-y-6">
             <div className="bg-card rounded-2xl border border-border/80 p-4 shadow-xs">
               <OdontogramaTab 
@@ -118,6 +129,7 @@ export function TreatmentPlanDetail({
                 isPlanView={true}
                 onToothClickCallback={(tooth: number) => {
                   if (tooth > 0) {
+                    setActiveSectionId(null)
                     setters.setTargetToothOrRegion(String(tooth))
                     setters.setIsCatalogModalOpen(true)
                   }
@@ -127,11 +139,19 @@ export function TreatmentPlanDetail({
             </div>
 
             <TreatmentTable 
+              planId={plan.id}
               planItems={state.planItems}
+              sections={state.currentPlan?.sections || []} 
               planDiscountPercent={state.discountPercent}
               setIsSectionModalOpen={setters.setIsSectionModalOpen}
-              openCatalogModal={(region?: string) => {
-                setters.setTargetToothOrRegion(region)
+              onRequestDeleteSection={(sec) => {
+                setSectionToDelete(sec)
+                setters.setDeleteMode("SECTION" as any)
+                setters.setIsDeleteModalOpen(true)
+              }}
+              openCatalogModal={(region?: string, sectionId?: string) => {
+                setters.setTargetToothOrRegion(region || "")
+                setActiveSectionId(sectionId || null)
                 setters.setIsCatalogModalOpen(true)
               }}
               setIsDiagnosisModalOpen={setters.setIsDiagnosisModalOpen}
@@ -148,8 +168,8 @@ export function TreatmentPlanDetail({
               }}
               onUpdateItemDiscount={handlers.handleUpdateItemDiscount}
               onUpdateItemRegion={handlers.handleUpdateItemRegion}
+              onPlanUpdate={handlers.refreshPlanData}
               onSelectPrintMode={(mode: string) => {
-                // 2. Disparamos la impresión mediante IFRAME según el modo elegido
                 handlePrint(mode as PrintMode)
               }}
             />
@@ -170,8 +190,7 @@ export function TreatmentPlanDetail({
         </div>
       </div>
       
-      {/* 3. Se elimina por completo el <TreatmentPrintView> del DOM */}
-      
+      {/* DIÁLOGOS Y MODALES */}
       <div className="print:hidden">
         <TreatmentDetailDialogs
           plan={state.currentPlan}
@@ -182,19 +201,31 @@ export function TreatmentPlanDetail({
           setIsSectionModalOpen={setters.setIsSectionModalOpen}
           sectionName={state.sectionName}
           setSectionName={setters.setSectionName}
+          handleCreateSection={handlers.handleCreateSection}
           isDiscountModalOpen={state.isDiscountModalOpen}
           setIsDiscountModalOpen={setters.setIsDiscountModalOpen}
           tempDiscount={state.tempDiscount}
           setTempDiscount={setters.setTempDiscount}
           handleApplyDiscount={handlers.handleApplyDiscount}
           isCatalogModalOpen={state.isCatalogModalOpen}
-          setIsCatalogModalOpen={setters.setIsCatalogModalOpen}
+          setIsCatalogModalOpen={(open) => {
+            setters.setIsCatalogModalOpen(open)
+            if (!open) setActiveSectionId(null)
+          }}
           catalogSearch={state.catalogSearch}
           setCatalogSearch={setters.setCatalogSearch}
           filteredCatalog={[]}
-          handleAddManualProcedure={handlers.handleAddManualProcedure}
+          handleAddManualProcedure={async (proc: any, toothOrRegionValue?: string, sectionId?: string | null) => {
+            const finalProc = {
+              ...proc,
+              sectionId: sectionId !== undefined ? sectionId : activeSectionId
+            }
+            await (handlers.handleAddManualProcedure as any)(finalProc, toothOrRegionValue)
+          }}
           isAddingProcedure={state.isAddingProcedure}
           targetToothOrRegion={state.targetToothOrRegion}
+          targetSectionId={activeSectionId}
+          targetSectionName={activeSectionName}
           isEvolutionModalOpen={state.isEvolutionModalOpen}
           setIsEvolutionModalOpen={setters.setIsEvolutionModalOpen}
           evolutionProgress={state.evolutionProgress}
@@ -215,9 +246,29 @@ export function TreatmentPlanDetail({
           setCollaborators={setters.setCollaborators}
           isDeleteModalOpen={state.isDeleteModalOpen}
           setIsDeleteModalOpen={setters.setIsDeleteModalOpen}
-          deleteMode={state.deleteMode}
+          deleteMode={state.deleteMode as any}
+          sectionToDelete={sectionToDelete}
           handleClearPlan={handlers.handleClearPlan}
           executeDeleteSelected={handlers.executeDeleteSelected}
+          handleDeleteSection={async () => {
+            if (!sectionToDelete) return
+            try {
+              const res = await fetch(`/api/treatments/${plan.id}/sections/${sectionToDelete.id}`, {
+                method: "DELETE"
+              })
+              if (!res.ok) throw new Error("No se pudo eliminar la fase")
+              toast({ title: "Fase eliminada", variant: "success" })
+              setSectionToDelete(null)
+              setters.setIsDeleteModalOpen(false)
+              await handlers.refreshPlanData()
+            } catch (err: any) {
+              toast({ 
+                title: "Error al eliminar fase", 
+                description: err.message, 
+                variant: "destructive" 
+              })
+            }
+          }}
           itemsToDelete={state.itemsToDelete}
           onPlanUpdate={handlers.refreshPlanData}
         />

@@ -1,4 +1,5 @@
-// components/plans-treatment/use-treatment-state.ts
+"use client"
+
 import { useState, useEffect, useMemo } from "react"
 import { TreatmentItem, EvolutionInput } from "@/types/treatments"
 
@@ -8,7 +9,6 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
   const [planItems, setPlanItems] = useState<TreatmentItem[]>(initialPlan?.items || [])
   const [discountPercent, setDiscountPercent] = useState<number>(Number(initialPlan?.discount || 0))
   const [signedConsents, setSignedConsents] = useState<any[]>([])
-  
   const [collaborators, setCollaborators] = useState<string[]>(() => {
     if (Array.isArray(initialPlan?.collaborators)) return initialPlan.collaborators
     if (typeof initialPlan?.collaborators === "string") {
@@ -43,12 +43,12 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
   const [deleteMode, setDeleteMode] = useState<"ALL" | "SELECTED">("ALL")
   const [itemsToDelete, setItemsToDelete] = useState<string[]>([])
 
-  // --- EFECTOS ---
+  // --- SINCRONIZACIÓN DE PLAN ---
   useEffect(() => {
     if (initialPlan) {
       setCurrentPlan(initialPlan)
       setPlanItems(initialPlan.items || [])
-      setDiscountPercent(Number(initialPlan.discount || 0)) 
+      setDiscountPercent(Number(initialPlan.discount || 0))
       setCollaborators(Array.isArray(initialPlan.collaborators) ? initialPlan.collaborators : [])
     }
   }, [initialPlan])
@@ -69,7 +69,6 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
   const calculatedTotals = useMemo(() => {
     let subtotal = 0
     let totalProgressSum = 0
-
     planItems.forEach((item: any) => {
       const cost = Number(item.cost || item.price || 0)
       const itemDisc = Number(item.discount || 0)
@@ -77,106 +76,126 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       subtotal += Math.max(0, cost - (cost * (effectiveDisc / 100)))
       totalProgressSum += item.isCompleted ? 100 : Number(item.progress || 0)
     })
-
     const totalPaid = Number(currentPlan?.totalPaid || 0)
-    return { 
-      subtotal, 
-      totalPaid, 
-      pendingBalance: Math.max(0, subtotal - totalPaid), 
-      progress: planItems.length > 0 ? Math.round(totalProgressSum / planItems.length) : 0 
+    return {
+      subtotal,
+      totalPaid,
+      pendingBalance: Math.max(0, subtotal - totalPaid),
+      progress: planItems.length > 0 ? Math.round(totalProgressSum / planItems.length) : 0
     }
   }, [planItems, discountPercent, currentPlan?.totalPaid])
 
-  // --- FUNCIONES Y HANDLERS ---
+  // --- HANDLERS ---
   const refreshPlanData = async () => {
     if (!initialPlan?.id) return
     try {
       const res = await fetch(`/api/treatments/${initialPlan.id}`)
       if (res.ok) {
-        const { plan: fetchedPlan } = await res.json()
-        setCurrentPlan(fetchedPlan)
+        const data = await res.json()
+        const fetchedPlan = data.plan || data
+        
+        setCurrentPlan((prev: any) => ({
+          ...fetchedPlan,
+          sections: fetchedPlan.sections !== undefined ? fetchedPlan.sections : (prev?.sections || [])
+        }))
         setPlanItems(fetchedPlan.items || [])
         if (Array.isArray(fetchedPlan.collaborators)) setCollaborators(fetchedPlan.collaborators)
         if (fetchedPlan.discount !== undefined) setDiscountPercent(Number(fetchedPlan.discount))
-        else if (fetchedPlan.agreement?.discountValue) setDiscountPercent(Number(fetchedPlan.agreement.discountValue))
       }
-    } catch (e) { console.error("Error al refrescar plan:", e) }
+    } catch (e) {
+      console.error("Error al refrescar plan:", e)
+    }
   }
 
   const handleApplyDiscount = async () => {
     const val = Math.max(0, Math.min(100, parseFloat(tempDiscount) || 0))
     try {
       const res = await fetch(`/api/treatments/${initialPlan.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ discount: val })
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discount: val })
       })
       if (!res.ok) throw new Error()
       setDiscountPercent(val)
       setIsDiscountModalOpen(false)
       toast({ title: "Descuento aplicado", variant: "success" })
       refreshPlanData()
-    } catch { toast({ title: "Error", description: "No se pudo actualizar el descuento.", variant: "destructive" }) }
+    } catch {
+      toast({ title: "Error", description: "No se pudo actualizar el descuento.", variant: "destructive" })
+    }
   }
 
   const handleApplyAgreement = async (agreement: any) => {
     try {
       const newDiscount = Number(agreement?.discount || agreement?.discountValue || 10)
       const agreementName = agreement?.name || agreement?.nombre || "IESS"
-      
+
       const res = await fetch(`/api/treatments/${initialPlan.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agreementId: agreement?.id || null, agreementName, convenio: agreementName })
       })
       if (!res.ok) throw new Error()
-      
+
       const json = await res.json()
       setDiscountPercent(newDiscount)
       setCurrentPlan(json.plan || json)
-      if (Array.isArray((json.plan || json).collaborators)) setCollaborators((json.plan || json).collaborators)
-      
       toast({ title: "Convenio aplicado", description: `Se aplicó el convenio ${agreementName}.`, variant: "success" })
       refreshPlanData()
-    } catch { toast({ title: "Error", description: "No se pudo guardar el convenio.", variant: "destructive" }) }
+    } catch {
+      toast({ title: "Error", description: "No se pudo guardar el convenio.", variant: "destructive" })
+    }
   }
 
   const handleUpdateItemDiscount = async (itemId: string, itemDiscount: number) => {
     try {
       await fetch(`/api/treatment-items/${itemId}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ discount: itemDiscount })
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discount: itemDiscount })
       })
       setPlanItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, discount: itemDiscount } : item)))
       refreshPlanData()
-    } catch { }
+    } catch {}
   }
 
   const handleUpdateItemRegion = async (itemId: string, region: string) => {
     try {
       await fetch(`/api/treatment-items/${itemId}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ tooth: region })
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tooth: region })
       })
       setPlanItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, tooth: region } : item)))
       refreshPlanData()
-    } catch { }
+    } catch {}
   }
 
   const handleAddManualProcedure = async (procedure: any, toothNum?: string) => {
     setIsAddingProcedure(true)
     try {
       const targetTooth = toothNum || targetToothOrRegion || null
+      const targetSection = procedure.sectionId || null
+
       const res = await fetch(`/api/treatments/${initialPlan.id}/items`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           procedureName: procedure.name || procedure.procedureName,
           cost: Number(procedure.basePrice ?? procedure.price ?? procedure.cost ?? 0),
           tooth: targetTooth ? String(targetTooth) : null,
+          sectionId: targetSection, 
           discount: 0
         })
       })
       if (!res.ok) throw new Error()
       const resData = await res.json()
-      setPlanItems((prev) => [...prev, resData.item || resData])
+      const newItem = resData.item || resData
+      
+      setPlanItems((prev) => [...prev, newItem])
       setIsCatalogModalOpen(false)
       toast({ title: "Prestación agregada", variant: "success" })
-      refreshPlanData()
+      await refreshPlanData()
     } catch {
       toast({ title: "Error al agregar", description: "No se pudo agregar la prestación.", variant: "destructive" })
     } finally {
@@ -190,11 +209,17 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
     try {
       const progress = data?.progress ?? evolutionProgress
       const res = await fetch(`/api/treatments/items/${selectedItemToEvolve.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          progress, isCompleted: progress === 100, note: data?.note ?? evolutionNote,
-          hasIncident: data?.hasIncident, hasAdverseEvent: data?.hasAdverseEvent,
-          isPrivate: data?.isPrivate, fileUrl: data?.fileUrl, doctorId: data?.doctorId || currentUser?.id
+          progress,
+          isCompleted: progress === 100,
+          note: data?.note ?? evolutionNote,
+          hasIncident: data?.hasIncident,
+          hasAdverseEvent: data?.hasAdverseEvent,
+          isPrivate: data?.isPrivate,
+          fileUrl: data?.fileUrl,
+          doctorId: data?.doctorId || currentUser?.id
         })
       })
       if (!res.ok) throw new Error()
@@ -202,31 +227,44 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       setSelectedItemToEvolve(null)
       toast({ title: "Evolución registrada", variant: "success" })
       refreshPlanData()
-    } catch { toast({ title: "Error al registrar", description: "No se pudo guardar la evolución.", variant: "destructive" }) }
+    } catch {
+      toast({ title: "Error al registrar", description: "No se pudo guardar la evolución.", variant: "destructive" })
+    }
   }
 
   const handleSaveSignature = async (base64Signature: string) => {
     try {
       await fetch(`/api/treatments/${initialPlan.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ signatureBase64: base64Signature, status: "ACTIVE" })
       })
-      setCurrentPlan((prev: any) => ({ ...prev, status: "ACTIVE", patient: { ...prev.patient, signatureBase64: base64Signature } }))
+      setCurrentPlan((prev: any) => ({
+        ...prev,
+        status: "ACTIVE",
+        patient: { ...prev.patient, signatureBase64: base64Signature }
+      }))
       toast({ title: "Presupuesto aprobado", description: "Firma registrada exitosamente.", variant: "success" })
       setIsSignatureModalOpen(false)
       refreshPlanData()
-    } catch { toast({ title: "Error", description: "No se pudo vincular la firma.", variant: "destructive" }) }
+    } catch {
+      toast({ title: "Error", description: "No se pudo vincular la firma.", variant: "destructive" })
+    }
   }
 
   const handleApprovePlan = async () => {
     try {
       await fetch(`/api/treatments/${initialPlan.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: "ACTIVE" }) 
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "ACTIVE" })
       })
       setCurrentPlan((prev: any) => ({ ...prev, status: "ACTIVE" }))
       toast({ title: "Presupuesto aprobado", description: "Se ha vinculado la firma del paciente.", variant: "success" })
       refreshPlanData()
-    } catch { toast({ title: "Error", description: "No se pudo aprobar el plan.", variant: "destructive" }) }
+    } catch {
+      toast({ title: "Error", description: "No se pudo aprobar el plan.", variant: "destructive" })
+    }
   }
 
   const handleClearPlan = async () => {
@@ -235,20 +273,24 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       setPlanItems([])
       setIsDeleteModalOpen(false)
       refreshPlanData()
-    } catch { }
+    } catch {}
   }
 
   const executeDeleteSelected = async () => {
     try {
       await fetch(`/api/treatments/${initialPlan.id}/items`, {
-        method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itemIds: itemsToDelete })
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemIds: itemsToDelete })
       })
       setPlanItems((prev) => prev.filter((item) => !itemsToDelete.includes(item.id)))
       setIsDeleteModalOpen(false)
       setItemsToDelete([])
       toast({ title: "Prestaciones eliminadas", variant: "success" })
       refreshPlanData()
-    } catch { toast({ title: "Error", description: "No se pudieron eliminar los ítems.", variant: "destructive" }) }
+    } catch {
+      toast({ title: "Error", description: "No se pudieron eliminar los ítems.", variant: "destructive" })
+    }
   }
 
   const handleDeleteSelected = (ids: string[]) => {
@@ -257,26 +299,117 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
     setIsDeleteModalOpen(true)
   }
 
+  const handleCreateSection = async (customName?: string) => {
+    const finalName = (customName || sectionName).trim()
+    if (!finalName) {
+      toast({
+        title: "Campo requerido",
+        description: "Debes escribir el nombre de la sección o fase.",
+        variant: "destructive",
+      })
+      return
+    }
+    try {
+      const res = await fetch(`/api/treatments/${initialPlan?.id}/sections`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: finalName }),
+      })
+
+      if (res.ok) {
+        const createdData = await res.json()
+        const newSec = createdData.section || createdData
+        setCurrentPlan((prev: any) => ({
+          ...prev,
+          sections: [...(prev?.sections || []), newSec]
+        }))
+      } else {
+        const newLocalSec = { id: crypto.randomUUID(), name: finalName, treatmentPlanId: initialPlan?.id }
+        setCurrentPlan((prev: any) => ({
+          ...prev,
+          sections: [...(prev?.sections || []), newLocalSec]
+        }))
+      }
+
+      toast({
+        title: "Sección creada",
+        description: `Se agregó "${finalName}" al plan de tratamiento.`,
+        variant: "success",
+      })
+      setSectionName("")
+      setIsSectionModalOpen(false)
+      await refreshPlanData()
+    } catch (err: any) {
+      toast({
+        title: "Error al crear sección",
+        description: err.message || "Problema de conexión con el servidor.",
+        variant: "destructive",
+      })
+    }
+  }
+
   return {
     state: {
-      currentPlan, planItems, discountPercent, signedConsents, collaborators,
-      isSectionModalOpen, sectionName, isDiscountModalOpen, tempDiscount,
-      isCatalogModalOpen, catalogSearch, targetToothOrRegion, isAddingProcedure,
-      isEvolutionModalOpen, selectedItemToEvolve, evolutionProgress, evolutionNote,
-      isDiagnosisModalOpen, selectedDiagnosis, isSignatureModalOpen, isCollaboratorsOpen,
-      isDeleteModalOpen, deleteMode, itemsToDelete, calculatedTotals
+      currentPlan,
+      planItems,
+      discountPercent,
+      signedConsents,
+      collaborators,
+      isSectionModalOpen,
+      sectionName,
+      isDiscountModalOpen,
+      tempDiscount,
+      isCatalogModalOpen,
+      catalogSearch,
+      targetToothOrRegion,
+      isAddingProcedure,
+      isEvolutionModalOpen,
+      selectedItemToEvolve,
+      evolutionProgress,
+      evolutionNote,
+      isDiagnosisModalOpen,
+      selectedDiagnosis,
+      isSignatureModalOpen,
+      isCollaboratorsOpen,
+      isDeleteModalOpen,
+      deleteMode,
+      itemsToDelete,
+      calculatedTotals,
     },
     setters: {
-      setIsSectionModalOpen, setSectionName, setIsDiscountModalOpen, setTempDiscount,
-      setIsCatalogModalOpen, setCatalogSearch, setTargetToothOrRegion, setIsEvolutionModalOpen,
-      setSelectedItemToEvolve, setEvolutionProgress, setEvolutionNote, setIsDiagnosisModalOpen,
-      setSelectedDiagnosis, setIsSignatureModalOpen, setIsCollaboratorsOpen, setCollaborators,
-      setIsDeleteModalOpen, setDeleteMode
+      setIsSectionModalOpen,
+      setSectionName,
+      setIsDiscountModalOpen,
+      setTempDiscount,
+      setIsCatalogModalOpen,
+      setCatalogSearch,
+      setTargetToothOrRegion,
+      setIsEvolutionModalOpen,
+      setSelectedItemToEvolve,
+      setEvolutionProgress,
+      setEvolutionNote,
+      setIsDiagnosisModalOpen,
+      setSelectedDiagnosis,
+      setIsSignatureModalOpen,
+      setIsCollaboratorsOpen,
+      setCollaborators,
+      setIsDeleteModalOpen,
+      setDeleteMode,
     },
     handlers: {
-      refreshPlanData, handleApplyDiscount, handleApplyAgreement, handleUpdateItemDiscount,
-      handleUpdateItemRegion, handleAddManualProcedure, handleSaveEvolution, handleSaveSignature,
-      handleApprovePlan, handleClearPlan, executeDeleteSelected, handleDeleteSelected
-    }
+      refreshPlanData,
+      handleApplyDiscount,
+      handleApplyAgreement,
+      handleUpdateItemDiscount,
+      handleUpdateItemRegion,
+      handleAddManualProcedure,
+      handleSaveEvolution,
+      handleSaveSignature,
+      handleApprovePlan,
+      handleClearPlan,
+      executeDeleteSelected,
+      handleDeleteSelected,
+      handleCreateSection,
+    },
   }
 }

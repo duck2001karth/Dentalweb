@@ -25,7 +25,6 @@ export async function POST(
       return NextResponse.json({ error: "Falta el ID del plan de tratamiento" }, { status: 400 });
     }
 
-    // Metadatos de red
     const headersList = await headers();
     const forwardedFor = headersList.get("x-forwarded-for");
     const ipAddress = forwardedFor
@@ -38,6 +37,7 @@ export async function POST(
     const rawPrice = body.cost ?? body.price ?? body.basePrice ?? 0;
     const parsedPrice = isNaN(parseFloat(rawPrice)) ? 0 : parseFloat(rawPrice);
     const tooth = body.toothNumber || body.tooth || body.toothNum || null;
+    const sectionId = body.sectionId || null; 
 
     const newItem = await prisma.$transaction(async (tx) => {
       const plan = await tx.treatmentPlan.findUnique({
@@ -48,20 +48,38 @@ export async function POST(
       if (!plan) {
         throw new Error("PLAN_NOT_FOUND");
       }
+      let sectionName = "";
+      if (sectionId) {
+        const sec = await tx.treatmentSection.findUnique({
+          where: { id: sectionId },
+          select: { name: true, treatmentPlanId: true }
+        });
+        if (sec && sec.treatmentPlanId === id) {
+          sectionName = sec.name;
+        }
+      }
+
       const item = await tx.treatmentItem.create({
         data: {
           treatmentPlanId: id,
           procedureName: String(procedureName),
           cost: parsedPrice,
           tooth: tooth ? String(tooth) : null,
+          sectionId: sectionId ? String(sectionId) : null, 
         }
       });
+
       await tx.treatmentPlan.update({
         where: { id },
         data: {
           totalCost: { increment: parsedPrice }
         }
       });
+
+      const detailMsg = sectionName 
+        ? `Se añadió la prestación "${item.procedureName}" (${item.tooth || "General"}) a la fase "${sectionName}" con costo de $${parsedPrice.toFixed(2)} al plan "${plan.name}"`
+        : `Se añadió la prestación "${item.procedureName}" (${item.tooth || "General"}) con costo de $${parsedPrice.toFixed(2)} al plan "${plan.name}"`;
+
       await tx.auditLog.create({
         data: {
           userId: currentUserId,
@@ -69,7 +87,7 @@ export async function POST(
           entity: "TreatmentItem",
           entityId: item.id,
           patientId: plan.patientId,
-          details: `Se añadió la prestación "${item.procedureName}" (${item.tooth || "General"}) con costo de $${parsedPrice.toFixed(2)} al plan "${plan.name}"`,
+          details: detailMsg,
           oldData: undefined,
           newData: {
             id: item.id,
@@ -77,6 +95,7 @@ export async function POST(
             procedureName: item.procedureName,
             cost: item.cost,
             tooth: item.tooth,
+            sectionId: item.sectionId,
           },
           ipAddress,
           userAgent,
@@ -93,6 +112,41 @@ export async function POST(
     }
     console.error("Error al agregar prestación:", error);
     return NextResponse.json({ error: "Error al agregar prestación" }, { status: 500 });
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user || !(session.user as any).id) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+    const { itemIds, sectionId } = body;
+
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) {
+      return NextResponse.json({ error: "Debe especificar las prestaciones a actualizar" }, { status: 400 });
+    }
+
+    await prisma.treatmentItem.updateMany({
+      where: {
+        id: { in: itemIds },
+        treatmentPlanId: id,
+      },
+      data: {
+        sectionId: sectionId || null,
+      },
+    });
+
+    return NextResponse.json({ success: true, message: "Fase actualizada correctamente" });
+  } catch (error: any) {
+    console.error("Error al actualizar sección de ítems:", error);
+    return NextResponse.json({ error: "Error al mover prestaciones" }, { status: 500 });
   }
 }
 
@@ -184,6 +238,7 @@ export async function DELETE(
               discount: item.discount,
               tooth: item.tooth,
               paidAmount: item.paidAmount,
+              sectionId: item.sectionId,
             })),
             previousTotalCost: plan.totalCost,
           },

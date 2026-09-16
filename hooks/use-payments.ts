@@ -39,7 +39,10 @@ export function usePayments() {
     }
   }, [toast]);
 
-  const createPayment = async (data: PaymentFormData, processedById?: string) => {
+  const createPayment = async (
+    data: PaymentFormData & { treatmentPlanId?: string; reference?: string; receiptImage?: string | null }, 
+    processedById?: string
+  ) => {
     setIsSaving(true);
     try {
       const res = await fetch('/api/payments', {
@@ -48,7 +51,6 @@ export function usePayments() {
         body: JSON.stringify({ ...data, processedById })
       });
       if (!res.ok) throw new Error();
-      toast({ title: "Pago Registrado", variant: "success" });
       await fetchPayments();
       return true;
     } catch (error) {
@@ -59,7 +61,7 @@ export function usePayments() {
     }
   };
 
-  const updatePayment = async (id: string, data: Partial<PaymentFormData>) => {
+  const updatePayment = async (id: string, data: Partial<PaymentFormData & { reference?: string }>) => {
     setIsSaving(true);
     try {
       const res = await fetch('/api/payments', {
@@ -68,7 +70,6 @@ export function usePayments() {
         body: JSON.stringify({ id, ...data })
       });
       if (!res.ok) throw new Error();
-      toast({ title: "Pago Actualizado", variant: "success" });
       await fetchPayments();
       return true;
     } catch (error) {
@@ -79,16 +80,26 @@ export function usePayments() {
     }
   };
 
-  const deletePayment = async (id: string) => {
+  const deletePayment = async (id: string, reason?: string, permanent: boolean = false) => {
+    setIsSaving(true);
     try {
-      const res = await fetch(`/api/payments?id=${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/payments/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          reason: reason || "Anulación registrada desde módulo de caja",
+          permanent 
+        })
+      });
+
       if (!res.ok) throw new Error();
-      toast({ title: "Registro eliminado", variant: "success" });
       await fetchPayments();
       return true;
     } catch (error) {
-      toast({ title: "Error al eliminar", variant: "destructive" });
+      toast({ title: "Error al anular cobro", variant: "destructive" });
       return false;
+    } finally {
+      setIsSaving(false);
     }
   };
 

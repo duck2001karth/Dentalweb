@@ -13,6 +13,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         doctor: true,
         patient: true,
         items: true,
+        sections: { 
+          orderBy: { createdAt: "asc" } 
+        },
         payments: true,
         agreement: true 
       }
@@ -65,7 +68,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (action === "RESTORE") {
         const restoredPlan = await tx.treatmentPlan.update({
           where: { id },
-          data: { status: "DRAFT" }
+          data: { status: "DRAFT" },
+          include: {
+            doctor: true,
+            patient: true,
+            items: true,
+            sections: true,
+            agreement: true
+          }
         })
 
         await tx.auditLog.create({
@@ -108,6 +118,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           include: {
             doctor: true,
             items: true,
+            sections: true,
             patient: true,
             agreement: true
           }
@@ -176,6 +187,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           doctor: true,
           patient: true,
           items: true,
+          sections: true,
           agreement: true
         }
       })
@@ -247,7 +259,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const responseData = await prisma.$transaction(async (tx) => {
       const planToDelete = await tx.treatmentPlan.findUnique({
         where: { id },
-        include: { items: true }
+        include: { items: true, sections: true }
       })
 
       if (!planToDelete) {
@@ -256,6 +268,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
       if (forceDelete) {
         await tx.treatmentItem.deleteMany({ where: { treatmentPlanId: id } })
+        await tx.treatmentSection.deleteMany({ where: { treatmentPlanId: id } })
         await tx.odontogramRecord.deleteMany({ where: { planId: id } })
         await tx.treatmentPlan.delete({ where: { id } })
 
@@ -266,13 +279,14 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
             entity: "TreatmentPlan",
             entityId: id,
             patientId: planToDelete.patientId,
-            details: `Eliminación permanente del plan "${planToDelete.name}" y sus prestaciones asociadas`,
+            details: `Eliminación permanente del plan "${planToDelete.name}", sus fases y prestaciones asociadas`,
             oldData: {
               name: planToDelete.name,
               totalCost: planToDelete.totalCost,
               totalPaid: planToDelete.totalPaid,
               status: planToDelete.status,
-              itemsCount: planToDelete.items.length
+              itemsCount: planToDelete.items.length,
+              sectionsCount: planToDelete.sections.length
             },
             newData: undefined,
             ipAddress,
@@ -282,7 +296,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
 
         return { success: true, message: "Plan destruido permanentemente de la base de datos" }
       }
-
 
       await tx.treatmentPlan.update({
         where: { id },

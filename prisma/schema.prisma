@@ -397,8 +397,8 @@ model TreatmentPlan {
   
   collaborators String[] @default([])
 
-  name        String   // Ej: "Ortodoncia Invisible", "Rehabilitación Superior"
-  status      String   @default("DRAFT") // DRAFT (Diagnóstico), ACTIVE (En Curso), COMPLETED (Finalizado)
+  name        String   
+  status      String   @default("DRAFT")
   
   totalCost   Float    @default(0) // Presupuesto Total
   totalPaid   Float    @default(0) // Lo que el paciente ya pagó (Abonado)
@@ -407,6 +407,7 @@ model TreatmentPlan {
   commentsToPatient String? @db.Text
 
   payments          Payment[]
+  sections          TreatmentSection[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -415,27 +416,52 @@ model TreatmentPlan {
   
 }
 
-model TreatmentItem {
+model TreatmentSection {
   id              String        @id @default(cuid())
+  name            String        // Ej: "Fase 1: Higiene y Operatoria"
+  order           Int           @default(0)
+  
   treatmentPlanId String
   plan            TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
-
-  discount        Float         @default(0)
-  paidAmount      Float         @default(0)
-  isPaid          Boolean       @default(false)
   
-  tooth           String?       
-  procedureName   String       
-  cost            Float         @default(0)
-  isCompleted     Boolean       @default(false) 
+  items           TreatmentItem[]
 
-  progress        Int?          @default(0) 
-  evolutionNote   String?       @db.Text    
-  isPrivate       Boolean       @default(false) 
-  fileUrl         String?       @db.Text    
-  hasIncident     Boolean       @default(false) 
-  hasAdverseEvent Boolean       @default(false) 
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([treatmentPlanId])
+}
+
+model TreatmentItem {
+  id              String            @id @default(cuid())
+  treatmentPlanId String
+  plan            TreatmentPlan     @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+
+  // --- RELACIÓN CON LA SECCIÓN ---
+  sectionId       String?
+  section         TreatmentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  discount        Float             @default(0)
+  paidAmount      Float             @default(0)
+  isPaid          Boolean           @default(false)
+
+  tooth           String?       
+  procedureName   String        
+  cost            Float             @default(0)
+  isCompleted     Boolean           @default(false) 
+
+  progress        Int?              @default(0) 
+  evolutionNote   String?           @db.Text    
+  isPrivate       Boolean           @default(false) 
+  fileUrl         String?           @db.Text    
+  hasIncident     Boolean           @default(false) 
+  hasAdverseEvent Boolean           @default(false) 
   performedById   String?       
+
+  createdAt       DateTime?          @default(now())
+  updatedAt       DateTime?          @updatedAt
+
+  @@index([sectionId])
 }
 
 model EvolutionTemplate {
@@ -572,7 +598,7 @@ model Payment {
   receiptImage    String?
   notes           String?       @db.Text
 
-  taxDocuments TaxDocument[]
+  taxDocuments    TaxDocument[]
   
   patientId       String
   patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
@@ -581,10 +607,14 @@ model Payment {
   treatmentPlan   TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
 
   processedById   String?
-  processedBy     User?         @relation("UserPayments", fields: [processedById], references: [id])
+  processedBy     User?          @relation("UserPayments", fields: [processedById], references: [id], onDelete: SetNull)
 
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+
+  @@index([patientId])
+  @@index([treatmentPlanId])
+  @@index([processedById])
 }
 
 

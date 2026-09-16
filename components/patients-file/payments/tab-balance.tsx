@@ -34,7 +34,6 @@ const formatPaymentMethod = (method?: string) => {
       return "Tarjeta de Débito"
     case "TRANSFER":
     case "TRANSFERENCIA":
-    case "NEQUI":
       return "Transferencia Bancaria"
     case "CHECK":
     case "CHEQUE":
@@ -52,6 +51,41 @@ const calculateAge = (birthDateString?: string | Date | null) => {
   const m = today.getMonth() - birthDate.getMonth()
   if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--
   return age
+}
+
+const parseTransactionDescription = (p: any): string => {
+  if (p.treatmentPlan?.name) {
+    return p.treatmentPlan.name
+  }
+
+  if (p.notes && typeof p.notes === "string") {
+    const trimmed = p.notes.trim()
+    if (trimmed.startsWith("[{")) {
+      try {
+        const parsed = JSON.parse(trimmed)
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const procs = parsed.map((item: any) => item.procedureName || "Prestación")
+          return procs.slice(0, 2).join(", ") + (procs.length > 2 ? ` (+${procs.length - 2})` : "")
+        }
+      } catch {
+      }
+    }
+
+    const cleanNotes = trimmed
+      .replace(/\[TARJETA[^\]]*\]/gi, "")
+      .replace(/\[PAGO[^\]]*\]/gi, "")
+      .trim()
+
+    if (cleanNotes && cleanNotes !== "N/A" && !cleanNotes.startsWith("[")) {
+      return cleanNotes
+    }
+  }
+
+  if (p.reference && !p.reference.startsWith("#") && !p.reference.startsWith("00")) {
+    return p.reference
+  }
+
+  return p.concept || p.treatmentName || "Consulta / Mostrador"
 }
 
 interface PaymentBreakdown {
@@ -88,7 +122,6 @@ export function FinancialBalanceView({
   patientAge,
 }: FinancialBalanceViewProps) {
   const { settings } = useClinicSettings()
-
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role?.toUpperCase() || ""
   const canPrint = ["ADMIN", "ADMINISTRADOR", "RECEPTIONIST", "RECEPTION", "RECEPCION", "DOCTOR"].includes(userRole)
@@ -154,7 +187,7 @@ export function FinancialBalanceView({
         type: "INCOME",
         date: p.createdAt ? new Date(p.createdAt) : new Date(),
         number: p.paymentNumber || p.receiptNumber || p.number || `#REC-${p.id?.slice(-6) || "PAGO"}`,
-        description: p.treatmentPlan?.name || p.concept || p.treatmentName || "Abono / Pago de Tratamiento",
+        description: parseTransactionDescription(p),
         method: formatPaymentMethod(p.method || p.paymentMethod),
         amount: Number(p.amount || p.paidAmount || 0)
       })),
@@ -235,7 +268,7 @@ export function FinancialBalanceView({
       </div>
 
       {/* TARJETAS DE TOTALES */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 no-print">       
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 no-print">      
         <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-2">
           <div className="flex items-center justify-between text-muted-foreground">
             <span className="text-xs font-bold uppercase tracking-wider">Total Cobrado</span>
@@ -507,3 +540,5 @@ export function FinancialBalanceView({
     </div>
   )
 }
+
+export default FinancialBalanceView

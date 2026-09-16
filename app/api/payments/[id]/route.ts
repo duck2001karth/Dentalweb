@@ -44,6 +44,73 @@ async function createPaymentAudit(
   }
 }
 
+async function syncPlanFinancialsTx(tx: any, planId: string) {
+  const activePayments = await tx.payment.findMany({
+    where: {
+      treatmentPlanId: planId,
+      status: "COMPLETED",
+      NOT: {
+        notes: { contains: "[PAGO ELIMINADO" },
+      },
+    },
+  })
+
+  const realTotalPaid = activePayments.reduce(
+    (acc: number, p: any) => acc + Number(p.amount || 0),
+    0
+  )
+
+  const items = await tx.treatmentItem.findMany({
+    where: { treatmentPlanId: planId },
+    orderBy: { id: "asc" },
+  })
+
+  let remainingPaidToDistribute = realTotalPaid
+  let allItemsCovered = items.length > 0
+
+  for (const item of items) {
+    const itemCost = Number(item.cost || item.price || 0)
+    const discount = Number(item.discount || 0)
+    const itemFinalPrice = itemCost - itemCost * (discount / 100)
+
+    let itemPaid = 0
+    if (remainingPaidToDistribute > 0 && itemFinalPrice > 0) {
+      itemPaid = Math.min(itemFinalPrice, remainingPaidToDistribute)
+      remainingPaidToDistribute -= itemPaid
+    }
+
+    const isFullyPaid = itemPaid >= itemFinalPrice - 0.01 && itemFinalPrice > 0
+    if (!isFullyPaid && itemFinalPrice > 0) {
+      allItemsCovered = false
+    }
+
+    await tx.treatmentItem.update({
+      where: { id: item.id },
+      data: {
+        paidAmount: itemPaid,
+        isPaid: isFullyPaid,
+      },
+    })
+  }
+
+  const finalStatus =
+    items.length > 0
+      ? allItemsCovered
+        ? "COMPLETED"
+        : "ACTIVE"
+      : realTotalPaid > 0
+      ? "ACTIVE"
+      : "DRAFT"
+
+  await tx.treatmentPlan.update({
+    where: { id: planId },
+    data: {
+      totalPaid: realTotalPaid,
+      status: finalStatus,
+    },
+  })
+}
+
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -201,23 +268,19 @@ export async function DELETE(
       if (body?.reason) deletionReason = body.reason
       if (body?.permanent) isPermanent = true
     } catch {
-
     }
 
     await prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
         where: { id: paymentId },
         include: {
-          treatmentPlan: {
-            include: { items: true },
-          },
+          treatmentPlan: true,
         },
       })
 
       if (!payment) throw new Error("NOT_FOUND")
 
       const planId = payment.treatmentPlanId
-      const plan = payment.treatmentPlan
       const userName = currentUser.name || "Administrador"
 
       if (isPermanent) {
@@ -259,8 +322,9 @@ export async function DELETE(
           },
         })
       }
-      if (planId && plan) {
-        await syncPlanFinancialsTx(tx, planId, plan.items)
+
+      if (planId) {
+        await syncPlanFinancialsTx(tx, planId)
       }
     })
 
@@ -283,64 +347,4 @@ export async function DELETE(
       { status: 500 }
     )
   }
-}
-async function syncPlanFinancialsTx(tx: any, planId: string, items: any[] = []) {
-  const activePayments = await tx.payment.findMany({
-    where: {
-      treatmentPlanId: planId,
-      NOT: {
-        notes: { contains: "[PAGO ELIMINADO" },
-      },
-    },
-  })
-
-  const realTotalPaid = activePayments.reduce(
-    (acc: number, p: any) => acc + Number(p.amount || 0),
-    0
-  )
-
-  let remainingPaidToDistribute = realTotalPaid
-  let allItemsCovered = true
-
-  for (const item of items) {
-    const itemCost = Number(item.cost || item.price || 0)
-    const discount = Number(item.discount || 0)
-    const itemFinalPrice = itemCost - itemCost * (discount / 100)
-
-    let itemPaid = 0
-    if (remainingPaidToDistribute > 0) {
-      itemPaid = Math.min(itemFinalPrice, remainingPaidToDistribute)
-      remainingPaidToDistribute -= itemPaid
-    }
-
-    const isFullyPaid = itemPaid >= itemFinalPrice - 0.01 && itemFinalPrice > 0
-    if (!isFullyPaid && itemFinalPrice > 0) {
-      allItemsCovered = false
-    }
-
-    await tx.treatmentItem.update({
-      where: { id: item.id },
-      data: {
-        paidAmount: itemPaid,
-        isPaid: isFullyPaid,
-      },
-    })
-  }
-
-  const finalStatus =
-    items.length > 0
-      ? allItemsCovered
-        ? "COMPLETED"
-        : "ACTIVE"
-      : realTotalPaid > 0
-      ? "ACTIVE"
-      : "DRAFT"
-
-  await tx.treatmentPlan.update({
-    where: { id: planId },
-    data: {
-      totalPaid: realTotalPaid,
-      status: finalStatus,
-    },
-  })
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useMemo, useRef } from "react"
-import { Search, Loader2, Info } from "lucide-react"
+import { Search, Loader2, Info, Layers } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -20,9 +20,11 @@ interface TreatmentCatalogModalProps {
   catalogSearch?: string
   setCatalogSearch?: (query: string) => void
   filteredCatalog?: any[]
-  handleAddManualProcedure: (proc: any, toothOrRegionValue?: string) => void
+  handleAddManualProcedure: (proc: any, toothOrRegionValue?: string, sectionId?: string | null) => void
   isAddingProcedure?: boolean
   initialLocation?: { type: "GENERAL" | "TOOTH" | "ARCADA" | "SEXTANTE"; value: string }
+  targetSectionId?: string | null
+  targetSectionName?: string | null
 }
 
 export function TreatmentCatalogModal({
@@ -34,6 +36,8 @@ export function TreatmentCatalogModal({
   handleAddManualProcedure,
   isAddingProcedure = false,
   initialLocation,
+  targetSectionId = null,
+  targetSectionName = null,
 }: TreatmentCatalogModalProps) {
   const { toast } = useToast()
   const clinicCtx = useClinicSettings() as any
@@ -74,7 +78,6 @@ export function TreatmentCatalogModal({
     fetch("/api/admin/catalog")
       .then(async (res) => {
         if (!res.ok) {
-          // Fallback en caso de que la ruta sea estándar
           return fetch("/api/catalog").then((r) => (r.ok ? r.json() : []))
         }
         return res.json()
@@ -109,7 +112,6 @@ export function TreatmentCatalogModal({
     })
   }, [baseList, searchQuery])
 
-  // Selección inteligente y validación médica
   const handleSelectProcedure = (proc: any) => {
     const nameUpper = (proc.name || "").toUpperCase()
     const catUpper = (proc.category || "").toUpperCase()
@@ -135,7 +137,6 @@ export function TreatmentCatalogModal({
       return
     }
 
-    // 3. Si está en Diente, Arcada o Sextante pero no ha seleccionado un valor específico
     if (selectedLocation.type !== "GENERAL" && !selectedLocation.value) {
       toast({
         title: "Selección incompleta",
@@ -145,11 +146,8 @@ export function TreatmentCatalogModal({
       return
     }
 
-    // 4. Ejecutar la inserción
     const toothOrRegionValue = selectedLocation.value || undefined
-    handleAddManualProcedure(proc, toothOrRegionValue)
-
-    // Resetear a estado limpio
+    handleAddManualProcedure(proc, toothOrRegionValue, targetSectionId)
     setSelectedLocation({ type: "GENERAL", value: "" })
     setIsOpen(false)
   }
@@ -158,13 +156,23 @@ export function TreatmentCatalogModal({
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[650px] h-[85vh] flex flex-col p-0 bg-card text-card-foreground border border-border/80 rounded-2xl overflow-hidden shadow-2xl font-sans">
         <DialogHeader className="p-5 border-b border-border bg-slate-900 text-white dark:bg-slate-950">
-          <DialogTitle className="text-xl font-bold tracking-tight">Catálogo de Prestaciones</DialogTitle>
-          <DialogDescription className="text-xs text-slate-300">
-            Define la ubicación anatómica y selecciona el procedimiento clínico a cotizar.
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-xl font-bold tracking-tight">Catálogo de Prestaciones</DialogTitle>
+              <DialogDescription className="text-xs text-slate-300 mt-0.5">
+                Define la ubicación anatómica y selecciona el procedimiento clínico a cotizar.
+              </DialogDescription>
+            </div>
+            {targetSectionName && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#008bcd]/20 border border-[#008bcd]/40 text-[#008bcd] text-xs font-bold">
+                <Layers className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span className="uppercase tracking-wide">{targetSectionName}</span>
+              </div>
+            )}
+          </div>
         </DialogHeader>
 
-        {/* SELECTOR DE ALCANCE Y BARRA DE BÚSQUEDA */}
+        {/* SELECTOR Y BÚSQUEDA */}
         <div className="p-4 border-b border-border bg-muted/20 space-y-3">
           <RegionSelector
             selectedLocation={selectedLocation}
@@ -183,17 +191,29 @@ export function TreatmentCatalogModal({
             />
           </div>
 
-          {selectedLocation.value && (
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#008bcd] bg-[#008bcd]/10 px-3 py-1.5 rounded-lg border border-[#008bcd]/20">
-              <Info className="w-3.5 h-3.5 shrink-0" />
-              <span>
-                Prestaciones asignadas a: <strong>{selectedLocation.value}</strong>
-              </span>
-            </div>
-          )}
+          {/* BADGES LIMPIOS SIN COLOR PESADO */}
+          <div className="flex flex-wrap items-center gap-2">
+            {targetSectionName && (
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#008bcd] bg-white dark:bg-card px-2.5 py-1 rounded-lg border border-[#008bcd]/30 shadow-2xs">
+                <Layers className="w-3.5 h-3.5 stroke-[2.5] text-[#008bcd]" />
+                <span>
+                  Fase destino: <strong className="uppercase">{targetSectionName}</strong>
+                </span>
+              </div>
+            )}
+
+            {selectedLocation.value && (
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#008bcd] bg-[#008bcd]/10 px-2.5 py-1 rounded-lg border border-[#008bcd]/20">
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Asignado a: <strong>{selectedLocation.value}</strong>
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* LISTADO DE PRESTACIONES */}
+        {/* LISTA DE PRESTACIONES */}
         <div className="flex-1 overflow-y-auto p-2 divide-y divide-border/60">
           {isLoading ? (
             <div className="py-20 flex flex-col items-center justify-center gap-2 text-muted-foreground text-xs font-semibold">

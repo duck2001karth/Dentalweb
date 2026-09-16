@@ -51,8 +51,7 @@ export async function GET(request: Request) {
       select: { id: true, createdAt: true, countedCash: true, status: true },
     })
 
-    const whereClause: any = {
-    }
+    const whereClause: any = {}
 
     if (patientId) {
       whereClause.patientId = patientId
@@ -76,13 +75,15 @@ export async function GET(request: Request) {
       where: whereClause,
       include: {
         patient: {
-          select: { id: true, firstName: true, lastName: true, ci: true },
+          select: { id: true, firstName: true, lastName: true, ci: true, convenio: true },
         },
         treatmentPlan: {
           select: {
             id: true,
             name: true,
             totalPaid: true,
+            totalCost: true,
+            agreement: true,
             items: true,
           },
         },
@@ -99,6 +100,7 @@ export async function GET(request: Request) {
       const notes = typeof p.notes === "string" ? p.notes.toUpperCase() : ""
       return amt < 0 || notes.includes("DEVOLUCION") || notes.includes("DEVOLUCIÓN") || notes.includes("NOTA")
     })
+
     const payments = rawPayments.map((payment: any) => {
       const pId = String(payment.id).toLowerCase()
       const pReceipt = String(payment.receiptNumber || "").trim().toUpperCase()
@@ -157,11 +159,13 @@ export async function POST(request: Request) {
       patientId,
       amount,
       paymentMethod,
+      method,
       reference,
       itemIds,
       receiptImage,
       treatmentPlanId,
       receiptNumber,
+      notes,
     } = body
 
     const parsedAmount = parseFloat(amount || 0)
@@ -169,13 +173,16 @@ export async function POST(request: Request) {
     if (!patientId || parsedAmount <= 0) {
       return NextResponse.json({ error: "Monto o paciente no válido" }, { status: 400 })
     }
+
     const patientExists = await prisma.patient.findUnique({
       where: { id: patientId },
       select: { id: true },
     })
+
     if (!patientExists) {
       return NextResponse.json({ error: "El paciente indicado no existe" }, { status: 404 })
     }
+
     const sessionUserId = (session?.user as any)?.id
     let validProcessorId: string | null = null
 
@@ -195,52 +202,28 @@ export async function POST(request: Request) {
       if (userByEmail) validProcessorId = userByEmail.id
     }
 
-    // 3. Resolver prestaciones objetivo
     let targetItemIds: string[] = Array.isArray(itemIds) ? [...itemIds] : []
 
-    if (targetItemIds.length === 0) {
-      if (treatmentPlanId) {
-        const planItems = await prisma.treatmentItem.findMany({
-          where: { treatmentPlanId },
-        })
+    // Buscar prestaciones a abonar si viene treatmentPlanId (ordenado por id)
+    if (targetItemIds.length === 0 && treatmentPlanId) {
+      const planItems = await prisma.treatmentItem.findMany({
+        where: { treatmentPlanId },
+        orderBy: { id: "asc" }
+      })
 
-        for (const item of planItems) {
-          const cost = Number(item.cost || 0)
-          const dscto = Number(item.discount || 0)
-          const finalCost = cost - cost * (dscto / 100)
-          const paid = Number(item.paidAmount || 0)
+      for (const item of planItems) {
+        const cost = Number(item.cost || 0)
+        const dscto = Number(item.discount || 0)
+        const finalCost = cost - cost * (dscto / 100)
+        const paid = Number(item.paidAmount || 0)
 
-          if (finalCost - paid > 0 && !item.isPaid) {
-            targetItemIds.push(item.id)
-          }
-        }
-      } else {
-        const activePlans = await prisma.treatmentPlan.findMany({
-          where: { patientId, status: { not: "CANCELLED" } },
-          include: { items: true },
-        })
-
-        for (const p of activePlans) {
-          if (p.items && Array.isArray(p.items)) {
-            for (const item of p.items) {
-              const cost = Number(item.cost || 0)
-              const dscto = Number(item.discount || 0)
-              const finalCost = cost - cost * (dscto / 100)
-              const paid = Number(item.paidAmount || 0)
-
-              if (finalCost - paid > 0 && !item.isPaid) {
-                targetItemIds.push(item.id)
-              }
-            }
-          }
+        if (finalCost - paid > 0 && !item.isPaid) {
+          targetItemIds.push(item.id)
         }
       }
     }
-    const result = await prisma.$transaction(async (tx) => {
-      const itemsToPay = await tx.treatmentItem.findMany({
-        where: { id: { in: targetItemIds } },
-      })
 
+    const result = await prisma.$transaction(async (tx) => {
       let remainingMoneyToDistribute = parsedAmount
       const planIdsToUpdate = new Set<string>()
       const paidSnapshotItems: any[] = []
@@ -249,38 +232,46 @@ export async function POST(request: Request) {
         planIdsToUpdate.add(treatmentPlanId)
       }
 
-      for (const item of itemsToPay) {
-        if (remainingMoneyToDistribute <= 0) break
-
-        planIdsToUpdate.add(item.treatmentPlanId)
-
-        const cost = Number(item.cost || 0)
-        const dscto = Number(item.discount || 0)
-        const itemFinalPrice = cost - cost * (dscto / 100)
-        const currentPaid = Number(item.paidAmount || 0)
-        const pendingDebt = Math.max(0, itemFinalPrice - currentPaid)
-
-        const moneyForThisItem = Math.min(remainingMoneyToDistribute, pendingDebt)
-        const newPaidAmount = currentPaid + moneyForThisItem
-        const isFullyPaid = newPaidAmount >= itemFinalPrice - 0.01
-
-        await tx.treatmentItem.update({
-          where: { id: item.id },
-          data: {
-            paidAmount: newPaidAmount,
-            isPaid: isFullyPaid,
-          },
+      if (targetItemIds.length > 0) {
+        const itemsToPay = await tx.treatmentItem.findMany({
+          where: { id: { in: targetItemIds } },
+          orderBy: { id: "asc" }
         })
 
-        paidSnapshotItems.push({
-          procedureName: item.procedureName || "Procedimiento Odontológico",
-          tooth: item.tooth || "General",
-          appliedAmount: moneyForThisItem,
-        })
+        for (const item of itemsToPay) {
+          if (remainingMoneyToDistribute <= 0) break
 
-        remainingMoneyToDistribute -= moneyForThisItem
+          planIdsToUpdate.add(item.treatmentPlanId)
+
+          const cost = Number(item.cost || 0)
+          const dscto = Number(item.discount || 0)
+          const itemFinalPrice = cost - cost * (dscto / 100)
+          const currentPaid = Number(item.paidAmount || 0)
+          const pendingDebt = Math.max(0, itemFinalPrice - currentPaid)
+
+          const moneyForThisItem = Math.min(remainingMoneyToDistribute, pendingDebt)
+          const newPaidAmount = currentPaid + moneyForThisItem
+          const isFullyPaid = newPaidAmount >= itemFinalPrice - 0.01
+
+          await tx.treatmentItem.update({
+            where: { id: item.id },
+            data: {
+              paidAmount: newPaidAmount,
+              isPaid: isFullyPaid,
+            },
+          })
+
+          paidSnapshotItems.push({
+            procedureName: item.procedureName || "Procedimiento Odontológico",
+            tooth: item.tooth || "General",
+            appliedAmount: moneyForThisItem,
+          })
+
+          remainingMoneyToDistribute -= moneyForThisItem
+        }
       }
 
+      // Actualizar los totales del plan de tratamiento
       for (const planId of Array.from(planIdsToUpdate)) {
         const allPlanItems = await tx.treatmentItem.findMany({
           where: { treatmentPlanId: planId },
@@ -310,6 +301,8 @@ export async function POST(request: Request) {
           },
         })
       }
+
+      // Generar número correlativo de recibo si no vino manual
       let finalReceiptNumber = receiptNumber?.trim()
       if (!finalReceiptNumber) {
         const totalPaymentsCount = await tx.payment.count()
@@ -317,9 +310,15 @@ export async function POST(request: Request) {
         finalReceiptNumber = `REC-${nextSequence.toString().padStart(5, "0")}`
       }
 
-      const validMethod = normalizePrismaPaymentMethod(paymentMethod)
-      const primaryPlanId =
-        treatmentPlanId || (planIdsToUpdate.size > 0 ? Array.from(planIdsToUpdate)[0] : null)
+      const rawMethod = paymentMethod || method
+      const validMethod = normalizePrismaPaymentMethod(rawMethod)
+      const primaryPlanId = treatmentPlanId || null
+
+      const noteContent = notes?.trim() 
+        ? notes 
+        : paidSnapshotItems.length > 0 
+        ? JSON.stringify(paidSnapshotItems) 
+        : `Cobro en caja: $${parsedAmount.toFixed(2)}`
 
       const newPayment = await tx.payment.create({
         data: {
@@ -328,12 +327,9 @@ export async function POST(request: Request) {
           method: validMethod as any,
           reference: reference?.trim() || null,
           receiptImage: receiptImage || null,
-          treatmentPlanId: primaryPlanId || null,
+          treatmentPlanId: primaryPlanId,
           processedById: validProcessorId || null,
-          notes:
-            paidSnapshotItems.length > 0
-              ? JSON.stringify(paidSnapshotItems)
-              : `Abono directo al tratamiento: $${parsedAmount.toFixed(2)}`,
+          notes: noteContent,
           receiptNumber: finalReceiptNumber,
         },
         include: {
@@ -343,7 +339,7 @@ export async function POST(request: Request) {
         },
       })
 
-      // Registro en auditoría
+      // Auditoría
       if (validProcessorId) {
         try {
           const headersList = await headers()
@@ -366,6 +362,7 @@ export async function POST(request: Request) {
                 method: validMethod,
                 reference: reference || null,
                 receiptNumber: finalReceiptNumber,
+                treatmentPlanId: primaryPlanId,
               },
               ipAddress,
               userAgent,
@@ -381,7 +378,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "Pago registrado y aplicado correctamente",
+      message: "Pago registrado y procesado correctamente",
       payment: result,
     })
   } catch (error: any) {
@@ -392,6 +389,7 @@ export async function POST(request: Request) {
     )
   }
 }
+
 export async function PATCH(request: Request) {
   try {
     const session = await getServerSession(authOptions)
@@ -425,7 +423,7 @@ export async function PATCH(request: Request) {
       )
     }
 
-    const { method, reference, notes, receiptNumber, amount } = body
+    const { method, paymentMethod, reference, notes, receiptNumber, amount } = body
 
     const updatedPayment = await prisma.$transaction(async (tx) => {
       const previous = await tx.payment.findUnique({
@@ -437,7 +435,8 @@ export async function PATCH(request: Request) {
       }
 
       const parsedAmount = amount !== undefined ? parseFloat(amount) : undefined
-      const validMethod = method ? normalizePrismaPaymentMethod(method) : undefined
+      const rawMethod = method || paymentMethod
+      const validMethod = rawMethod ? normalizePrismaPaymentMethod(rawMethod) : undefined
 
       const updated = await tx.payment.update({
         where: { id: paymentId },
@@ -455,6 +454,56 @@ export async function PATCH(request: Request) {
         },
       })
 
+      // Sincronizar finanzas del plan si se modificó el monto y el cobro pertenece a un tratamiento
+      if (updated.treatmentPlanId && parsedAmount !== undefined && parsedAmount !== previous.amount) {
+        const activePayments = await tx.payment.findMany({
+          where: {
+            treatmentPlanId: updated.treatmentPlanId,
+            status: "COMPLETED",
+            NOT: { notes: { contains: "[PAGO ELIMINADO" } },
+          },
+        })
+
+        const realTotalPaid = activePayments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0)
+
+        const items = await tx.treatmentItem.findMany({
+          where: { treatmentPlanId: updated.treatmentPlanId },
+          orderBy: { id: "asc" },
+        })
+
+        let remaining = realTotalPaid
+        let allCovered = items.length > 0
+
+        for (const item of items) {
+          const cost = Number(item.cost || 0)
+          const dscto = Number(item.discount || 0)
+          const finalPrice = cost - cost * (dscto / 100)
+
+          let itemPaid = 0
+          if (remaining > 0 && finalPrice > 0) {
+            itemPaid = Math.min(finalPrice, remaining)
+            remaining -= itemPaid
+          }
+
+          const isFullyPaid = itemPaid >= finalPrice - 0.01 && finalPrice > 0
+          if (!isFullyPaid && finalPrice > 0) allCovered = false
+
+          await tx.treatmentItem.update({
+            where: { id: item.id },
+            data: { paidAmount: itemPaid, isPaid: isFullyPaid },
+          })
+        }
+
+        await tx.treatmentPlan.update({
+          where: { id: updated.treatmentPlanId },
+          data: {
+            totalPaid: realTotalPaid,
+            status: allCovered ? "COMPLETED" : "ACTIVE",
+          },
+        })
+      }
+
+      // Registrar auditoría de la actualización
       try {
         const headersList = await headers()
         const forwardedFor = headersList.get("x-forwarded-for")
@@ -470,7 +519,7 @@ export async function PATCH(request: Request) {
             entity: "PAYMENT",
             entityId: paymentId,
             patientId: previous.patientId,
-            details: `Edición de pago #${updated.receiptNumber || paymentId}: método actualizado a ${updated.method}`,
+            details: `Edición de pago #${updated.receiptNumber || paymentId}: monto ${previous.amount} -> ${updated.amount}`,
             oldData: {
               method: previous.method,
               reference: previous.reference,

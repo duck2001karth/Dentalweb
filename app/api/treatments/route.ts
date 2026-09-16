@@ -47,6 +47,9 @@ export async function GET(request: Request) {
           select: { id: true, name: true, email: true } 
         },
         items: true,
+        sections: { 
+          orderBy: { createdAt: "asc" } 
+        },
         agreement: true 
       },
       orderBy: { createdAt: "desc" }
@@ -131,7 +134,10 @@ export async function POST(req: Request) {
           agreement: true,
           patient: true,
           doctor: true,
-          items: true
+          items: true,
+          sections: {
+            orderBy: { createdAt: "asc" } 
+          }
         }
       });
 

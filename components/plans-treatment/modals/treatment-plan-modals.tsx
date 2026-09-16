@@ -1,7 +1,7 @@
 "use client"
 
-import React from "react"
-import { Stethoscope } from "lucide-react"
+import React, { useState } from "react"
+import { Stethoscope, Loader2 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ export function TreatmentPlanModals({
   sectionName,
   setSectionName,
   handleAddSection,
+  handleCreateSection,
   isDiscountModalOpen,
   setIsDiscountModalOpen,
   tempDiscount,
@@ -49,7 +50,9 @@ export function TreatmentPlanModals({
   filteredCatalog,
   handleAddManualProcedure,
   isAddingProcedure,
-  initialLocation, 
+  initialLocation,
+  targetSectionId = null,
+  targetSectionName = null,
   isEvolutionModalOpen,
   setIsEvolutionModalOpen,
   evolutionProgress,
@@ -63,6 +66,23 @@ export function TreatmentPlanModals({
   setSelectedDiagnosis,
   handleSaveDiagnosis,
 }: any) {
+  const [isSubmittingSection, setIsSubmittingSection] = useState(false)
+
+  const onSectionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!sectionName?.trim() || isSubmittingSection) return
+
+    const action = handleCreateSection || handleAddSection
+    if (!action) return
+
+    try {
+      setIsSubmittingSection(true)
+      await action(sectionName.trim())
+    } finally {
+      setIsSubmittingSection(false)
+    }
+  }
+
   return (
     <>
       {/* 1. MODAL AGREGAR FASE / SECCIÓN */}
@@ -74,29 +94,46 @@ export function TreatmentPlanModals({
               Agrupa tus prestaciones clínicas por fases o etapas de tratamiento.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4 space-y-3">
-            <Label className="text-xs font-bold uppercase text-muted-foreground">
-              Nombre de la Fase / Sección
-            </Label>
-            <Input
-              placeholder="Ej: Fase 1: Higiene y Operatoria"
-              value={sectionName}
-              onChange={(e) => setSectionName(e.target.value)}
-              autoFocus
-              className="bg-background border-border text-xs font-semibold"
-            />
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsSectionModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button
-              onClick={handleAddSection}
-              className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold"
-            >
-              Crear Sección
-            </Button>
-          </DialogFooter>
+
+          <form onSubmit={onSectionSubmit} className="space-y-4">
+            <div className="py-2 space-y-2">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">
+                Nombre de la Fase / Sección
+              </Label>
+              <Input
+                placeholder="Ej: Fase 1: Higiene y Operatoria"
+                value={sectionName}
+                onChange={(e) => setSectionName(e.target.value)}
+                autoFocus
+                disabled={isSubmittingSection}
+                className="bg-background border-border text-xs font-semibold"
+              />
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsSectionModalOpen(false)}
+                disabled={isSubmittingSection}
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={!sectionName?.trim() || isSubmittingSection}
+                className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold"
+              >
+                {isSubmittingSection ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...
+                  </>
+                ) : (
+                  "Crear Sección"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
@@ -138,7 +175,7 @@ export function TreatmentPlanModals({
         </DialogContent>
       </Dialog>
 
-      {/* 3. MODAL CATÁLOGO DESACOPLADO */}
+      {/* 3. MODAL CATÁLOGO DESACOPLADO CON FASE ACTIVA */}
       <TreatmentCatalogModal
         isOpen={isCatalogModalOpen}
         setIsOpen={setIsCatalogModalOpen}
@@ -147,10 +184,12 @@ export function TreatmentPlanModals({
         filteredCatalog={filteredCatalog}
         handleAddManualProcedure={handleAddManualProcedure}
         isAddingProcedure={isAddingProcedure}
-        initialLocation={initialLocation} // <--- 2. SE LO ENTREGAMOS AL CATÁLOGO
+        initialLocation={initialLocation}
+        targetSectionId={targetSectionId}
+        targetSectionName={targetSectionName}
       />
 
-      {/* 4. MODAL EVOLUCIÓN CLÍNICA (Nota médica y porcentaje) */}
+      {/* 4. MODAL EVOLUCIÓN CLÍNICA */}
       <EvolutionModal
         isOpen={isEvolutionModalOpen}
         setIsOpen={setIsEvolutionModalOpen}
@@ -163,7 +202,7 @@ export function TreatmentPlanModals({
         handleSaveEvolution={handleSaveEvolution}
       />
 
-      {/* 5. MODAL DE DIAGNÓSTICO CLÍNICO (CIE-10 Odontológico) */}
+      {/* 5. MODAL DE DIAGNÓSTICO CLÍNICO */}
       <Dialog open={isDiagnosisModalOpen} onOpenChange={setIsDiagnosisModalOpen}>
         <DialogContent className="sm:max-w-[500px] bg-card text-card-foreground border-border rounded-2xl p-0 overflow-hidden shadow-2xl">
           <DialogHeader className="p-6 border-b border-border bg-slate-100/80 dark:bg-slate-900/80">
