@@ -42,7 +42,6 @@ export function TreatmentCatalogModal({
   const { toast } = useToast()
   const clinicCtx = useClinicSettings() as any
   const settings = clinicCtx?.settings || clinicCtx
-
   const rawCurrency = settings?.currencySymbol || settings?.currency || "USD "
   const currencySymbol = rawCurrency.endsWith(" ") ? rawCurrency : `${rawCurrency} `
 
@@ -71,10 +70,8 @@ export function TreatmentCatalogModal({
 
   useEffect(() => {
     if (!isOpen) return
-
     let isMounted = true
     setIsLoading(true)
-
     fetch("/api/admin/catalog")
       .then(async (res) => {
         if (!res.ok) {
@@ -102,7 +99,6 @@ export function TreatmentCatalogModal({
 
   const visibleProcedures = useMemo(() => {
     if (!searchQuery.trim()) return baseList
-
     const term = searchQuery.toLowerCase().trim()
     return baseList.filter((proc: any) => {
       const name = (proc.name || "").toLowerCase()
@@ -116,23 +112,51 @@ export function TreatmentCatalogModal({
     const nameUpper = (proc.name || "").toUpperCase()
     const catUpper = (proc.category || "").toUpperCase()
 
-    const isGlobalProcedure =
-      nameUpper.includes("CONSULTA") ||
-      nameUpper.includes("VALORACION") ||
-      nameUpper.includes("VALORACIÓN") ||
-      nameUpper.includes("DIAGNOSTICO") ||
-      nameUpper.includes("DIAGNÓSTICO") ||
-      nameUpper.includes("PROFILAXIS GENERAL") ||
+    const isProductOrGeneral =
+      catUpper.includes("PRODUCTO") ||
+      catUpper.includes("FARMACIA") ||
+      catUpper.includes("INSUMO") ||
+      catUpper.includes("PREVENTIV") ||
+      catUpper.includes("DIAGNOST") ||
+      catUpper.includes("DIAGNÓST") ||
+      catUpper.includes("CONSULT") ||
+      catUpper.includes("ADMINIST") ||
+      catUpper.includes("GENERAL") ||
+      nameUpper.includes("CEPILLO") ||
+      nameUpper.includes("PASTA") ||
+      nameUpper.includes("ENJUAGUE") ||
+      nameUpper.includes("SEDA") ||
+      nameUpper.includes("HILO") ||
+      nameUpper.includes("PROFILAXIS") ||
+      nameUpper.includes("LIMPIEZA") ||
+      nameUpper.includes("BLANQUEAMIENTO") ||
       nameUpper.includes("MODELO") ||
-      catUpper.includes("CONSULTA") ||
-      catUpper.includes("DIAGNOSTICO") ||
-      catUpper.includes("ADMINISTRATIVO")
+      nameUpper.includes("VALORACION") ||
+      nameUpper.includes("VALORACIÓN")
 
-    if (!isGlobalProcedure && selectedLocation.type === "GENERAL") {
+    const isStrictlyToothProcedure =
+      !isProductOrGeneral && (
+        catUpper.includes("OPERATORIA") ||
+        catUpper.includes("ENDODONCIA") ||
+        catUpper.includes("CIRUGIA") ||
+        catUpper.includes("CIRUGÍA") ||
+        catUpper.includes("REHABILITACION") ||
+        catUpper.includes("REHABILITACIÓN") ||
+        catUpper.includes("IMPLANT") ||
+        nameUpper.includes("RESINA") ||
+        nameUpper.includes("EXTRACCION") ||
+        nameUpper.includes("EXTRACCIÓN") ||
+        nameUpper.includes("CORONA") ||
+        nameUpper.includes("PERNO") ||
+        nameUpper.includes("CALZA")
+      )
+
+    if (isStrictlyToothProcedure && selectedLocation.type === "GENERAL") {
       setSelectedLocation({ type: "TOOTH", value: "" })
       toast({
         title: "Pieza Dental Requerida",
-        description: `"${proc.name}" requiere asociarse a un diente. Selecciona el número en el desplegable.`,
+        description: `"${proc.name}" es un procedimiento que se realiza en un diente específico. Seleccione el número (11 al 48).`,
+        variant: "default",
       })
       return
     }
@@ -146,7 +170,10 @@ export function TreatmentCatalogModal({
       return
     }
 
-    const toothOrRegionValue = selectedLocation.value || undefined
+    const toothOrRegionValue = selectedLocation.type === "GENERAL" 
+      ? "General" 
+      : (selectedLocation.value || undefined)
+
     handleAddManualProcedure(proc, toothOrRegionValue, targetSectionId)
     setSelectedLocation({ type: "GENERAL", value: "" })
     setIsOpen(false)
@@ -178,7 +205,6 @@ export function TreatmentCatalogModal({
             selectedLocation={selectedLocation}
             onSelectLocation={setSelectedLocation}
           />
-
           <div className="relative pt-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
@@ -191,7 +217,7 @@ export function TreatmentCatalogModal({
             />
           </div>
 
-          {/* BADGES LIMPIOS SIN COLOR PESADO */}
+          {/* BADGES INFORMATIVOS */}
           <div className="flex flex-wrap items-center gap-2">
             {targetSectionName && (
               <div className="flex items-center gap-1.5 text-[11px] font-bold text-[#008bcd] bg-white dark:bg-card px-2.5 py-1 rounded-lg border border-[#008bcd]/30 shadow-2xs">
@@ -201,7 +227,6 @@ export function TreatmentCatalogModal({
                 </span>
               </div>
             )}
-
             {selectedLocation.value && (
               <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#008bcd] bg-[#008bcd]/10 px-2.5 py-1 rounded-lg border border-[#008bcd]/20">
                 <Info className="w-3.5 h-3.5 shrink-0" />
@@ -249,7 +274,6 @@ export function TreatmentCatalogModal({
                     )}
                   </div>
                 </div>
-
                 <div className="text-right shrink-0">
                   <p className="font-black text-emerald-600 dark:text-emerald-400 text-base font-mono">
                     {currencySymbol}
