@@ -4,6 +4,21 @@ import { headers } from "next/headers"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 
+function parseDiscounts(plan: any) {
+  const agreementDisc = plan.agreement ? Number(plan.agreement.discountValue || 0) : 0
+  let commercialDisc = 0
+
+  if (plan.commentsToPatient && typeof plan.commentsToPatient === "string") {
+    const match = plan.commentsToPatient.match(/\[COMMERCIAL_DISCOUNT:([\d.]+)\]/)
+    if (match) {
+      commercialDisc = parseFloat(match[1]) || 0
+    }
+  }
+
+  const effectiveDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
+  return { agreementDisc, commercialDisc, effectiveDiscount }
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
@@ -22,12 +37,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     })
 
     if (!plan) return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 })
-    const effectiveDiscount = plan.agreement ? Number(plan.agreement.discountValue) : 0
+
+    const { effectiveDiscount } = parseDiscounts(plan)
     const agreementName = plan.agreement?.name || plan.patient?.convenio || null
+    const cleanComment = plan.commentsToPatient
+      ? plan.commentsToPatient.replace(/\[COMMERCIAL_DISCOUNT:[\d.]+\]\s*/, "")
+      : null
 
     return NextResponse.json({
       plan: {
         ...plan,
+        commentsToPatient: cleanComment,
         discount: effectiveDiscount,
         convenio: agreementName
       }
@@ -54,17 +74,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const body = await request.json()
-    const { action, input, collaborators, agreementId, agreementName, ...restBody } = body
+    const { action, input, collaborators, agreementId, agreementName, discount, ...restBody } = body
 
     const result = await prisma.$transaction(async (tx) => {
       const previousPlan = await tx.treatmentPlan.findUnique({
         where: { id },
-        include: { agreement: true, patient: true }
+        include: { agreement: true, patient: true, items: true }
       })
 
       if (!previousPlan) {
         throw new Error("NOT_FOUND")
       }
+
       if (action === "RESTORE") {
         const restoredPlan = await tx.treatmentPlan.update({
           where: { id },
@@ -95,6 +116,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
         return { plan: restoredPlan }
       }
+
       if (collaborators !== undefined) {
         let finalCollaboratorNames: string[] = []
 
@@ -139,10 +161,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           }
         })
 
+        const { effectiveDiscount } = parseDiscounts(updatedPlan)
         return {
           plan: {
             ...updatedPlan,
-            discount: updatedPlan.agreement ? Number(updatedPlan.agreement.discountValue) : 0,
+            discount: effectiveDiscount,
             convenio: updatedPlan.agreement?.name || updatedPlan.patient?.convenio || null
           },
           message: "Colaboradores actualizados con éxito"
@@ -150,8 +173,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
 
       const rawData = input ? { ...input } : { ...restBody }
-
       const targetConvenio = rawData.convenio || agreementName
+
       if (previousPlan.patientId && (rawData.signatureBase64 !== undefined || targetConvenio !== undefined)) {
         const patientData: Record<string, any> = {}
         if (rawData.signatureBase64 !== undefined) patientData.signatureBase64 = rawData.signatureBase64
@@ -162,7 +185,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           data: patientData
         })
       }
+
       const planData: Record<string, any> = {}
+
       if (agreementId !== undefined) {
         planData.agreementId = agreementId || null
       } else if (targetConvenio) {
@@ -173,12 +198,34 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           planData.agreementId = agreementRecord.id
         }
       }
+      const targetDiscount = discount !== undefined ? Number(discount) : undefined
+      if (targetDiscount !== undefined) {
+        let baseText = rawData.commentsToPatient ?? previousPlan.commentsToPatient ?? ""
+        baseText = baseText.replace(/\[COMMERCIAL_DISCOUNT:[\d.]+\]\s*/, "").trim()
+        planData.commentsToPatient = targetDiscount > 0 
+          ? `[COMMERCIAL_DISCOUNT:${targetDiscount}] ${baseText}`.trim()
+          : baseText
+      } else {
+        if (rawData.commentsToPatient !== undefined) planData.commentsToPatient = rawData.commentsToPatient
+        if (rawData.comments !== undefined) planData.commentsToPatient = rawData.comments
+      }
 
       if (rawData.status !== undefined) planData.status = rawData.status
-      if (rawData.commentsToPatient !== undefined) planData.commentsToPatient = rawData.commentsToPatient
-      if (rawData.comments !== undefined) planData.commentsToPatient = rawData.comments
-      if (rawData.totalCost !== undefined) planData.totalCost = Number(rawData.totalCost)
       if (rawData.doctorId !== undefined) planData.doctorId = rawData.doctorId
+
+      const allItems = previousPlan.items || []
+      const effectiveGlobalDisc = targetDiscount !== undefined
+        ? targetDiscount
+        : parseDiscounts(previousPlan).effectiveDiscount
+
+      const recalculatedTotalCost = allItems.reduce((acc, itm) => {
+        const baseCost = Number(itm.cost || 0)
+        const itmDisc = Number(itm.discount || 0)
+        const effectiveDisc = itmDisc > 0 ? itmDisc : effectiveGlobalDisc
+        return acc + Math.max(0, baseCost - baseCost * (effectiveDisc / 100))
+      }, 0)
+
+      planData.totalCost = recalculatedTotalCost
 
       const updatedPlan = await tx.treatmentPlan.update({
         where: { id },
@@ -219,10 +266,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }
       })
 
+      const { effectiveDiscount } = parseDiscounts(updatedPlan)
+      const cleanComment = updatedPlan.commentsToPatient
+        ? updatedPlan.commentsToPatient.replace(/\[COMMERCIAL_DISCOUNT:[\d.]+\]\s*/, "")
+        : null
+
       return {
         plan: {
           ...updatedPlan,
-          discount: updatedPlan.agreement ? Number(updatedPlan.agreement.discountValue) : 0,
+          commentsToPatient: cleanComment,
+          discount: effectiveDiscount,
           convenio: updatedPlan.agreement?.name || updatedPlan.patient?.convenio || null
         }
       }

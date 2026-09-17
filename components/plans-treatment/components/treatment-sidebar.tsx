@@ -47,6 +47,7 @@ export interface TreatmentSidebarProps {
   totalPaid?: number
   appointmentList?: any[]
   onOpenDiscountModal: () => void
+  setTempDiscount?: (val: string) => void
   onOpenCollaboratorsModal: () => void
   onOpenSignatureModal?: () => void
   onPlanUpdate?: () => void
@@ -59,8 +60,9 @@ export function TreatmentSidebar({
   currentUser,
   planItems = [],
   totalPaid,
-  appointmentList = [],
+  appointmentList,
   onOpenDiscountModal,
+  setTempDiscount,
   onOpenCollaboratorsModal,
   onOpenSignatureModal,
   onPlanUpdate,
@@ -73,32 +75,45 @@ export function TreatmentSidebar({
   const [fetchedAppointments, setFetchedAppointments] = useState<any[]>([])
   const [isLoadingAppointments, setIsLoadingAppointments] = useState<boolean>(false)
 
-  const patientId = patient?.id || plan?.patientId
+  const targetPatientId = patient?.id || plan?.patientId
 
-  // Cargar citas del paciente
   useEffect(() => {
-    if (appointmentList && appointmentList.length > 0) return
-    if (!patientId) return
+    const existing = appointmentList || patient?.appointments || patient?.citas
+    if (existing && existing.length > 0) {
+      setFetchedAppointments(existing)
+      setIsLoadingAppointments(false)
+      return
+    }
+
+    if (!targetPatientId) {
+      setIsLoadingAppointments(false)
+      return
+    }
 
     let isMounted = true
     setIsLoadingAppointments(true)
 
-    fetch(`/api/citas?patientId=${patientId}`)
+    fetch(`/api/citas?patientId=${targetPatientId}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((json) => {
         if (!isMounted) return
         const rawList = Array.isArray(json) ? json : json.citas || json.appointments || json.data || []
         setFetchedAppointments(rawList)
       })
-      .catch((e) => console.error("Error al cargar citas:", e))
+      .catch((e) => {
+        console.error("Error al cargar citas:", e)
+        if (isMounted) setFetchedAppointments([])
+      })
       .finally(() => {
-        if (isMounted) setIsLoadingAppointments(false)
+        if (isMounted) {
+          setIsLoadingAppointments(false)
+        }
       })
 
     return () => {
       isMounted = false
     }
-  }, [patientId])
+  }, [targetPatientId, appointmentList, patient?.appointments, patient?.citas])
 
   const realAppointments = useMemo(() => {
     const rawList =
@@ -145,20 +160,17 @@ export function TreatmentSidebar({
 
   return (
     <div className="flex flex-col gap-5 sticky top-24 self-start select-none font-sans antialiased">
-      
-      {/* 1. TARJETA FINANCIERA CON ARQUEO Y DESCUENTOS */}
       <TreatmentSidebarCard
         plan={plan}
         patient={patient}
         planItems={planItems.length > 0 ? planItems : plan?.items || []}
         discountPercent={Number(plan?.discount || 0)}
         setIsDiscountModalOpen={onOpenDiscountModal}
-        setTempDiscount={() => {}}
+        setTempDiscount={setTempDiscount || (() => {})}
         onApplyAgreement={onApplyAgreement}
         totalPaid={totalPaid ?? plan?.totalPaid}
       />
 
-      {/* 2. VENCIMIENTO DE ARANCELES */}
       <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-3.5 shadow-xs">
         <div className="p-2 bg-amber-500/15 rounded-xl shrink-0">
           <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
@@ -173,10 +185,9 @@ export function TreatmentSidebar({
         </div>
       </div>
 
-      {/* 3. PROFESIONAL, COLABORADORES Y CONVENIO */}
       <div className="bg-card border border-border/80 shadow-xs rounded-2xl p-4 space-y-3 text-xs font-medium">
         <div className="flex gap-3 items-center">
-          <User className="w-4 h-4 text-[#008bcd] shrink-0" />
+          <User className="w-4 h-4 text-[#008bcd]" shrink-0 />
           <div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Profesional a cargo</p>
             <p className="font-bold text-foreground text-xs mt-0.5">{plan?.doctor?.name || "Dr(a). Asignado"}</p>
@@ -199,13 +210,13 @@ export function TreatmentSidebar({
                 {activeCollaborators.map((colabName: string, idx: number) => {
                   const isUuid = typeof colabName === "string" && colabName.length > 25 && colabName.includes("-")
                   const displayName = isUuid ? "Dr. Colaborador" : colabName
-
                   return (
                     <span
                       key={idx}
                       className="inline-flex items-center text-[10px] font-bold bg-violet-100 text-violet-800 border border-violet-300 dark:bg-violet-950/70 dark:text-violet-200 dark:border-violet-700/60 px-2 py-0.5 rounded-md tracking-wide"
                     >
-                      👨‍⚕️ {displayName}
+                      {/* Corregido sin entidades conflictivas */}
+                      {`Dr. ${displayName}`}
                     </span>
                   )
                 })}
@@ -217,7 +228,7 @@ export function TreatmentSidebar({
         </div>
 
         <div className="flex gap-3 items-center">
-          <ClipboardList className="w-4 h-4 text-[#008bcd] shrink-0" />
+          <ClipboardList className="w-4 h-4 text-[#008bcd]" shrink-0 />
           <div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">Convenio / EPS</p>
             <p className="font-bold text-foreground text-xs mt-0.5">{convenioPortada}</p>
@@ -225,7 +236,6 @@ export function TreatmentSidebar({
         </div>
       </div>
 
-      {/* 4. HISTORIAL DE CITAS */}
       <div className="bg-card border border-border/80 shadow-xs rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between border-b border-border/60 pb-2">
           <div className="flex items-center gap-2 text-xs font-bold text-foreground">
@@ -274,7 +284,6 @@ export function TreatmentSidebar({
           </p>
         )}
       </div>
-
     </div>
   )
 }

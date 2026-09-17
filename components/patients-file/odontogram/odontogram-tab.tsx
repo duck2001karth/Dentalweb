@@ -10,11 +10,12 @@ import { cn } from "@/lib/utils"
 
 import { useGetPatient } from "@/hooks/patients"
 import { OdontogramGrid } from "./odontogram-grid"
-import { OdontogramActionMenu, HEALTHY_OPTION, LESION_OPTIONS, PREEXISTENCE_OPTIONS } from "./odontogram-action-menu"
+import { OdontogramActionMenu } from "./odontogram-action-menu"
 import { OdontogramHistory } from "./odontogram-history"
 import { printOdontogramSheet } from "@/components/patients-file/odontogram/odontogram-print"
 import { useClinicSettings } from "@/config/clinic-settings"
 import { OdontogramLegendModal } from "@/components/patients-file/odontogram/odontogram-legend-modal"
+import { odontogramStatuses } from "@/constants/status"
 
 export function OdontogramaTab({ 
   patientId, 
@@ -80,7 +81,7 @@ export function OdontogramaTab({
     } else { 
       if (surface === "TODA_LA_PIEZA") {
         setCurrentSurfaces([])
-      } else {
+      } else { 
         setCurrentSurfaces((prev) => 
           prev.includes(surface) ? prev.filter((s) => s !== surface) : [...prev, surface]
         )
@@ -95,14 +96,15 @@ export function OdontogramaTab({
       records,
       view,
       dentition,
-      patientFullName: `${patient.firstName} ${patient.lastName}`,
-      patientDocId: patient.ci,
+      patientFullName: `${patient?.firstName || ""} ${patient?.lastName || ""}`.trim(),
+      patientDocId: patient?.ci,
       doctorName: currentUser?.name,
       doctorSpecialty: currentUser?.specialty,
       getStatusLabel,
       settings,
     })
-}
+  }
+
   const handleCloseMenu = () => {
     setMenuStep("NONE")
     setSelectedTooth(null)
@@ -177,13 +179,18 @@ export function OdontogramaTab({
     }
   }
 
-  const getStatusLabel = (val: string) => 
-    [...LESION_OPTIONS, ...PREEXISTENCE_OPTIONS, HEALTHY_OPTION].find((o) => o.value === val)?.label || val
+  // Traducción y etiqueta garantizada con fallback limpio
+  const getStatusLabel = (val: string) => {
+    if (!val) return "Sin estado"
+    if (odontogramStatuses && odontogramStatuses[val]) {
+      return odontogramStatuses[val].label
+    }
+    return val.replace(/_/g, " ")
+  }
 
   const getRecordsForTooth = (toothNum: number) => 
     records.filter((r) => r.toothNumber === toothNum && r.isEvolution === (view === "evolucion"))
 
-  const patientFullName = patient ? `${patient.firstName || ""} ${patient.lastName || ""}`.trim() : "Paciente"
   const currentViewRecords = records.filter((r) => r.isEvolution === (view === "evolucion"))
 
   if (isLoading) {

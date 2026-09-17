@@ -3,7 +3,6 @@
 import React from "react"
 import { ChevronLeft, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { TreatmentActions } from "./treatment-actions"
 
 interface TreatmentDetailHeaderProps {
   planId: string
@@ -11,8 +10,6 @@ interface TreatmentDetailHeaderProps {
   onBack: () => void
   onRefreshData?: () => void
   isRefreshing?: boolean
-  onClearPlan?: () => void
-  onPrintPDF?: () => void
 }
 
 export function TreatmentDetailHeader({
@@ -21,8 +18,6 @@ export function TreatmentDetailHeader({
   onBack,
   onRefreshData,
   isRefreshing = false,
-  onClearPlan,
-  onPrintPDF,
 }: TreatmentDetailHeaderProps) {
   const patientFullName = `${patient?.firstName || ""} ${patient?.lastName || ""}`.trim() || "Paciente"
 
@@ -49,27 +44,19 @@ export function TreatmentDetailHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-2.5">
-        {onRefreshData && (
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            onClick={onRefreshData}
-            disabled={isRefreshing}
-            className="h-10 w-10 rounded-xl border-border/80 bg-background hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer shadow-xs"
-            title="Actualizar datos del plan"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-[#008bcd]" : ""}`} />
-          </Button>
-        )}
-
-        <TreatmentActions 
-          planId={planId}
-          onClearPlan={onClearPlan}
-          onPrintPDF={onPrintPDF}
-        />
-      </div>
+      {onRefreshData && (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={onRefreshData}
+          disabled={isRefreshing}
+          className="h-10 w-10 rounded-xl border-border/80 bg-background hover:bg-muted text-muted-foreground hover:text-foreground transition-all duration-200 cursor-pointer shadow-xs"
+          title="Actualizar datos del plan"
+        >
+          <RefreshCw className={`h-4 w-4 ${isRefreshing ? "animate-spin text-[#008bcd]" : ""}`} />
+        </Button>
+      )}
     </div>
   )
 }

@@ -43,15 +43,39 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
   const [deleteMode, setDeleteMode] = useState<"ALL" | "SELECTED">("ALL")
   const [itemsToDelete, setItemsToDelete] = useState<string[]>([])
 
-  // --- SINCRONIZACIÓN DE PLAN ---
+  // --- SINCRONIZACIÓN DE PLAN (CORREGIDO PARA F5) ---
   useEffect(() => {
     if (initialPlan) {
       setCurrentPlan(initialPlan)
       setPlanItems(initialPlan.items || [])
       setDiscountPercent(Number(initialPlan.discount || 0))
+      setTempDiscount(String(initialPlan.discount || 0))
       setCollaborators(Array.isArray(initialPlan.collaborators) ? initialPlan.collaborators : [])
+      
+      if (initialPlan.id) {
+        fetch(`/api/treatments/${initialPlan.id}`)
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => {
+            if (data?.plan) {
+              const freshPlan = data.plan
+              setCurrentPlan((prev: any) => ({
+                ...freshPlan,
+                sections: freshPlan.sections !== undefined ? freshPlan.sections : (prev?.sections || [])
+              }))
+              setPlanItems(freshPlan.items || [])
+              if (freshPlan.discount !== undefined) {
+                setDiscountPercent(Number(freshPlan.discount))
+                setTempDiscount(String(freshPlan.discount))
+              }
+              if (Array.isArray(freshPlan.collaborators)) {
+                setCollaborators(freshPlan.collaborators)
+              }
+            }
+          })
+          .catch((e) => console.error("Error al sincronizar plan inicial:", e))
+      }
     }
-  }, [initialPlan])
+  }, [initialPlan?.id])
 
   useEffect(() => {
     if (patient?.id) {
@@ -65,10 +89,11 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
     }
   }, [patient?.id])
 
-  // --- CÁLCULOS ---
+  // --- CÁLCULOS EN TIEMPO REAL ---
   const calculatedTotals = useMemo(() => {
     let subtotal = 0
     let totalProgressSum = 0
+
     planItems.forEach((item: any) => {
       const cost = Number(item.cost || item.price || 0)
       const itemDisc = Number(item.discount || 0)
@@ -76,6 +101,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       subtotal += Math.max(0, cost - (cost * (effectiveDisc / 100)))
       totalProgressSum += item.isCompleted ? 100 : Number(item.progress || 0)
     })
+
     const totalPaid = Number(currentPlan?.totalPaid || 0)
     return {
       subtotal,
@@ -100,7 +126,10 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
         }))
         setPlanItems(fetchedPlan.items || [])
         if (Array.isArray(fetchedPlan.collaborators)) setCollaborators(fetchedPlan.collaborators)
-        if (fetchedPlan.discount !== undefined) setDiscountPercent(Number(fetchedPlan.discount))
+        if (fetchedPlan.discount !== undefined) {
+          setDiscountPercent(Number(fetchedPlan.discount))
+          setTempDiscount(String(fetchedPlan.discount))
+        }
       }
     } catch (e) {
       console.error("Error al refrescar plan:", e)
@@ -116,12 +145,18 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
         body: JSON.stringify({ discount: val })
       })
       if (!res.ok) throw new Error()
+      
+      const json = await res.json()
+      const updated = json.plan || json
+
       setDiscountPercent(val)
+      setCurrentPlan(updated)
       setIsDiscountModalOpen(false)
-      toast({ title: "Descuento aplicado", variant: "success" })
-      refreshPlanData()
+      toast({ title: "Descuento comercial aplicado", variant: "success" })
+      
+      await refreshPlanData()
     } catch {
-      toast({ title: "Error", description: "No se pudo actualizar el descuento.", variant: "destructive" })
+      toast({ title: "Error", description: "No se pudo actualizar el descuento comercial.", variant: "destructive" })
     }
   }
 
@@ -141,7 +176,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       setDiscountPercent(newDiscount)
       setCurrentPlan(json.plan || json)
       toast({ title: "Convenio aplicado", description: `Se aplicó el convenio ${agreementName}.`, variant: "success" })
-      refreshPlanData()
+      await refreshPlanData()
     } catch {
       toast({ title: "Error", description: "No se pudo guardar el convenio.", variant: "destructive" })
     }
@@ -149,26 +184,54 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
 
   const handleUpdateItemDiscount = async (itemId: string, itemDiscount: number) => {
     try {
-      await fetch(`/api/treatment-items/${itemId}`, {
+      setPlanItems((prev) =>
+        prev.map((item) => (item.id === itemId ? { ...item, discount: itemDiscount } : item))
+      )
+
+      const res = await fetch(`/api/treatments/items/${itemId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ discount: itemDiscount })
       })
-      setPlanItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, discount: itemDiscount } : item)))
-      refreshPlanData()
-    } catch {}
+
+      if (!res.ok) {
+        throw new Error("No se pudo actualizar el descuento de la pieza")
+      }
+
+      toast({ 
+        title: "Descuento por pieza aplicado", 
+        description: `Se asignó ${itemDiscount}% a esta prestación.`, 
+        variant: "success" 
+      })
+      await refreshPlanData()
+    } catch (err: any) {
+      toast({
+        title: "Error al actualizar descuento",
+        description: err.message || "Error al comunicarse con el servidor.",
+        variant: "destructive"
+      })
+      await refreshPlanData()
+    }
   }
 
   const handleUpdateItemRegion = async (itemId: string, region: string) => {
     try {
-      await fetch(`/api/treatment-items/${itemId}`, {
+      setPlanItems((prev) =>
+        prev.map((item) => (item.id === itemId ? { ...item, tooth: region } : item))
+      )
+
+      const res = await fetch(`/api/treatments/items/${itemId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tooth: region })
       })
-      setPlanItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, tooth: region } : item)))
-      refreshPlanData()
-    } catch {}
+
+      if (!res.ok) throw new Error()
+      await refreshPlanData()
+    } catch (err) {
+      console.error("Error al actualizar región:", err)
+      await refreshPlanData()
+    }
   }
 
   const handleAddManualProcedure = async (procedure: any, toothNum?: string) => {
@@ -226,7 +289,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       setIsEvolutionModalOpen(false)
       setSelectedItemToEvolve(null)
       toast({ title: "Evolución registrada", variant: "success" })
-      refreshPlanData()
+      await refreshPlanData()
     } catch {
       toast({ title: "Error al registrar", description: "No se pudo guardar la evolución.", variant: "destructive" })
     }
@@ -246,7 +309,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       }))
       toast({ title: "Presupuesto aprobado", description: "Firma registrada exitosamente.", variant: "success" })
       setIsSignatureModalOpen(false)
-      refreshPlanData()
+      await refreshPlanData()
     } catch {
       toast({ title: "Error", description: "No se pudo vincular la firma.", variant: "destructive" })
     }
@@ -261,7 +324,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       })
       setCurrentPlan((prev: any) => ({ ...prev, status: "ACTIVE" }))
       toast({ title: "Presupuesto aprobado", description: "Se ha vinculado la firma del paciente.", variant: "success" })
-      refreshPlanData()
+      await refreshPlanData()
     } catch {
       toast({ title: "Error", description: "No se pudo aprobar el plan.", variant: "destructive" })
     }
@@ -272,7 +335,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       await fetch(`/api/treatments/${initialPlan.id}/clear-items`, { method: "DELETE" })
       setPlanItems([])
       setIsDeleteModalOpen(false)
-      refreshPlanData()
+      await refreshPlanData()
     } catch {}
   }
 
@@ -287,7 +350,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       setIsDeleteModalOpen(false)
       setItemsToDelete([])
       toast({ title: "Prestaciones eliminadas", variant: "success" })
-      refreshPlanData()
+      await refreshPlanData()
     } catch {
       toast({ title: "Error", description: "No se pudieron eliminar los ítems.", variant: "destructive" })
     }

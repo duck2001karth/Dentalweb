@@ -76,25 +76,30 @@ export function TreatmentSidebarCard({
   }, [selectedAgreement, discountPercent, baseCost])
 
   const finalTotalCost = useMemo(() => {
-    const calculated = baseCost - (baseCost * (effectiveDiscount / 100))
-    return Math.max(0, calculated)
-  }, [baseCost, effectiveDiscount])
-
+    return (planItems || []).reduce((acc: number, item: any) => {
+      const cost = Number(item.cost || item.price || 0)
+      const itemDisc = Number(item.discount || 0)
+      const effDisc = itemDisc > 0 ? itemDisc : effectiveDiscount
+      return acc + Math.max(0, cost - (cost * (effDisc / 100)))
+    }, 0)
+  }, [planItems, effectiveDiscount])
 
   const completedValue = useMemo(() => {
     return (planItems || []).reduce((acc: number, item: any) => {
       const isDone = item.isCompleted || item.progress === 100
       if (isDone) {
         const cost = Number(item.cost || item.price || 0)
-        const dscto = Number(item.discount || 0)
-        return acc + (cost - (cost * (dscto / 100)))
+        const itemDisc = Number(item.discount || 0)
+        const effDisc = itemDisc > 0 ? itemDisc : effectiveDiscount
+        return acc + Math.max(0, cost - (cost * (effDisc / 100)))
       }
       return acc
     }, 0)
-  }, [planItems])
+  }, [planItems, effectiveDiscount])
 
   const totalAbonado = totalPaid ?? (planItems || []).reduce((acc: number, item: any) => acc + Number(item.paidAmount || 0), 0)
   const totalDebt = Math.max(0, finalTotalCost - totalAbonado)
+
   const handleSelectAgreement = (agreement: any) => {
     if (selectedAgreement?.id === agreement.id) {
       setSelectedAgreement(null)
@@ -129,7 +134,6 @@ export function TreatmentSidebarCard({
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
               Presupuesto Total
             </p>
-            {/* Monto corregido con separación entre moneda y cifra */}
             <h4 className="text-3xl md:text-4xl font-extrabold text-[#008bcd] tracking-tight font-mono">
               {currencySymbol}{finalTotalCost.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </h4>
@@ -171,7 +175,6 @@ export function TreatmentSidebarCard({
             </div>
           </div>
 
-          {/* Botón de apertura de convenios */}
           <Button
             type="button"
             onClick={() => setIsAgreementModalOpen(true)}
@@ -183,7 +186,6 @@ export function TreatmentSidebarCard({
         </div>
       </div>
 
-      {/* Modal de selección de convenios */}
       <Dialog open={isAgreementModalOpen} onOpenChange={setIsAgreementModalOpen}>
         <DialogContent className="sm:max-w-[550px] bg-card border-border rounded-[24px] p-0 overflow-hidden shadow-2xl">
           <DialogHeader className="px-6 py-5 border-b border-border bg-[#008bcd]/5">

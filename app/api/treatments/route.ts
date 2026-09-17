@@ -4,6 +4,12 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
+function parseCommercialDiscount(comments?: string | null): number {
+  if (!comments || typeof comments !== "string") return 0;
+  const match = comments.match(/\[COMMERCIAL_DISCOUNT:([\d.]+)\]/);
+  return match ? parseFloat(match[1]) || 0 : 0;
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -57,26 +63,34 @@ export async function GET(request: Request) {
 
     const computedPlans = plans.map((plan) => {
       const agreementDiscount = plan.agreement ? Number(plan.agreement.discountValue) : 0;
+      const commercialDiscount = parseCommercialDiscount(plan.commentsToPatient);
+      const effectiveGlobalDiscount = commercialDiscount > 0 ? commercialDiscount : agreementDiscount;
+
       let calculatedSubtotal = 0;
 
       if (plan.items && plan.items.length > 0) {
         calculatedSubtotal = plan.items.reduce((acc, item) => {
           const cost = Number(item.cost || 0);
           const itemDisc = Number(item.discount || 0);
-          const effectiveDisc = itemDisc > 0 ? itemDisc : agreementDiscount;
+          const effectiveDisc = itemDisc > 0 ? itemDisc : effectiveGlobalDiscount;
           return acc + (cost - cost * (effectiveDisc / 100));
         }, 0);
       } else {
         const rawCost = Number(plan.totalCost || 0);
-        calculatedSubtotal = rawCost - rawCost * (agreementDiscount / 100);
+        calculatedSubtotal = Math.max(0, rawCost - rawCost * (effectiveGlobalDiscount / 100));
       }
 
       const totalPaid = Number(plan.totalPaid || 0);
       const pendingBalance = Math.max(0, calculatedSubtotal - totalPaid);
 
+      const cleanComments = plan.commentsToPatient
+        ? plan.commentsToPatient.replace(/\[COMMERCIAL_DISCOUNT:[\d.]+\]\s*/, "")
+        : null;
+
       return {
         ...plan,
-        discount: agreementDiscount,
+        commentsToPatient: cleanComments,
+        discount: effectiveGlobalDiscount,
         totalCost: calculatedSubtotal,
         pendingBalance
       };
@@ -141,7 +155,6 @@ export async function POST(req: Request) {
         }
       });
 
-      // Registro de Auditoría
       await tx.auditLog.create({
         data: {
           userId: currentUserId,

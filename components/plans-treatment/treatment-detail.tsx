@@ -85,16 +85,11 @@ export function TreatmentPlanDetail({
   return (
     <div className="w-full font-sans antialiased animate-in fade-in duration-300 relative">
       <div className="print:hidden space-y-6">
-        <TreatmentDetailHeader 
+       <TreatmentDetailHeader 
           planId={plan.id}
           patient={patient}
           onBack={onBack}
           onRefreshData={handlers.refreshPlanData}
-          onClearPlan={() => {
-            setters.setDeleteMode("ALL")
-            setters.setIsDeleteModalOpen(true)
-          }}
-          onPrintPDF={() => handlePrint("COMPLETO")}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -113,6 +108,7 @@ export function TreatmentPlanDetail({
                 setters.setTempDiscount(String(state.discountPercent))
                 setters.setIsDiscountModalOpen(true)
               }}
+              setTempDiscount={setters.setTempDiscount} 
               onOpenCollaboratorsModal={() => setters.setIsCollaboratorsOpen(true)}
               onOpenSignatureModal={() => setters.setIsSignatureModalOpen(true)}
               onPlanUpdate={handlers.refreshPlanData}
@@ -169,11 +165,10 @@ export function TreatmentPlanDetail({
               onUpdateItemDiscount={handlers.handleUpdateItemDiscount}
               onUpdateItemRegion={handlers.handleUpdateItemRegion}
               onPlanUpdate={handlers.refreshPlanData}
-              onSelectPrintMode={(mode: string) => {
+              onSelectPrintMode={(mode: any) => {
                 handlePrint(mode as PrintMode)
               }}
             />
-
             <TreatmentExtra 
               plan={state.currentPlan}
               patient={patient}

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
-import { authOptions } from "@/lib/auth"; 
+import { authOptions } from "@/lib/auth";
 
 export async function PATCH(
   request: Request,
@@ -24,6 +24,7 @@ export async function PATCH(
     if (!itemId) {
       return NextResponse.json({ error: "Falta el ID del ítem" }, { status: 400 });
     }
+
     const headersList = await headers();
     const forwardedFor = headersList.get("x-forwarded-for");
     const ipAddress = forwardedFor
@@ -55,9 +56,11 @@ export async function PATCH(
         where: { id: itemId },
         include: {
           plan: {
-            select: { id: true, patientId: true, name: true }
-          }
-        }
+            include: {
+              agreement: true,
+            },
+          },
+        },
       });
 
       if (!previousItem) {
@@ -93,9 +96,31 @@ export async function PATCH(
           0
         );
 
+        let commercialDisc = 0;
+        if (previousItem.plan?.commentsToPatient) {
+          const match = previousItem.plan.commentsToPatient.match(/\[COMMERCIAL_DISCOUNT:([\d.]+)\]/);
+          if (match) {
+            commercialDisc = parseFloat(match[1]) || 0;
+          }
+        }
+
+        const agreementDisc = previousItem.plan?.agreement
+          ? Number(previousItem.plan.agreement.discountValue || 0)
+          : 0;
+
+        const globalDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc;
+
+        const newTotalCost = allItems.reduce((acc, itm) => {
+          const baseCost = Number(itm.cost || 0);
+          const itmDisc = Number(itm.discount || 0);
+          const effectiveDisc = itmDisc > 0 ? itmDisc : globalDiscount;
+          return acc + Math.max(0, baseCost - baseCost * (effectiveDisc / 100));
+        }, 0);
+
         await tx.treatmentPlan.update({
           where: { id: updated.treatmentPlanId },
           data: {
+            totalCost: newTotalCost,
             totalPaid: newTotalPaid,
           },
         });
@@ -108,7 +133,7 @@ export async function PATCH(
           entity: "TreatmentItem",
           entityId: updated.id,
           patientId: previousItem.plan?.patientId || null,
-          details: `Actualización de prestación "${updated.procedureName || 'Tratamiento'}" (Diente: ${updated.tooth || 'General'}). Progreso: ${updated.progress ?? 0}%, Pagado: $${Number(updated.paidAmount || 0).toFixed(2)}`,
+          details: `Actualización de prestación "${updated.procedureName || 'Tratamiento'}" (Diente: ${updated.tooth || 'General'}). Descuento: ${updated.discount ?? 0}%, Progreso: ${updated.progress ?? 0}%, Pagado: $${Number(updated.paidAmount || 0).toFixed(2)}`,
           oldData: {
             progress: previousItem.progress,
             isCompleted: previousItem.isCompleted,
