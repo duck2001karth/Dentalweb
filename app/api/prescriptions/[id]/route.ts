@@ -93,8 +93,7 @@ export async function PUT(
               name: true,
               specialty: true,
               signatureBase64: true, 
-              professionalCard: true, 
-              licenseNumber: true,
+              professionalCard: true,
             },
           },
         },
@@ -124,8 +123,7 @@ export async function PUT(
     });
 
     const authorLicense =
-      updated.author?.professionalCard ||
-      updated.author?.licenseNumber ||
+      updated.author?.professionalCard 
       "";
 
     return NextResponse.json({
