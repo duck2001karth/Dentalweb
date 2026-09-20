@@ -10,9 +10,9 @@ import { useRouter } from "next/navigation";
 
 import { Stethoscope } from "lucide-react";
 
-import { UserAuthForm } from "@/components/user-login/user-auth";
+import { UserAuthForm } from "@/components/auth/user-auth";
 
-import { AuthFooter } from "@/components/user-login/auth-footer";
+import { AuthFooter } from "@/components/auth/auth-footer";
 
 export default function AuthenticationPage() {
 

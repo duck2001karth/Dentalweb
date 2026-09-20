@@ -42,6 +42,7 @@ async function createAuditEntry(
     console.error("Error al registrar auditoría en Prescription [id]:", err);
   }
 }
+
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -87,7 +88,14 @@ export async function PUT(
         },
         include: {
           author: {
-            select: { id: true, name: true, specialty: true },
+            select: {
+              id: true,
+              name: true,
+              specialty: true,
+              signatureBase64: true, 
+              professionalCard: true, 
+              licenseNumber: true,
+            },
           },
         },
       });
@@ -115,7 +123,16 @@ export async function PUT(
       return res;
     });
 
-    return NextResponse.json(updated);
+    const authorLicense =
+      updated.author?.professionalCard ||
+      updated.author?.licenseNumber ||
+      "";
+
+    return NextResponse.json({
+      ...updated,
+      doctorSignature: updated.doctorSignature || updated.author?.signatureBase64 || null,
+      doctorLicense: authorLicense,
+    });
   } catch (error: any) {
     if (error?.message === "NOT_FOUND") {
       return NextResponse.json({ error: "Receta médica no encontrada" }, { status: 404 });
@@ -130,6 +147,7 @@ export async function PUT(
     return NextResponse.json({ error: "Error al actualizar la receta" }, { status: 500 });
   }
 }
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

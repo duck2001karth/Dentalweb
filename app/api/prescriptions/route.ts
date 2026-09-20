@@ -56,13 +56,30 @@ export async function GET(request: Request) {
       where: { patientId },
       include: {
         author: {
-          select: { id: true, name: true, specialty: true }
-        }
+          select: {
+            id: true,
+            name: true,
+            specialty: true,
+            signatureBase64: true,
+            professionalCard: true, // Campo exacto del modelo User
+          },
+        },
       },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(prescriptions);
+    const formattedPrescriptions = prescriptions.map((p: any) => {
+      const authorCard = p.author?.professionalCard || "";
+      const authorSig = p.author?.signatureBase64 || null;
+
+      return {
+        ...p,
+        doctorSignature: p.doctorSignature || authorSig,
+        doctorLicense: (p as any).doctorLicense || authorCard,
+      };
+    });
+
+    return NextResponse.json(formattedPrescriptions);
   } catch (error) {
     console.error("Error GET prescriptions:", error);
     return NextResponse.json({ error: "Error interno al consultar recetas" }, { status: 500 });
@@ -83,6 +100,7 @@ export async function POST(request: Request) {
     if (!patientId) {
       return NextResponse.json({ error: "patientId es requerido" }, { status: 400 });
     }
+
     const patientExists = await prisma.patient.findUnique({
       where: { id: patientId },
       select: { id: true },
@@ -94,27 +112,46 @@ export async function POST(request: Request) {
         { status: 404 }
       );
     }
+
     let resolvedAuthorId = authorId || (session.user as any)?.id;
     let validUser = resolvedAuthorId
-      ? await prisma.user.findUnique({ where: { id: resolvedAuthorId }, select: { id: true } })
+      ? await prisma.user.findUnique({
+          where: { id: resolvedAuthorId },
+          select: {
+            id: true,
+            signatureBase64: true,
+            professionalCard: true,
+          },
+        })
       : null;
+
     if (!validUser) {
       if (session.user.email) {
         validUser = await prisma.user.findUnique({
           where: { email: session.user.email },
-          select: { id: true },
+          select: {
+            id: true,
+            signatureBase64: true,
+            professionalCard: true,
+          },
         });
       }
-      
+
       if (!validUser) {
         validUser = await prisma.user.findFirst({
           where: { role: { in: ["DOCTOR", "ADMIN"] } },
-          select: { id: true },
+          select: {
+            id: true,
+            signatureBase64: true,
+            professionalCard: true,
+          },
         });
       }
     }
 
     resolvedAuthorId = validUser ? validUser.id : null;
+    const finalDoctorSignature = doctorSignature || validUser?.signatureBase64 || null;
+
     const newPrescription = await prisma.$transaction(async (tx) => {
       const created = await tx.prescription.create({
         data: {
@@ -122,12 +159,18 @@ export async function POST(request: Request) {
           medications: medications || "",
           indications: indications || "",
           observations: observations || null,
-          authorId: resolvedAuthorId, 
-          doctorSignature: doctorSignature || null,
+          authorId: resolvedAuthorId,
+          doctorSignature: finalDoctorSignature,
         },
         include: {
           author: {
-            select: { id: true, name: true, specialty: true },
+            select: {
+              id: true,
+              name: true,
+              specialty: true,
+              signatureBase64: true,
+              professionalCard: true,
+            },
           },
         },
       });
@@ -151,7 +194,16 @@ export async function POST(request: Request) {
       return created;
     });
 
-    return NextResponse.json(newPrescription, { status: 201 });
+    const authorCard = newPrescription.author?.professionalCard || "";
+
+    return NextResponse.json(
+      {
+        ...newPrescription,
+        doctorSignature: newPrescription.doctorSignature || newPrescription.author?.signatureBase64 || null,
+        doctorLicense: authorCard,
+      },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error("Error POST prescription:", error);
     return NextResponse.json(

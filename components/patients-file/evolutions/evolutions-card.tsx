@@ -37,9 +37,10 @@ export function EvolutionCard({
   const statusConfig = treatmentStatuses[note.status] || treatmentStatuses.IN_PROGRESS
   const StatusIcon = statusConfig.icon
 
-  const formattedDate = note.createdAt 
-    ? format(new Date(note.createdAt), "d 'de' MMMM yyyy, HH:mm", { locale: es })
-    : "Sin fecha"
+  const resolvedDate = note.date || note.createdAt
+  const formattedDate = resolvedDate
+  ? format(new Date(resolvedDate), "d 'de' MMMM yyyy, HH:mm", { locale: es })
+  : "Sin fecha"
 
   const noteCode = `#${note.id?.slice(-4).toUpperCase() || "EVOL"}`
 

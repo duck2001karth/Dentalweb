@@ -11,7 +11,7 @@ import {
 import { AppLayout } from "@/components/layouts/app-layout"
 import { Button } from "@/components/ui/button"
 import { useGetPatients } from "@/hooks/patients"
-import { NewPatientModal } from "@/components/patients/patients-form"
+import { NewPatientModal } from "@/components/patients/patient-form"
 
 export default function PatientsPage() {
   const [searchTerm, setSearchTerm] = useState("")

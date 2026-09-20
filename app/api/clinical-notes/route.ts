@@ -42,6 +42,7 @@ async function createAuditEntry(
     console.error("Error al registrar auditoría en ClinicalNote:", err);
   }
 }
+
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
@@ -56,9 +57,11 @@ export async function GET(req: Request) {
       include: {
         author: {
           select: {
-            name: true,
             id: true,
+            name: true,
             specialty: true,
+            professionalCard: true,
+            signatureBase64: true,
           },
         },
       },
@@ -71,6 +74,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -89,6 +93,8 @@ export async function POST(req: Request) {
       professionalSignature,
       patientSignature,
       status,
+      createdAt,
+      date,
     } = input;
 
     const currentAuthorId = authorId || (session.user as any)?.id;
@@ -102,6 +108,7 @@ export async function POST(req: Request) {
 
     const noteType = type || "EVOLUTION";
     const noteStatus = status || "IN_PROGRESS";
+    const noteDate = date || createdAt ? new Date(date || createdAt) : new Date();
 
     const note = await prisma.$transaction(async (tx) => {
       const created = await tx.clinicalNote.create({
@@ -114,16 +121,21 @@ export async function POST(req: Request) {
           fileUrl: fileUrl || null,
           professionalSignature: professionalSignature || null,
           patientSignature: patientSignature || null,
+          createdAt: noteDate,
         },
         include: {
           author: {
             select: {
+              id: true,
               name: true,
               specialty: true,
+              professionalCard: true,
+              signatureBase64: true,
             },
           },
         },
       });
+
       const isFileDoc = noteType === "GENERAL" && Boolean(fileUrl);
       const detailMsg = isFileDoc
         ? `Carga de archivo/radiografía: "${content}"`
@@ -157,6 +169,7 @@ export async function POST(req: Request) {
     );
   }
 }
+
 export async function PATCH(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -174,6 +187,8 @@ export async function PATCH(req: Request) {
       professionalSignature,
       patientSignature,
       isSigned,
+      date,
+      createdAt,
     } = input;
 
     if (!id) {
@@ -181,6 +196,7 @@ export async function PATCH(req: Request) {
     }
 
     const currentUserId = (session.user as any)?.id;
+    const updateDate = date || createdAt ? new Date(date || createdAt) : undefined;
 
     const updatedNote = await prisma.$transaction(async (tx) => {
       const previous = await tx.clinicalNote.findUnique({
@@ -198,10 +214,17 @@ export async function PATCH(req: Request) {
           ...(professionalSignature !== undefined && { professionalSignature }),
           ...(patientSignature !== undefined && { patientSignature }),
           ...(isSigned !== undefined && { isSigned }),
+          ...(updateDate !== undefined && { createdAt: updateDate }),
         },
         include: {
           author: {
-            select: { name: true, specialty: true },
+            select: {
+              id: true,
+              name: true,
+              specialty: true,
+              professionalCard: true,
+              signatureBase64: true,
+            },
           },
         },
       });

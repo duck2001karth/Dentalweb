@@ -15,6 +15,8 @@ interface PeriodontogramPrintProps {
   patientAge?: string | number
   doctorName?: string
   doctorSpecialty?: string
+  doctorSignature?: string | null
+  doctorLicense?: string
   PerioGraphicComponent: React.ComponentType<{ tooth: number; data: any; isUpper: boolean }>
 }
 
@@ -25,10 +27,11 @@ export function PeriodontogramPrint({
   patientAge = "--",
   doctorName,
   doctorSpecialty,
-  PerioGraphicComponent: PerioGraphic
+  doctorSignature,
+  doctorLicense,
+  PerioGraphicComponent: PerioGraphic,
 }: PeriodontogramPrintProps) {
   const { settings } = useClinicSettings()
-
   const clinicName = settings?.clinicName?.trim() || "CLÍNICA ODONTOLÓGICA"
   const clinicSlogan = settings?.slogan?.trim() || "CENTRO DE ESPECIALIDADES ODONTOLÓGICAS"
   const clinicRuc = settings?.ruc?.trim() || "1790000000001"
@@ -37,9 +40,10 @@ export function PeriodontogramPrint({
   const clinicCity = (settings as any)?.city?.trim() || "Provincia"
   const clinicCountry = (settings as any)?.country?.trim() || "País"
   const clinicLocation = `${clinicCity} - ${clinicCountry}`
-
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es })
-  const activeDoctor = doctorName || settings?.razonSocial?.trim() || "Dr. Especialista"
+  
+  const rawDoctor = doctorName || settings?.razonSocial?.trim() || "Dr. Especialista"
+  const activeDoctor = rawDoctor.startsWith("Dr") ? rawDoctor : `Dr. ${rawDoctor}`
 
   const renderPrintSection = (numbers: number[], label: string, isUpper: boolean) => (
     <div className="mb-6 break-inside-avoid">
@@ -47,7 +51,6 @@ export function PeriodontogramPrint({
         <h3 className="font-black text-xs text-[#008bcd] uppercase tracking-wider">{label}</h3>
         <span className="text-[10px] text-neutral-400 font-mono">16 Piezas Evaluadas</span>
       </div>
-
       <table className="w-full text-center border-collapse text-[10px] border border-neutral-300">
         <thead>
           <tr className="bg-neutral-50">
@@ -60,7 +63,6 @@ export function PeriodontogramPrint({
           </tr>
         </thead>
         <tbody>
-          {/* Fila Gráfica */}
           <tr>
             <td className="p-1 border border-neutral-300 text-left font-semibold text-neutral-500 bg-neutral-50">Esquema</td>
             {numbers.map((n) => (
@@ -71,7 +73,6 @@ export function PeriodontogramPrint({
               </td>
             ))}
           </tr>
-          {/* Fila Sangrado */}
           <tr>
             <td className="p-1 border border-neutral-300 text-left font-medium text-neutral-600">Sangrado (BOP)</td>
             {numbers.map((n) => {
@@ -83,7 +84,6 @@ export function PeriodontogramPrint({
               )
             })}
           </tr>
-          {/* Fila Profundidad de Bolsa */}
           <tr className="bg-neutral-50/50">
             <td className="p-1 border border-neutral-300 text-left font-bold text-neutral-700">Prof. Bolsa (PD)</td>
             {numbers.map((n) => (
@@ -99,7 +99,6 @@ export function PeriodontogramPrint({
               </td>
             ))}
           </tr>
-          {/* Fila Margen Gingival */}
           <tr>
             <td className="p-1 border border-neutral-300 text-left font-medium text-amber-700">Margen (MG)</td>
             {numbers.map((n) => (
@@ -108,7 +107,6 @@ export function PeriodontogramPrint({
               </td>
             ))}
           </tr>
-          {/* Fila NIC / CAL */}
           <tr className="bg-neutral-100 font-bold">
             <td className="p-1 border border-neutral-300 text-left text-neutral-900">NIC / CAL</td>
             {numbers.map((n) => (
@@ -131,8 +129,6 @@ export function PeriodontogramPrint({
 
   return (
     <div id="periodontogram-printable" className="hidden print:block font-sans text-slate-900 bg-white min-h-[210mm] relative overflow-hidden">
-      
-      {/* Marca de agua institucional */}
       {settings?.watermarkUrl && (
         <div
           aria-hidden="true"
@@ -166,7 +162,6 @@ export function PeriodontogramPrint({
                 <p className="text-[9.5px] text-neutral-500 font-medium">RUC: {clinicRuc} | {clinicAddress}</p>
               </div>
             </div>
-
             <div className="text-right flex flex-col items-end gap-0.5">
               <span className="inline-block bg-white text-neutral-900 text-[10px] font-black px-3 py-1 rounded-lg uppercase tracking-wider border border-neutral-300">
                 REPORTE PERIODONTAL INTEGRAL
@@ -177,24 +172,47 @@ export function PeriodontogramPrint({
             </div>
           </div>
 
-          {/* Datos del Paciente y Profesional */}
+          {/* Tarjeta de Paciente y Especialista con Firma y Matrícula */}
           <div className="grid grid-cols-2 gap-4 my-3 p-3 bg-neutral-50 border border-neutral-200 rounded-xl text-xs">
             <div>
               <p className="text-neutral-400 font-bold text-[9px] uppercase tracking-wider">Paciente</p>
-              <p className="font-black text-neutral-900 text-sm mt-0.5 uppercase">{patientFullName}</p>
+              <p className="font-black text-neutral-900 text-sm mt-0.5">{patientFullName}</p>
               <div className="flex gap-4 text-neutral-700 mt-0.5 text-[11px]">
                 <p><b>Identificación:</b> <span className="font-mono">{patientDocId}</span></p>
                 <p><b>Edad:</b> {patientAge !== "--" ? `${patientAge} Años` : "--"}</p>
               </div>
             </div>
-            <div className="border-l border-neutral-200 pl-4">
-              <p className="text-neutral-400 font-bold text-[9px] uppercase tracking-wider">Especialista Evaluador</p>
-              <p className="font-black text-neutral-900 text-sm mt-0.5">{activeDoctor}</p>
-              <p className="text-neutral-700 mt-0.5 text-[11px]"><b>Especialidad:</b> {doctorSpecialty || "Periodoncia / Odontología General"}</p>
+            
+            <div className="border-l border-neutral-200 pl-4 flex items-center justify-between">
+              <div>
+                <p className="text-neutral-400 font-bold text-[9px] uppercase tracking-wider">Especialista Evaluador</p>
+                <p className="font-black text-neutral-900 text-sm mt-0.5">{activeDoctor}</p>
+                <p className="text-neutral-700 mt-0.5 text-[11px]">
+                  <b>Especialidad:</b> {doctorSpecialty || "Ortodoncia"}
+                </p>
+                {doctorLicense && (
+                  <p className="text-neutral-600 mt-0.5 text-[10px] font-mono font-bold">
+                    Matrícula / Reg. MSP: {doctorLicense}
+                  </p>
+                )}
+              </div>
+
+              {doctorSignature && (
+                <div className="text-center pr-2">
+                  <img
+                    src={doctorSignature}
+                    alt="Firma del Evaluador"
+                    className="h-12 max-w-[120px] object-contain"
+                  />
+                  <div className="border-t border-slate-400 text-[8px] font-bold text-slate-500 uppercase mt-0.5">
+                    Firma Autorizada
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Tablas de Evaluación Periodontal */}
+          {/* Tablas de Evaluación */}
           {renderPrintSection(TOOTH_NUMBERS_SUP, "Maxilar Superior (Vestibular / Palatino)", true)}
           {renderPrintSection(TOOTH_NUMBERS_INF, "Maxilar Inferior (Vestibular / Lingual)", false)}
         </div>

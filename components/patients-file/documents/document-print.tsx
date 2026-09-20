@@ -7,7 +7,16 @@ interface PrintClinicalDocOptions {
   patientAge?: string | number
   patientDocId?: string
   doctorSpecialty?: string
+  doctorLicense?: string
   settings?: any
+}
+
+function sanitizeSig(sig?: string | null): string | null {
+  if (!sig || typeof sig !== "string") return null
+  const clean = sig.trim()
+  if (clean.length < 50) return null
+  if (clean.startsWith("data:image/") || clean.startsWith("http")) return clean
+  return `data:image/png;base64,${clean}`
 }
 
 export function printClinicalDocSheet({
@@ -15,53 +24,59 @@ export function printClinicalDocSheet({
   patientFullName,
   patientAge,
   patientDocId,
-  doctorSpecialty = "Odontología General y Especialidades",
+  doctorSpecialty = "Ortodoncia",
+  doctorLicense = "",
   settings,
 }: PrintClinicalDocOptions) {
   if (!doc) return
 
-  // 1. Configuración de la Clínica
   const clinicName = settings?.clinicName?.trim() || "Carmo Dental"
   const clinicSlogan = settings?.slogan?.trim() || "Clínica de Especialidades Odontológicas"
   const clinicRuc = settings?.ruc?.trim() || "1719231696001"
-  
   const rawAddress = settings?.address?.trim()
   const rawCity = settings?.city?.trim()
   const rawCountry = settings?.country?.trim()
   const clinicAddress = [rawAddress, rawCity, rawCountry].filter(Boolean).join(", ") || "Quito, Ecuador"
-  
   const clinicPhone = settings?.phone?.trim() || settings?.whatsappNumber?.trim() || ""
   const clinicEmail = settings?.email?.trim() || ""
 
   const isMonochrome = settings?.defaultPrintMode === "bw"
   const filterStyle = isMonochrome ? "filter: grayscale(100%);" : ""
-  const watermarkOpacity = ((settings?.watermarkOpacity ?? 8) / 100)
+  const watermarkOpacity = ((settings?.watermarkOpacity ?? 7) / 100)
   const watermarkScale = ((settings?.watermarkScale || 100) / 100)
-  const logoUrl = settings?.logoUrl || "/logosn.png"
-  const watermarkUrl = settings?.watermarkUrl || settings?.logoUrl || "/logosn.png"
+  const logoUrl = settings?.logoUrl || ""
+  const watermarkUrl = settings?.watermarkUrl || settings?.logoUrl || ""
 
-  // 2. Datos del Documento y Personal
   const formattedDate = format(
     new Date(doc.createdAt || new Date()),
     "dd 'de' MMMM 'de' yyyy, HH:mm",
     { locale: es }
   )
 
-  const doctorName = doc.specialistName || doc.author?.name || "Dr(a). Profesional Tratante"
-  const doctorSpecialtyFinal = doc.author?.specialty || doctorSpecialty
-  const docIdShort = doc.id ? doc.id.substring(0, 10).toUpperCase() : "DOC-PEND"
+  const rawDoctor = doc.specialistName || doc.author?.name || "Dr. Patricio C"
+  const activeDoctorName = rawDoctor.startsWith("Dr") ? rawDoctor : `Dr. ${rawDoctor}`
+  const activeSpecialty = doc.author?.specialty || doctorSpecialty
+  const activeLicense =
+    doc.author?.professionalCard ||
+    doc.author?.licenseNumber ||
+    doctorLicense ||
+    "1824124AC-1234"
 
-  // 3. Generación del HTML
+  const docIdShort = doc.id ? doc.id.substring(0, 8).toUpperCase() : "DOC-LEGAL"
+
+  const patientSigUrl = sanitizeSig(doc.patientSignature)
+  const doctorSigUrl = sanitizeSig(doc.doctorSignature || doc.author?.signatureBase64)
+
   const htmlContent = `
     <!DOCTYPE html>
     <html lang="es">
     <head>
       <meta charset="UTF-8">
-      <title>${doc.title || "Documento Clínico"} - ${patientFullName}</title>
+      <title>${doc.title || "Consentimiento Informado"} - ${patientFullName}</title>
       <style>
         @page {
           size: A4 portrait;
-          margin: 0mm;
+          margin: 14mm 16mm 14mm 16mm;
         }
         * {
           box-sizing: border-box;
@@ -72,29 +87,28 @@ export function printClinicalDocSheet({
         }
         html, body {
           width: 100%;
-          height: 100%;
           background: #ffffff;
           color: #0f172a;
+          line-height: 1.45;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
         }
 
         .sheet {
           position: relative;
-          width: 210mm;
-          min-height: 297mm;
+          width: 100%;
           margin: 0 auto;
-          padding: 16mm 18mm 14mm 18mm;
           display: flex;
           flex-direction: column;
-          overflow: hidden;
         }
 
         .watermark-bg {
-          position: absolute;
+          position: fixed;
           top: 50%;
           left: 50%;
           transform: translate(-50%, -50%) scale(${watermarkScale});
-          width: 450px;
-          max-height: 450px;
+          width: 340px;
+          max-height: 340px;
           opacity: ${watermarkOpacity};
           z-index: 0;
           pointer-events: none;
@@ -112,34 +126,33 @@ export function printClinicalDocSheet({
         .document-body {
           position: relative;
           z-index: 10;
-          flex: 1;
-          display: flex;
-          flex-direction: column;
+          width: 100%;
         }
 
-        /* CABECERA */
+        /* ENCABEZADO */
         .header {
           display: flex;
           justify-content: space-between;
-          align-items: flex-start;
+          align-items: center;
           padding-bottom: 12px;
-          margin-bottom: 16px;
-          border-bottom: 3px solid #008bcd;
+          margin-bottom: 14px;
+          border-bottom: 2.5px solid #008bcd;
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
         .header-left {
           display: flex;
-          align-items: flex-start;
-          gap: 14px;
+          align-items: center;
+          gap: 12px;
         }
         .logo {
-          max-height: 64px;
-          max-width: 160px;
+          max-height: 48px;
+          max-width: 130px;
           object-fit: contain;
-          margin-top: 2px;
           ${filterStyle}
         }
         .clinic-brand {
-          font-size: 22px;
+          font-size: 20px;
           font-weight: 900;
           color: #008bcd;
           letter-spacing: -0.3px;
@@ -147,113 +160,108 @@ export function printClinicalDocSheet({
           text-transform: uppercase;
         }
         .clinic-slogan {
-          font-size: 10.5px;
-          font-weight: 700;
-          color: #334155;
+          font-size: 9.5px;
+          font-weight: 800;
+          color: #1e293b;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-top: 4px;
-          margin-bottom: 6px;
+          margin-top: 1px;
         }
         .clinic-meta {
-          font-size: 9.5px;
+          font-size: 8.5px;
           color: #64748b;
-          line-height: 1.4;
+          margin-top: 2px;
         }
-        
+
         .header-right {
           text-align: right;
-          flex-shrink: 0;
         }
         .header-badge {
           display: inline-block;
-          border: 1px solid #e2e8f0;
-          border-radius: 20px;
-          padding: 4px 14px;
-          font-size: 10px;
-          font-weight: 700;
+          border: 1px solid #cbd5e1;
+          border-radius: 6px;
+          padding: 4px 10px;
+          font-size: 9px;
+          font-weight: 800;
           letter-spacing: 0.3px;
           background: #f8fafc;
-          color: #334155;
+          color: #0f172a;
           text-transform: uppercase;
         }
         .emission-date {
-          font-size: 9.5px;
+          font-size: 8.5px;
           color: #64748b;
-          margin-top: 8px;
+          margin-top: 4px;
         }
         .doc-ref {
-          font-size: 8.5px;
+          font-size: 8px;
           color: #94a3b8;
           font-family: monospace;
-          margin-top: 4px;
-          letter-spacing: 0.5px;
+          margin-top: 2px;
         }
 
         /* CAJA DEL PACIENTE */
         .patient-card {
           display: grid;
-          grid-template-columns: 1fr 1fr;
-          border: 1px solid #cbd5e1;
-          border-radius: 12px;
-          margin-bottom: 24px;
-          background: rgba(248, 250, 252, 0.8);
+          grid-template-columns: 1.2fr 1fr;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          margin-bottom: 16px;
+          background: #f8fafc;
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
         .patient-col {
-          padding: 14px 18px;
+          padding: 8px 12px;
         }
         .patient-col:first-child {
           border-right: 1px solid #e2e8f0;
         }
         .card-label {
-          font-size: 9px;
-          font-weight: 700;
-          color: #94a3b8;
-          margin-bottom: 3px;
-          letter-spacing: 0.5px;
+          font-size: 8px;
+          font-weight: 800;
+          color: #64748b;
           text-transform: uppercase;
+          letter-spacing: 0.4px;
         }
         .card-title {
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 800;
           color: #0f172a;
-          text-transform: capitalize;
+          margin-top: 1px;
         }
         .card-sub {
-          font-size: 11px;
-          color: #475569;
-          margin-top: 4px;
+          font-size: 10px;
+          color: #334155;
+          margin-top: 2px;
         }
 
         /* CONTENIDO DEL DOCUMENTO */
-        .doc-content-area {
-          flex: 1;
-        }
         .doc-title {
-          font-size: 16px;
-          font-weight: 800;
+          font-size: 14px;
+          font-weight: 900;
           color: #008bcd;
-          border-left: 4px solid #008bcd;
-          padding-left: 12px;
-          margin-bottom: 16px;
+          border-left: 3.5px solid #008bcd;
+          padding-left: 10px;
+          margin-bottom: 12px;
           text-transform: uppercase;
           letter-spacing: -0.2px;
+          break-inside: avoid;
+          page-break-inside: avoid;
         }
         .doc-body {
-          font-size: 11.5px;
+          font-size: 10.5px;
           color: #1e293b;
-          line-height: 1.6;
+          line-height: 1.55;
           white-space: pre-wrap;
-          padding-right: 16px;
           text-align: justify;
         }
 
-        /* FIRMAS Y PIE */
+        /* SECCIÓN DE FIRMAS */
         .signatures-section {
-          margin-top: 40px;
-          padding-top: 20px;
-          border-top: 1px solid #e2e8f0;
-          page-break-inside: avoid;
+          margin-top: 32px;
+          padding-top: 10px;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
         }
         .signatures-grid {
           display: grid;
@@ -265,85 +273,72 @@ export function printClinicalDocSheet({
           display: flex;
           flex-direction: column;
           align-items: center;
-        }
-        .sig-line {
-          height: 64px;
-          width: 220px;
-          border-bottom: 1px solid #cbd5e1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin-bottom: 8px;
+          justify-content: flex-end;
+          min-height: 75px;
         }
         .sig-img {
-          max-height: 56px;
-          max-width: 100%;
+          height: 52px;
+          max-width: 170px;
           object-fit: contain;
-          mix-blend-mode: multiply;
+          display: block;
+          margin: 0 auto -8px auto;
         }
-        .sig-pending {
+        .sig-placeholder {
+          height: 52px;
+        }
+        .sig-line {
+          width: 100%;
+          border-top: 1.5px solid #0f172a;
+          padding-top: 5px;
+        }
+        .sig-title {
           font-size: 10px;
-          color: #94a3b8;
-          font-style: italic;
-        }
-        .sig-name {
-          font-size: 11px;
           font-weight: 800;
           color: #0f172a;
-          text-transform: uppercase;
-        }
-        .sig-id {
-          font-size: 9px;
-          color: #64748b;
-          margin-top: 2px;
         }
         .sig-role {
           font-size: 8.5px;
-          color: #94a3b8;
-          font-weight: 500;
-          margin-top: 2px;
+          color: #64748b;
+          margin-top: 1px;
         }
 
         .footer-legal {
           text-align: center;
-          margin-top: 24px;
-          font-size: 8.5px;
+          margin-top: 20px;
+          padding-top: 8px;
+          border-top: 1px solid #008bcd;
+          font-size: 7.5px;
           color: #94a3b8;
-          page-break-inside: avoid;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
         }
       </style>
     </head>
     <body>
+      ${
+        watermarkUrl
+          ? `<div class="watermark-bg"><img src="${watermarkUrl}" alt="" /></div>`
+          : ""
+      }
       <div class="sheet">
-        <!-- MARCA DE AGUA -->
-        <div class="watermark-bg">
-          <img src="${watermarkUrl}" alt="" />
-        </div>
-
         <div class="document-body">
           <!-- CABECERA -->
           <div class="header">
             <div class="header-left">
-              <img src="${logoUrl}" class="logo" alt="Logo" />
+              ${logoUrl ? `<img src="${logoUrl}" class="logo" alt="Logo" />` : ""}
               <div>
                 <div class="clinic-brand">${clinicName}</div>
                 ${clinicSlogan ? `<div class="clinic-slogan">${clinicSlogan}</div>` : ""}
                 <div class="clinic-meta">
-                  <div>${clinicRuc ? `<b>RUC:</b> ${clinicRuc} &nbsp;•&nbsp; ` : ""}${clinicAddress}</div>
-                  ${clinicPhone || clinicEmail ? `
-                    <div style="margin-top: 2px;">
-                      ${clinicPhone ? `<b>Telf:</b> ${clinicPhone}` : ""}
-                      ${clinicPhone && clinicEmail ? ` &nbsp;•&nbsp; ` : ""}
-                      ${clinicEmail ? `<b>Email:</b> ${clinicEmail}` : ""}
-                    </div>
-                  ` : ""}
+                  RUC: ${clinicRuc} &nbsp;•&nbsp; ${clinicAddress}
+                  ${clinicPhone ? ` &nbsp;•&nbsp; Telf: ${clinicPhone}` : ""}
                 </div>
               </div>
             </div>
             <div class="header-right">
-              <div class="header-badge">Documento Clínico Oficial</div>
-              <div class="emission-date">Fecha de Emisión:<br><b style="color: #0f172a; font-size: 11px;">${formattedDate}</b></div>
-              <div class="doc-ref">ID REF: ${docIdShort}</div>
+              <div class="header-badge">Consentimiento Informado</div>
+              <div class="emission-date">Fecha de Emisión: <b>${formattedDate}</b></div>
+              <div class="doc-ref">REF: ${docIdShort}</div>
             </div>
           </div>
 
@@ -351,69 +346,66 @@ export function printClinicalDocSheet({
           <div class="patient-card">
             <div class="patient-col">
               <div class="card-label">Datos del Paciente</div>
-              <div class="card-title">${patientFullName.toLowerCase()}</div>
+              <div class="card-title">${patientFullName}</div>
               <div class="card-sub">
-                <b>Doc. Identidad:</b> ${patientDocId || "No registrado"} &nbsp;&nbsp;&nbsp; 
+                <b>Doc. Identidad:</b> ${patientDocId || "No registrado"} &nbsp;•&nbsp;
                 <b>Edad:</b> ${patientAge ? `${patientAge} Años` : "--"}
               </div>
             </div>
             <div class="patient-col">
               <div class="card-label">Profesional Tratante</div>
-              <div class="card-title">${doctorName.toLowerCase()}</div>
-              <div class="card-sub"><b>Especialidad:</b> ${doctorSpecialtyFinal}</div>
+              <div class="card-title">${activeDoctorName}</div>
+              <div class="card-sub">
+                <b>Especialidad:</b> ${activeSpecialty}
+                ${activeLicense ? ` &nbsp;•&nbsp; <b>Matrícula:</b> ${activeLicense}` : ""}
+              </div>
             </div>
           </div>
 
           <!-- CONTENIDO DEL DOCUMENTO -->
-          <div class="doc-content-area">
-            <div class="doc-title">${doc.title || "Registro Clínico"}</div>
-            <div class="doc-body">${doc.content}</div>
-          </div>
+          <div class="doc-title">${doc.title || "Consentimiento Legal"}</div>
+          <div class="doc-body">${doc.content}</div>
 
-          <!-- FIRMAS -->
+          <!-- FIRMAS: IZQUIERDA PACIENTE / DERECHA DOCTOR -->
           <div class="signatures-section">
             <div class="signatures-grid">
-              
               <!-- Firma Paciente -->
               <div class="sig-box">
+                ${
+                  patientSigUrl
+                    ? `<img id="patient-sig" src="${patientSigUrl}" class="sig-img" alt="Firma Paciente" />`
+                    : `<div class="sig-placeholder"></div>`
+                }
                 <div class="sig-line">
-                  ${doc.patientSignature 
-                    ? `<img src="${doc.patientSignature}" class="sig-img" alt="Firma Paciente" />` 
-                    : `<span class="sig-pending">Pendiente de firma digital</span>`
-                  }
+                  <div class="sig-title">${patientFullName}</div>
+                  <div class="sig-role">Firma del Paciente / Tutor Legal (C.I.: ${patientDocId || "S/N"})</div>
                 </div>
-                <div class="sig-name">${patientFullName.toLowerCase()}</div>
-                <div class="sig-id">C.I.: ${patientDocId || "S/N"}</div>
-                <div class="sig-role">Firma del Paciente / Tutor Legal</div>
               </div>
 
               <!-- Firma Profesional -->
               <div class="sig-box">
+                ${
+                  doctorSigUrl
+                    ? `<img id="doctor-sig" src="${doctorSigUrl}" class="sig-img" alt="Firma Doctor" />`
+                    : `<div class="sig-placeholder"></div>`
+                }
                 <div class="sig-line">
-                  ${doc.doctorSignature 
-                    ? `<img src="${doc.doctorSignature}" class="sig-img" alt="Firma Doctor" />` 
-                    : `<span class="sig-pending">Pendiente de firma digital</span>`
-                  }
+                  <div class="sig-title">${activeDoctorName}</div>
+                  <div class="sig-role">${activeLicense ? `Matrícula / Reg. MSP: ${activeLicense}` : "Firma y Sello del Especialista"}</div>
                 </div>
-                <div class="sig-name">${doctorName.toLowerCase()}</div>
-                <div class="sig-id">${doctorSpecialtyFinal}</div>
-                <div class="sig-role">Firma y Sello Odontológico</div>
               </div>
-
             </div>
-            
+
             <div class="footer-legal">
-              Documento emitido electrónicamente por el Sistema Clínico ${clinicName}. Registrado bajo estándares de auditoría médica. Válido sin tachaduras ni enmendaduras.
+              Documento emitido electrónicamente por el Sistema Clínico ${clinicName}. Registrado bajo estándares de auditoría médica legal. Válido sin tachaduras ni enmendaduras.
             </div>
           </div>
-
         </div>
       </div>
     </body>
     </html>
   `
 
-  // Impresión aislada por IFRAME
   const iframe = document.createElement("iframe")
   iframe.style.position = "fixed"
   iframe.style.right = "0"
@@ -429,10 +421,24 @@ export function printClinicalDocSheet({
     printDoc.write(htmlContent)
     printDoc.close()
 
-    setTimeout(() => {
-      iframe.contentWindow?.focus()
-      iframe.contentWindow?.print()
-      setTimeout(() => document.body.removeChild(iframe), 1500)
-    }, 400)
+    const triggerPrint = () => {
+      setTimeout(() => {
+        iframe.contentWindow?.focus()
+        iframe.contentWindow?.print()
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe)
+          }
+        }, 1500)
+      }, 300)
+    }
+
+    const docImg = printDoc.getElementById("doctor-sig") as HTMLImageElement
+    if (docImg && !docImg.complete) {
+      docImg.onload = triggerPrint
+      docImg.onerror = triggerPrint
+    } else {
+      setTimeout(triggerPrint, 400)
+    }
   }
 }

@@ -163,16 +163,18 @@ export function RecetasTab({ patientId }: { patientId: string }) {
       const url = editingId ? `/api/prescriptions/${editingId}` : `/api/prescriptions`
       
       const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          patientId, 
-          medications, 
-          indications, 
-          observations,
-          authorId: currentUser?.id 
-        })
-      })
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        patientId,
+        medications,
+        indications,
+        observations,
+        authorId: currentUser?.id,
+        doctorSignature: currentUser?.signatureBase64 || null, 
+        doctorLicense: currentUser?.professionalCard || currentUser?.licenseNumber || "", 
+      }),
+    })
 
       if (!res.ok) throw new Error("Error en la respuesta del servidor")
 
@@ -230,28 +232,61 @@ export function RecetasTab({ patientId }: { patientId: string }) {
     }
   }
 
-  const handleWhatsApp = (p: any) => {
-    if (!p.doctorSignature && canEditClinicalData) {
-      setPendingActionAfterSign("whatsapp")
-      setSigningRecipe(p)
-      return
+const handleWhatsApp = async (p: any) => {
+    let sig = p.doctorSignature || p.author?.signatureBase64 || currentUser?.signatureBase64 || null
+    let license = p.doctorLicense || p.author?.professionalCard || p.author?.licenseNumber || currentUser?.professionalCard || ""
+
+    if (!sig) {
+      try {
+        const res = await fetch("/api/users/signature")
+        if (res.ok) {
+          const creds = await res.json()
+          if (creds?.signatureBase64) sig = creds.signatureBase64
+          if (creds?.professionalCard) license = creds.professionalCard
+        }
+      } catch {}
     }
 
-    setSharingRecipe(p)
+    const docWithDoctorCredentials = {
+      ...p,
+      doctorSignature: sig,
+      doctorLicense: license,
+      doctorSpecialty: p.author?.specialty || currentUser?.specialty || "Ortodoncia",
+      doctorName: p.author?.name || currentUser?.name || "Dr. Especialista",
+    }
+
+    setSharingRecipe(docWithDoctorCredentials)
     setIsShareModalOpen(true)
   }
 
-  const handlePrintClick = (p: any) => {
-    if (!p.doctorSignature && canEditClinicalData) {
-      setPendingActionAfterSign("print")
-      setSigningRecipe(p)
-    } else { 
-      setPrintingDoc(p)
-      setTimeout(() => { 
-        window.print()
-        setPrintingDoc(null) 
-      }, 300) 
+const handlePrintClick = async (p: any) => {
+    let sig = p.doctorSignature || p.author?.signatureBase64 || currentUser?.signatureBase64 || null
+    let license = p.doctorLicense || p.author?.professionalCard || p.author?.licenseNumber || currentUser?.professionalCard || ""
+
+    if (!sig) {
+      try {
+        const res = await fetch("/api/users/signature")
+        if (res.ok) {
+          const creds = await res.json()
+          if (creds?.signatureBase64) sig = creds.signatureBase64
+          if (creds?.professionalCard) license = creds.professionalCard
+        }
+      } catch {}
     }
+    const docToPrint = {
+      ...p,
+      doctorSignature: sig,
+      doctorLicense: license,
+      doctorSpecialty: p.author?.specialty || currentUser?.specialty || "Ortodoncia",
+      doctorName: p.author?.name || currentUser?.name || "Dr. Especialista",
+    }
+    setPrintingDoc(docToPrint)
+    setTimeout(() => {
+      window.print()
+      setTimeout(() => {
+        setPrintingDoc(null)
+      }, 500)
+    }, 600)
   }
 
   const filteredPrescriptions = prescriptions.filter(p => {
@@ -549,9 +584,9 @@ export function RecetasTab({ patientId }: { patientId: string }) {
         </div>
       </div>
 
-      {/* 5. MODAL DE COMPARTIR RECETA */}
+     {/* 5. MODAL DE COMPARTIR RECETA */}
       {sharingRecipe && (
-        <RecipeShareModal 
+        <RecipeShareModal
           isOpen={isShareModalOpen}
           onClose={() => {
             setIsShareModalOpen(false)
@@ -563,6 +598,15 @@ export function RecetasTab({ patientId }: { patientId: string }) {
           patientAllergies={patientAllergies}
           recipeData={sharingRecipe}
           patientDocId={patientDocId}
+          doctorSignature={sharingRecipe.doctorSignature || currentUser?.signatureBase64 || null}
+          doctorLicense={
+            sharingRecipe.doctorLicense ||
+            currentUser?.professionalCard ||
+            currentUser?.licenseNumber ||
+            ""
+          }
+          doctorName={sharingRecipe.doctorName || currentUser?.name || "Dr. Especialista"}
+          doctorSpecialty={sharingRecipe.doctorSpecialty || currentUser?.specialty || "Ortodoncia"}
         />
       )}
     </div>

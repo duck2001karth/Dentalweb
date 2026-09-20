@@ -56,7 +56,13 @@ export async function GET(req: Request) {
       where: { patientId },
       include: {
         author: {
-          select: { id: true, name: true },
+          select: {
+            id: true,
+            name: true,
+            specialty: true,
+            professionalCard: true,
+            signatureBase64: true,
+          },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -94,6 +100,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
+
     const doc = await prisma.$transaction(async (tx) => {
       const created = await tx.patientDocument.create({
         data: {
@@ -106,7 +113,13 @@ export async function POST(req: Request) {
         },
         include: {
           author: {
-            select: { id: true, name: true },
+            select: {
+              id: true,
+              name: true,
+              specialty: true,
+              professionalCard: true,
+              signatureBase64: true,
+            },
           },
         },
       });

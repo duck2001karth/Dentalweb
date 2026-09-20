@@ -112,7 +112,11 @@ model User {
   role          UserRole  @default(DOCTOR)
   specialty     String?   
   isActive      Boolean   @default(true)
-  lastLogin  DateTime?
+  lastLogin     DateTime?
+
+  signatureBase64   String?   @db.Text 
+  professionalCard  String?            
+  sealStampUrl      String?   @db.Text 
   
   accounts      Account[]
   sessions      Session[]

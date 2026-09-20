@@ -3,7 +3,7 @@
 import React from "react"
 import { 
   User, MoreVertical, Edit, Trash2, 
-  ImageIcon, ZoomIn, Check, CheckSquare, Pill, Clock, FileText 
+  ImageIcon, ZoomIn, Check, CheckSquare, Pill, Clock, FileText, Download 
 } from "lucide-react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -45,6 +45,20 @@ export function HistoryCard({
 
   const StatusIcon = statusConfig.icon
   const codeId = `#${note.id?.slice(-4).toUpperCase() || "REG"}`
+
+  const mimeType = note.fileUrl?.match(/data:(.*?);/)?.[1] || ""
+  const isImage = mimeType.startsWith("image/") || note.fileUrl?.startsWith("http") && /\.(jpg|jpeg|png|webp)$/i.test(note.fileUrl)
+  const ext = mimeType.split('/')[1]?.toUpperCase() || (note.fileUrl?.includes("pdf") ? "PDF" : "FILE")
+
+  const handleDownload = (fileUrl: string, fileName: string) => {
+    const link = document.createElement('a')
+    link.href = fileUrl
+    link.download = fileName || 'documento_clinico'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
   const renderContent = () => {
     if (isPrescription) {
       try {
@@ -93,18 +107,13 @@ export function HistoryCard({
   }
 
   return (
-    <div className="relative flex flex-col md:flex-row items-start mb-6 group">
-      
-      {/* Columna Fecha Timeline alineada al margen izquierdo */}
+    <div className="relative flex flex-col md:flex-row items-start mb-6 group">      
       <div className="md:w-[95px] shrink-0 text-left pt-2 pb-1 font-bold text-muted-foreground text-[11px] uppercase tracking-wider leading-snug select-none">
         <p className="font-black text-foreground">{format(new Date(note.createdAt), "MMM. dd", { locale: es })}</p>
         <p className="text-[10px] text-muted-foreground/70">{format(new Date(note.createdAt), "yyyy")}</p>
       </div>
 
-      {/* Punto Conector en la Línea */}
-      <div className="absolute left-0 md:left-[102px] top-3.5 w-3.5 h-3.5 rounded-full bg-card border-2 border-[#008bcd] z-10 group-hover:scale-125 transition-transform" />
-      
-      {/* Tarjeta Principal */}
+      <div className="absolute left-0 md:left-[102px] top-3.5 w-3.5 h-3.5 rounded-full bg-card border-2 border-[#008bcd] z-10 group-hover:scale-125 transition-transform" />      
       <div className="ml-6 md:ml-8 flex-1 w-full">
         <div className="bg-card rounded-2xl border border-border/80 shadow-xs overflow-hidden hover:border-[#008bcd]/40 hover:shadow-md transition-all">
           
@@ -143,7 +152,6 @@ export function HistoryCard({
               </div>
               
               <div className="flex items-center gap-2.5">
-                {/* Botón Aclarar (Solo Evoluciones) */}
                 {isEvolution && !note.isSigned && canEdit && (
                   <button 
                     onClick={() => onAclarar(note.id)} 
@@ -158,13 +166,11 @@ export function HistoryCard({
                   </span>
                 )}
 
-                {/* Badge de Estado */}
                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${statusConfig.bg} ${statusConfig.color}`}>
                   <StatusIcon className="w-3 h-3 shrink-0" />
                   {statusConfig.label}
                 </span>
 
-                {/* Menú de Acciones */}
                 {(canEdit || canDelete) && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -189,23 +195,43 @@ export function HistoryCard({
               </div>
             </div>
 
-            {/* Texto Clínico o Receta Parseada */}
             <div className="mb-3">
               {renderContent()}
             </div>
 
-            {/* Archivo o Foto Adjunta */}
             {note.fileUrl && (
               <div className="my-3">
-                <div 
-                  className="group/image relative inline-block cursor-pointer border border-border/80 rounded-xl overflow-hidden bg-muted/20"
-                  onClick={() => onPreviewImage(note.fileUrl)}
-                >
-                  <img src={note.fileUrl} alt="Adjunto Clínico" className="max-h-36 w-auto object-cover group-hover/image:scale-105 transition-transform" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/image:opacity-100 bg-black/40 backdrop-blur-xs transition-opacity">
-                    <ZoomIn className="w-6 h-6 text-white" />
+                {isImage ? (
+                  <div 
+                    className="group/image relative inline-block cursor-pointer border border-border/80 rounded-xl overflow-hidden bg-muted/20"
+                    onClick={() => onPreviewImage(note.fileUrl)}
+                  >
+                    <img src={note.fileUrl} alt="Adjunto Clínico" className="max-h-36 w-auto object-cover group-hover/image:scale-105 transition-transform" />
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/image:opacity-100 bg-black/40 backdrop-blur-xs transition-opacity">
+                      <ZoomIn className="w-6 h-6 text-white" />
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-between p-3 bg-muted/20 rounded-xl border border-border/70 max-w-sm">
+                    <div className="flex items-center gap-3 truncate">
+                      <div className="w-9 h-9 rounded-lg bg-[#008bcd]/10 border border-[#008bcd]/20 flex items-center justify-center text-[#008bcd] shrink-0">
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div className="truncate">
+                        <p className="text-xs font-bold text-foreground truncate">{note.content || "Documento Adjunto"}</p>
+                        <span className="text-[10px] font-mono font-bold text-muted-foreground uppercase">{ext} Document</span>
+                      </div>
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleDownload(note.fileUrl, note.content || "documento.pdf")}
+                      className="h-8 text-xs font-bold rounded-lg border-border/80 hover:bg-[#008bcd]/10 hover:text-[#008bcd] cursor-pointer shrink-0 ml-2"
+                    >
+                      <Download className="w-3.5 h-3.5 mr-1" /> Descargar
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 

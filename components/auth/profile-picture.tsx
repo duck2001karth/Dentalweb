@@ -13,7 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { SettingsDialog } from "@/components/user-login/settingsaccount"
+import { SettingsDialog } from "@/components/settings/settings-dialog"
 
 const getRoleBadge = (role?: string) => {
   const r = (role || "").toUpperCase()

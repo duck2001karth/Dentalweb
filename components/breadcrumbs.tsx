@@ -13,14 +13,15 @@ export function DynamicBreadcrumbs() {
   const userRole = (currentUser?.role || "DOCTOR").toUpperCase()
   const accentColor = currentUser?.calendarColor || "#008bcd"
 
-  if (pathname === "/") return null
+  if (pathname === "/" || pathname.startsWith("/paciente/")) return null
+
   const isDoctor = userRole === "DOCTOR"
 
   const getBreadcrumbData = () => {
     if (pathname.startsWith("/pacientes")) return { parent: "Directorio", label: "Pacientes", href: "/pacientes" }
-    if (pathname.startsWith("/paciente/")) return { parent: "Ficha Clínica", label: "Detalles del Paciente", href: "/pacientes" }
     if (pathname.startsWith("/agenda")) return { parent: "Agenda", label: "Calendario Global", href: "/agenda" }
-        if (pathname.startsWith("/finanzas")) {
+    
+    if (pathname.startsWith("/finanzas")) {
       if (isDoctor) {
         return { parent: "Inicio", label: "Acceso Restringido", href: "/" }
       }

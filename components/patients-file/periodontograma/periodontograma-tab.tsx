@@ -230,7 +230,6 @@ const fetchHistory = useCallback(async () => {
         variant: "success" as any
       })
 
-      // Mantener el estado cargado con el registro actual guardado
       setEditingId(null)
       fetchHistory()
     } catch {

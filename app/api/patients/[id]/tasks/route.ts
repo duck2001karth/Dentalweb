@@ -17,7 +17,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
 
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   try {
-    const params = await props.params; // <- Desenvolvemos la promesa
+    const params = await props.params;
     const body = await req.json();
     const { title, creatorId, assignedToId, dueDate } = body;
 

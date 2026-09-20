@@ -6,7 +6,7 @@ import { Inter } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { siteConfig } from "@/config/site"; 
 
-import ClientProvider from "@/components/user-login/client-provider";
+import ClientProvider from "@/components/providers/client-provider";
 import { TailwindIndicator } from "@/components/tailwind-indicator";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/toaster";

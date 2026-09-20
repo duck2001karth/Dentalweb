@@ -1,8 +1,6 @@
-
 @import "tailwindcss";
 
 @theme {
-
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
   --color-background: hsl(var(--background));
@@ -91,6 +89,71 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11", "rlig" 1, "calt" 1;
   }
 }
+
+/* ==========================================================================
+   SCROLLBAR GLOBAL MODERNO, MINIMALISTA Y FLOTANTE
+   ========================================================================== */
+
+/* 1. Estandar W3C moderno (Firefox) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+
+/* 2. Motores WebKit (Chrome, Edge, Safari, Opera) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+/* Eliminar botones y flechas nativas */
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* Fondo de riel transparente */
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+/* Pastilla redondeada estilo pill */
+::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.2s ease-in-out;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.7);
+}
+
+::-webkit-scrollbar-thumb:active {
+  background-color: rgba(71, 85, 105, 0.9);
+}
+
+/* Adaptación a Modo Oscuro */
+.dark *,
+[data-theme="dark"] * {
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+}
+
+.dark ::-webkit-scrollbar-thumb,
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.25);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover,
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.5);
+}
+
+/* ==========================================================================
+   ANIMACIONES Y ESTILOS COMPLEMENTARIOS
+   ========================================================================== */
 
 .PopoverContent {
   width: var(--radix-popover-trigger-width);

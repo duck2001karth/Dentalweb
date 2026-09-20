@@ -67,9 +67,10 @@ export function FichaClinicaLayout({ patientId }: { patientId: string }) {
   }
 
   return (
-    <div className="animate-in fade-in duration-300 flex flex-col h-full w-full">
-      <div className="w-full border-b border-border/80 mb-6 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] print:hidden">
-        <div className="flex w-max min-w-full px-2 gap-2">
+    <div className="animate-in fade-in duration-300 flex flex-col h-full w-full font-sans">
+      {/* Barra de subpestañas clínicas: texto tamaño normal (text-sm / 14px), espaciado uniforme y scrollbar oculta */}
+      <div className="w-full border-b border-border/80 mb-6 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden print:hidden">
+        <nav className="flex items-center gap-6 sm:gap-8 pb-px min-w-max px-1">
           {visibleTabs.map((tab) => {
             const isActive = activeTab === tab.id
 
@@ -79,19 +80,20 @@ export function FichaClinicaLayout({ patientId }: { patientId: string }) {
                 type="button"
                 onClick={() => handleTabChange(tab.id)}
                 className={cn(
-                  "px-5 py-3 text-sm font-semibold whitespace-nowrap transition-colors border-b-2 relative -mb-[1px] cursor-pointer select-none outline-none",
+                  "py-3 text-sm transition-colors border-b-2 relative -mb-[1px] cursor-pointer select-none outline-none whitespace-nowrap",
                   isActive
                     ? "border-[#008bcd] text-[#008bcd] font-bold"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-border font-medium"
                 )}
               >
                 {tab.label}
               </button>
             )
           })}
-        </div>
+        </nav>
       </div>
 
+      {/* Vistas clínicas por subpestaña */}
       <div className="flex-1 w-full">
         {activeTab === "historial" && <HistorialTab patientId={patientId} />}
         {activeTab === "evoluciones" && !isReceptionist && <EvolucionesTab patientId={patientId} />}

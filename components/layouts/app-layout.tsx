@@ -20,7 +20,7 @@ const Nav = dynamic(() => import('../nav').then((mod) => mod.Nav), {
   loading: () => <div className="w-[70px] h-full bg-background border-r" />,
 })
 
-const ProfilePicture = dynamic(() => import('../user-login/profile-picture').then((mod) => mod.ProfilePicture))
+const ProfilePicture = dynamic(() => import('../auth/profile-picture').then((mod) => mod.ProfilePicture))
 const ThemeToggle = dynamic(() => import('../theme-toggle').then((mod) => mod.ThemeToggle))
 const Sheet = dynamic(() => import('../ui/sheet').then((mod) => mod.Sheet))
 const SheetContent = dynamic(() => import('../ui/sheet').then((mod) => mod.SheetContent))

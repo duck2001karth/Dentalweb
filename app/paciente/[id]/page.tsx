@@ -1,117 +1,55 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams, useRouter, useSearchParams } from "next/navigation" 
+import { useParams, useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
-import { 
-  Loader2, User, CreditCard, ShieldAlert, Pill, Trash2, 
-  Calendar as CalendarIcon, Banknote 
-} from "lucide-react"
+import { Loader2, User } from "lucide-react"
 
 import { AppLayout } from "@/components/layouts/app-layout"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
-import { cn } from "@/lib/utils"
-
 import { useGetPatient, useDeletePatient } from "@/hooks/patients"
 import { useGetTreatmentPlans } from "@/hooks/treatments"
-
-import { DatosPersonalesTab } from "@/components/patients/perfil-patient"
-import { FichaClinicaLayout } from "@/components/patients/file-clinic"
-import { PatientTreatmentPlans } from "@/components/plans-treatment/patient-treatment"
-import { PayBillingLayout } from "@/components/patients/file-paymentsbilling"
-import { PaymentReceiptModal } from "@/components/patients-receivepay/payment-tab"
-
-const FICHA_CLINICA_TABS = [
-  "ficha",
-  "historial",
-  "anamnesis", 
-  "odontograma", 
-  "periodontograma", 
-  "rx", 
-  "recetas", 
-  "documentos", 
-  "consentimientos", 
-  "evoluciones"
-]
-
-const FACTURACION_PAGOS_TABS = [
-  "facturacion",
-  "pagos",
-  "documentos_emitidos",
-  "devoluciones",
-  "eliminados",
-  "balance"
-]
+import { PatientDetailView } from "@/components/patients/patient-detail-view"
 
 export default function FichaClinicaPage() {
   const params = useParams()
   const router = useRouter()
-  const searchParams = useSearchParams() 
   const { toast } = useToast()
   const { data: session } = useSession()
+
   const userRole = (session?.user as any)?.role || "DOCTOR"
-  const canReceivePayments = userRole === "ADMIN" || userRole === "RECEPCION"
-  const isDoctor = userRole === "DOCTOR"
-
   const patientId = params.id as string
-  const tabFromUrl = searchParams.get("tab")
 
-  const initialTab = tabFromUrl === "ficha" ? "historial" : (tabFromUrl || "datos")
-  const [activeTab, setActiveTab] = useState(initialTab) 
-  
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false) 
   const patientHook = useGetPatient(patientId) as any
   const patient = patientHook?.patient
   const isLoadingPatient = patientHook?.isLoading
   const refetchPatient = patientHook?.refetch || patientHook?.mutate || (() => {})
 
   const { plans: treatmentPlans = [], refetch: refetchPlans } = useGetTreatmentPlans({ patientId })
-
-  const { deletePatient, isLoading: isDeleting } = useDeletePatient() 
-
-  useEffect(() => {
-    if (tabFromUrl) {
-      setActiveTab(tabFromUrl === "ficha" ? "historial" : tabFromUrl)
-    }
-  }, [tabFromUrl])
-
-  const calculateAge = (birthDate: string | Date | undefined | null) => {
-    if (!birthDate) return "--"
-    const today = new Date()
-    const dob = new Date(birthDate)
-    let age = today.getFullYear() - dob.getFullYear()
-    const m = today.getMonth() - dob.getMonth()
-    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--
-    return age
-  }
+  const { deletePatient, isLoading: isDeleting } = useDeletePatient()
 
   const handleDeletePatient = async () => {
     try {
       await deletePatient(patientId)
-      toast({ title: "Paciente Eliminado", description: "El paciente ha sido borrado del sistema correctamente.", variant: "success" })
-      router.push("/pacientes") 
-    } catch (error) {
-      toast({ title: "Error al eliminar", description: "Hubo un problema al intentar borrar al paciente.", variant: "destructive" })
+      toast({ 
+        title: "Paciente Eliminado", 
+        description: "El paciente ha sido borrado del sistema correctamente.", 
+        variant: "success" 
+      })
+      router.push("/pacientes")
+    } catch {
+      toast({ 
+        title: "Error al eliminar", 
+        description: "Hubo un problema al intentar borrar al paciente.", 
+        variant: "destructive" 
+      })
     }
   }
-  
-  const handleMainMenuClick = (newTab: string) => {
-    setActiveTab(newTab)
-    router.replace(`/paciente/${patientId}?tab=${newTab}`, { scroll: false })
+
+  const handleRefreshData = () => {
+    if (refetchPatient) refetchPatient()
+    if (refetchPlans) refetchPlans()
   }
-
-  const patientPlans = (treatmentPlans && treatmentPlans.length > 0) 
-    ? treatmentPlans 
-    : ((patient as any)?.treatmentPlans || (patient as any)?.plans || [])
-
-  const totalPatientDebt = patientPlans.reduce((acc: number, p: any) => {
-    const cost = p.totalCost || 0
-    const paid = p.totalPaid || 0
-    return acc + Math.max(0, cost - paid)
-  }, 0)
 
   if (isLoadingPatient) {
     return (
@@ -142,217 +80,15 @@ export default function FichaClinicaPage() {
 
   return (
     <AppLayout>
-      <div className="flex-1 flex flex-col w-full bg-background min-h-screen relative pb-12 font-sans antialiased">
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent className="sm:max-w-[425px] bg-background border-border">
-            <DialogHeader>
-              <DialogTitle className="text-xl text-red-600 dark:text-red-500 flex items-center gap-2">
-                <Trash2 className="w-6 h-6" /> Eliminar Paciente
-              </DialogTitle>
-              <DialogDescription className="text-muted-foreground mt-2">
-                ¿Estás seguro de que deseas eliminar a <strong className="text-foreground">{patient.firstName} {patient.lastName}</strong>? 
-                Esta acción es irreversible.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter className="gap-2 sm:gap-0 mt-4">
-              <Button variant="outline" className="bg-background text-foreground hover:bg-accent border-border" onClick={() => setIsDeleteDialogOpen(false)}>Cancelar</Button>
-              <Button variant="destructive" onClick={handleDeletePatient} disabled={isDeleting}>
-                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null} Sí, eliminar
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-        {canReceivePayments && (
-          <PaymentReceiptModal
-          isOpen={isPaymentModalOpen}
-          onClose={() => {
-            setIsPaymentModalOpen(false)
-            if (refetchPatient) refetchPatient()
-            if (refetchPlans) refetchPlans()
-          }}
-          patient={patient}
-          plans={patientPlans} 
-          debt={totalPatientDebt}
-          onPaymentSuccess={() => {
-            if (refetchPatient) refetchPatient()
-            if (refetchPlans) refetchPlans()
-          }}
-        />
-        )}
-
-        <div className="bg-card w-full shadow-sm z-10 relative overflow-hidden border-b border-border print:hidden">
-          
-          <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none">
-            <div className="absolute -top-24 -right-24 w-96 h-96 bg-blue-500/10 dark:bg-blue-500/20 blur-[80px] rounded-full"></div>
-            <div className="absolute top-12 -left-24 w-72 h-72 bg-emerald-500/10 dark:bg-emerald-500/20 blur-[80px] rounded-full"></div>
-          </div>
-
-          <div className="max-w-[1400px] mx-auto px-4 md:px-8 py-8 md:py-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8 relative z-10">
-            
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
-              
-              <div className="relative w-20 h-20 sm:w-24 sm:h-24 shrink-0">
-                <div className="w-full h-full rounded-2xl sm:rounded-full flex items-center justify-center border-4 border-background shadow-lg overflow-hidden bg-gradient-to-tr from-[#008bcd] to-blue-400">
-                  <div className="text-white font-bold text-3xl sm:text-4xl uppercase tracking-wider drop-shadow-sm">
-                    {patient.firstName.charAt(0)}{patient.lastName.charAt(0)}
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground tracking-normal">
-                  {patient.firstName} {patient.lastName}
-                </h1>
-                
-                <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-muted text-muted-foreground border border-border">
-                    ID: {patient.id.split("-")[0].toUpperCase()}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-blue-500/10 text-[#008bcd] dark:text-blue-400 border border-blue-500/20">
-                    <CreditCard size={13}/> CI: {patient.ci}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                    <User size={13}/> {calculateAge(patient.birthDate)} años
-                  </span>
-                </div>
-                
-                <div className="flex items-center gap-2 mt-3 text-sm font-semibold text-muted-foreground">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  {patient.convenio || "Sin convenio"} <span className="opacity-40 px-1">•</span> {patient.tipoPaciente || "Contributivo"}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-              <div className={cn(
-                "p-4 rounded-xl border backdrop-blur-sm flex flex-col justify-center min-w-[180px] transition-colors shadow-sm",
-                patient.medicalAlerts 
-                  ? "bg-red-500/10 border-red-500/20" 
-                  : "bg-background/60 border-border"
-              )}>
-                <div className={cn(
-                  "flex items-center gap-2 text-xs font-bold mb-1.5 uppercase tracking-wide",
-                  patient.medicalAlerts ? "text-red-600 dark:text-red-400" : "text-muted-foreground"
-                )}>
-                  <ShieldAlert size={14} /> Alertas médicas
-                </div>
-                <div className={cn(
-                  "text-sm font-semibold truncate max-w-[160px]",
-                  patient.medicalAlerts ? "text-red-700 dark:text-red-300" : "text-foreground"
-                )} title={patient.medicalAlerts || undefined}>
-                  {patient.medicalAlerts || "Ninguna registrada"}
-                </div>
-              </div>
-
-              <div className="p-4 rounded-xl border border-border bg-background/60 backdrop-blur-sm flex flex-col justify-center min-w-[180px] shadow-sm">
-                <div className="flex items-center gap-2 text-[#008bcd] dark:text-blue-400 text-xs font-bold mb-1.5 uppercase tracking-wide">
-                  <Pill size={14} /> EPS / Seguro
-                </div>
-                <div className="text-sm font-semibold text-foreground truncate max-w-[160px]" title={patient.eps || undefined}>
-                  {patient.eps || "No registrado"}
-                </div>
-              </div>
-            </div>
-            
-          </div>
-        </div>
-        <div className="bg-card border-b border-border w-full shadow-sm z-0 sticky top-0 print:hidden">
-          <div className="max-w-[1400px] mx-auto px-4 md:px-8 flex overflow-x-auto custom-scrollbar items-center justify-between">
-            
-            <div className="flex items-center">
-              <button 
-                onClick={() => handleMainMenuClick("datos")}
-                className={cn("px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px] cursor-pointer", activeTab === "datos" ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50")}
-              >
-                Datos personales
-              </button>
-              
-              <button 
-                onClick={() => handleMainMenuClick("historial")} 
-                className={cn(
-                  "px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px] cursor-pointer", 
-                  FICHA_CLINICA_TABS.includes(activeTab) 
-                    ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" 
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}
-              >
-                Ficha clínica
-              </button>
-              
-              <button 
-                onClick={() => handleMainMenuClick("planes")}
-                className={cn("px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px] cursor-pointer", activeTab === "planes" ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50")}
-              >
-                Planes de tratamiento
-              </button>
-
-              <button 
-                onClick={() => handleMainMenuClick("facturacion")}
-                className={cn(
-                  "px-6 py-4 font-bold text-sm whitespace-nowrap transition-all border-b-[3px] cursor-pointer", 
-                  FACTURACION_PAGOS_TABS.includes(activeTab) 
-                    ? "border-[#008bcd] text-[#008bcd] dark:text-blue-400 bg-blue-500/5" 
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}
-              >
-                Facturación y pagos
-              </button>
-            </div>
-            <div className="flex items-center gap-2 py-2 shrink-0">
-              <button 
-                onClick={() => router.push(`/agenda-global?patientId=${patientId}`)} 
-                className="px-4 h-10 text-[#008bcd] dark:text-blue-400 hover:bg-blue-500/10 font-bold text-xs whitespace-nowrap flex items-center gap-2 transition-colors rounded-xl border border-transparent cursor-pointer"
-              >
-                <CalendarIcon size={15} /> Agendar Cita
-              </button>
-              {canReceivePayments && (
-                <Button
-                  onClick={() => setIsPaymentModalOpen(true)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs h-10 px-4 rounded-xl shadow-md shadow-emerald-600/20 flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
-                >
-                  <Banknote size={16} className="stroke-[2.5]" /> Recibir pago
-                </Button>
-              )}
-            </div>
-
-          </div>
-        </div>
-        <div className="flex-1 w-full max-w-[1400px] mx-auto p-4 md:p-8">
-          
-          {activeTab === "datos" && (
-            <DatosPersonalesTab 
-              patient={patient} 
-              patientId={patientId} 
-              onDeleteRequest={() => setIsDeleteDialogOpen(true)} 
-            />
-          )}
-
-          {FICHA_CLINICA_TABS.includes(activeTab) && (
-            <FichaClinicaLayout patientId={patientId} />
-          )}
-
-          {activeTab === "planes" && (
-            <PatientTreatmentPlans patientId={patientId} />
-          )}
-
-          {FACTURACION_PAGOS_TABS.includes(activeTab) && (
-            <PayBillingLayout 
-              patientId={patientId}
-              patient={patient}
-              plans={patientPlans}
-              onRefreshData={() => {
-                if (refetchPatient) refetchPatient()
-                if (refetchPlans) refetchPlans()
-              }}
-            />
-          )}
-
-        </div>
-
-      </div>
+      <PatientDetailView
+        patient={patient}
+        patientId={patientId}
+        treatmentPlans={treatmentPlans}
+        userRole={userRole}
+        onDeletePatient={handleDeletePatient}
+        isDeleting={isDeleting}
+        onRefreshData={handleRefreshData}
+      />
     </AppLayout>
   )
 }

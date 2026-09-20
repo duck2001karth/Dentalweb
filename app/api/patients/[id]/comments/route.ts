@@ -32,3 +32,23 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request, props: { params: Promise<{ id: string }> }) {
+  try {
+    const url = new URL(req.url);
+    const commentId = url.searchParams.get("commentId");
+
+    if (!commentId) {
+      return NextResponse.json({ error: "Falta el ID del comentario" }, { status: 400 });
+    }
+
+    await prisma.patientComment.delete({
+      where: { id: commentId }
+    });
+
+    return NextResponse.json({ success: true, message: "Comentario eliminado correctamente" });
+  } catch (error) {
+    console.error("Error al eliminar comentario:", error);
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+  }
+}

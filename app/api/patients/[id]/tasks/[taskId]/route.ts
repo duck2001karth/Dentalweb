@@ -17,3 +17,18 @@ export async function PATCH(req: Request, props: { params: Promise<{ id: string,
     return NextResponse.json({ error: "Error interno" }, { status: 500 });
   }
 }
+
+export async function DELETE(req: Request, props: { params: Promise<{ id: string, taskId: string }> }) {
+  try {
+    const params = await props.params;
+
+    await prisma.patientTask.delete({
+      where: { id: params.taskId }
+    });
+
+    return NextResponse.json({ success: true, message: "Tarea eliminada correctamente" });
+  } catch (error) {
+    console.error("Error al eliminar tarea:", error);
+    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+  }
+}
