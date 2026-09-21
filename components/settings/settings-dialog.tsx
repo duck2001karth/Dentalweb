@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
+import { useTheme } from "next-themes"
 import { updateUserSettings } from "@/lib/actions"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -20,10 +21,8 @@ import {
   Mail,
   Loader2,
   Camera,
-  Globe,
   Clock,
   Command,
-  CreditCard,
   ShieldCheck,
   BellRing,
   Eye,
@@ -34,6 +33,7 @@ import { DoctorSignatureTab } from "./tabs/doctor-signature-tab"
 import { SettingsSidebar } from "@/components/settings/settings-sidebar"
 import { AppearanceTab } from "@/components/settings/tabs/appearance-tab"
 import { ClinicalProfileTab } from "@/components/settings/tabs/clinical-profile-tab"
+import { LanguageRegionSettings } from "@/components/settings/language-region-settings"
 
 const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Administrador General",
@@ -41,22 +41,29 @@ const ROLE_LABELS: Record<string, string> = {
   RECEPTIONIST: "Recepción y Caja",
 }
 
+interface SettingsDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  defaultTab?: string
+}
+
 export function SettingsDialog({
   open,
   onOpenChange,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-}) {
+  defaultTab = "profile",
+}: SettingsDialogProps) {
   const { data: session, update } = useSession()
+  const { theme, resolvedTheme } = useTheme()
   const { toast } = useToast()
+
+  const isDark = (resolvedTheme || theme) === "dark"
 
   const currentUser = session?.user as any
   const userRole = (currentUser?.role || "DOCTOR").toUpperCase()
   const isDoctor = userRole === "DOCTOR"
   const isOAuthUser = !currentUser?.hasPassword && !currentUser?.password
 
-  const [activeSubTab, setActiveSubTab] = useState("appearance")
+  const [activeSubTab, setActiveSubTab] = useState(defaultTab)
   const [isLoading, setIsLoading] = useState(false)
   const [liveAccentColor, setLiveAccentColor] = useState<string>(
     currentUser?.calendarColor || "#008bcd"
@@ -67,20 +74,23 @@ export function SettingsDialog({
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
-
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (open) {
+      setActiveSubTab(defaultTab)
+    }
+  }, [open, defaultTab])
 
   useEffect(() => {
     if (currentUser) {
       setPhone(currentUser.phoneNumber || currentUser.phone || "")
       setAvatarUrl(currentUser.image || "")
       setProfessionalCard(currentUser.professionalCard || currentUser.licenseNumber || "")
-
       if (currentUser.calendarColor) {
         setLiveAccentColor(currentUser.calendarColor)
       }
     }
-
     if (open) {
       fetch("/api/users/signature")
         .then((res) => (res.ok ? res.json() : null))
@@ -92,15 +102,6 @@ export function SettingsDialog({
         .catch(() => {})
     }
   }, [currentUser, open])
-
-  useEffect(() => {
-    if (!open) {
-      setCurrentPassword("")
-      setNewPassword("")
-      setConfirmPassword("")
-      setActiveSubTab("appearance")
-    }
-  }, [open])
 
   const handleFileUpload = (
     e: React.ChangeEvent<HTMLInputElement>,
@@ -122,7 +123,6 @@ export function SettingsDialog({
         toast({ title: "Error al actualizar", description: result.error, variant: "destructive" })
         return
       }
-
       await update({
         ...session,
         user: {
@@ -131,7 +131,6 @@ export function SettingsDialog({
           image: avatarUrl,
         },
       })
-
       toast({ title: "Cambios guardados", description: "Tu información personal fue actualizada con éxito." })
     } catch {
       toast({ title: "Error", description: "No se pudieron aplicar los cambios.", variant: "destructive" })
@@ -150,7 +149,6 @@ export function SettingsDialog({
       toast({ title: "Error", description: "Mínimo 6 caracteres.", variant: "destructive" })
       return
     }
-
     setIsLoading(true)
     try {
       const result = await updateUserSettings({ currentPassword, newPassword })
@@ -171,44 +169,68 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden gap-0 bg-white border border-slate-200/80 shadow-2xl rounded-3xl flex font-sans antialiased text-slate-900 [&>button:last-child]:hidden">
+      <DialogContent
+        className={`sm:max-w-5xl w-[95vw] h-[85vh] p-0 overflow-hidden gap-0 border shadow-2xl rounded-3xl flex font-sans antialiased [&>button:last-child]:hidden transition-colors ${
+          isDark
+            ? "bg-[#070d18] border-[#1e293b] text-white"
+            : "bg-white border-slate-200 text-slate-900"
+        }`}
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>Ajustes</DialogTitle>
           <DialogDescription>Ajustes globales del sistema</DialogDescription>
         </DialogHeader>
+
+        {/* BARRA LATERAL */}
         <SettingsSidebar
           activeSubTab={activeSubTab}
           setActiveSubTab={setActiveSubTab}
           isDoctor={isDoctor}
           currentColor={liveAccentColor}
         />
-        <div className="flex-1 flex flex-col h-full bg-white relative overflow-hidden">
+
+        {/* CONTENIDO PRINCIPAL DERECHO */}
+        <div
+          className={`flex-1 flex flex-col h-full relative overflow-hidden transition-colors ${
+            isDark ? "bg-[#030712]" : "bg-slate-50/60"
+          }`}
+        >
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="absolute top-5 right-6 z-30 text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-full transition-colors cursor-pointer"
+            className={`absolute top-5 right-6 z-30 p-1.5 rounded-full transition-colors cursor-pointer ${
+              isDark
+                ? "text-slate-400 hover:text-white hover:bg-white/10"
+                : "text-slate-400 hover:text-slate-700 hover:bg-slate-200"
+            }`}
             title="Cerrar ajustes"
           >
             <X className="w-4 h-4" />
           </button>
-          <div className="flex-1 overflow-y-auto p-8 sm:p-10 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-200 hover:[&::-webkit-scrollbar-thumb]:bg-slate-300">
-            
-            {/* SUB-PESTAÑA: APARIENCIA */}
+
+          <div className="flex-1 overflow-y-auto p-8 sm:p-10 custom-scrollbar">
             {activeSubTab === "appearance" && (
               <AppearanceTab
                 currentColor={liveAccentColor}
-                onColorChange={(newCol) => setLiveAccentColor(newCol)}
+                onColorChange={(newCol: string) => setLiveAccentColor(newCol)}
               />
             )}
 
-            {/* SUB-PESTAÑA: INFORMACIÓN PERSONAL */}
             {activeSubTab === "profile" && (
               <div className="space-y-6 max-w-2xl animate-in fade-in duration-200">
-                <div className="flex items-center gap-4 pb-4 border-b border-slate-100">
+                <div
+                  className={`flex items-center gap-4 pb-4 border-b ${
+                    isDark ? "border-[#1e293b]" : "border-slate-200"
+                  }`}
+                >
                   <div className="relative group shrink-0">
-                    <Avatar className="h-16 w-16 border border-slate-200 shadow-xs">
+                    <Avatar className="h-16 w-16 border shadow-xs border-slate-200 dark:border-[#1e293b]">
                       <AvatarImage src={avatarUrl} className="object-cover" />
-                      <AvatarFallback className="text-lg font-bold bg-slate-100 text-slate-700">
+                      <AvatarFallback
+                        className={`text-lg font-bold ${
+                          isDark ? "bg-[#111827] text-white" : "bg-slate-100 text-slate-800"
+                        }`}
+                      >
                         {currentUser?.name?.charAt(0).toUpperCase() || "U"}
                       </AvatarFallback>
                     </Avatar>
@@ -230,14 +252,16 @@ export function SettingsDialog({
                     />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-slate-900">
+                    <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
                       {currentUser?.name || "Usuario del Sistema"}
                     </h3>
-                    <p className="text-xs text-slate-500 font-mono mt-0.5">{currentUser?.email}</p>
+                    <p className={`text-xs font-mono mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                      {currentUser?.email}
+                    </p>
                     <div className="mt-1 flex items-center gap-2">
                       <span
                         style={{ backgroundColor: `${liveAccentColor}1A`, color: liveAccentColor }}
-                        className="text-[11px] font-bold px-2 py-0.5 rounded-md inline-block"
+                        className="text-[11px] font-bold px-2 py-0.5 rounded-md inline-block border border-current/20"
                       >
                         {ROLE_LABELS[userRole] || userRole}
                       </span>
@@ -247,33 +271,51 @@ export function SettingsDialog({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-700">Nombre Completo</Label>
+                    <Label className={`text-xs font-semibold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                      Nombre Completo
+                    </Label>
                     <Input
                       value={currentUser?.name || ""}
                       disabled
-                      className="h-10 rounded-xl bg-slate-50 border-slate-200 font-medium text-slate-600"
+                      className={`h-10 rounded-xl font-medium ${
+                        isDark
+                          ? "bg-[#070d18] border-[#1e293b] text-slate-400"
+                          : "bg-slate-100 border-slate-200 text-slate-500"
+                      }`}
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold text-slate-700">Correo Institucional</Label>
+                    <Label className={`text-xs font-semibold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                      Correo Institucional
+                    </Label>
                     <div className="relative">
                       <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <Input
                         value={currentUser?.email || ""}
                         disabled
-                        className="pl-9 h-10 rounded-xl bg-slate-50 border-slate-200 text-xs font-mono text-slate-600"
+                        className={`pl-9 h-10 rounded-xl text-xs font-mono ${
+                          isDark
+                            ? "bg-[#070d18] border-[#1e293b] text-slate-400"
+                            : "bg-slate-100 border-slate-200 text-slate-500"
+                        }`}
                       />
                     </div>
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label className="text-xs font-semibold text-slate-700">Teléfono Móvil (WhatsApp)</Label>
+                    <Label className={`text-xs font-semibold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                      Teléfono Móvil
+                    </Label>
                     <div className="relative">
                       <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                       <Input
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+593 9XXXXXXXX / +591 7XXXXXXX"
-                        className="pl-9 h-10 rounded-xl border-slate-200 text-xs"
+                        placeholder="+593 9XXXXXXXX"
+                        className={`pl-9 h-10 rounded-xl text-xs ${
+                          isDark
+                            ? "bg-[#070d18] border-[#1e293b] text-white"
+                            : "bg-white border-slate-200 text-slate-900"
+                        }`}
                       />
                     </div>
                   </div>
@@ -284,7 +326,7 @@ export function SettingsDialog({
                     onClick={handleSaveGeneral}
                     disabled={isLoading}
                     style={{ backgroundColor: liveAccentColor }}
-                    className="text-white font-bold h-9 rounded-xl px-5 cursor-pointer shadow-xs hover:opacity-90 transition-opacity"
+                    className="text-white font-bold h-9 rounded-xl px-5 cursor-pointer shadow-xs hover:opacity-90 transition-opacity border-0"
                   >
                     {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />} Guardar Información
                   </Button>
@@ -292,7 +334,6 @@ export function SettingsDialog({
               </div>
             )}
 
-            {/* SUB-PESTAÑA: PERFIL CLÍNICO (DESGLOSADO EN COMPONENTE LIMPIO) */}
             {activeSubTab === "clinical" && isDoctor && (
               <ClinicalProfileTab
                 accentColor={liveAccentColor}
@@ -301,7 +342,6 @@ export function SettingsDialog({
               />
             )}
 
-            {/* SUB-PESTAÑA: FIRMA Y SELLO */}
             {activeSubTab === "signature" && isDoctor && (
               <div className="animate-in fade-in duration-200">
                 <DoctorSignatureTab
@@ -324,27 +364,35 @@ export function SettingsDialog({
               </div>
             )}
 
-            {/* SUB-PESTAÑA: CONTRASEÑA Y SEGURIDAD */}
             {activeSubTab === "security" && (
               <div className="space-y-6 max-w-lg animate-in fade-in duration-200">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900">Contraseña y Seguridad</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
+                  <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+                    Contraseña y Seguridad
+                  </h3>
+                  <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                     Actualiza tu método de acceso al sistema clínico
                   </p>
                 </div>
-
                 {isOAuthUser ? (
-                  <div className="p-5 rounded-2xl border border-slate-200 bg-slate-50/60 space-y-3">
+                  <div
+                    className={`p-5 rounded-2xl border space-y-3 ${
+                      isDark ? "border-[#1e293b] bg-[#070d18]" : "border-slate-200 bg-slate-100/60"
+                    }`}
+                  >
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-xl bg-white border border-slate-200 shadow-xs shrink-0">
+                      <div
+                        className={`p-2 rounded-xl border shadow-xs shrink-0 ${
+                          isDark ? "bg-[#111827] border-[#1e293b]" : "bg-white border-slate-200"
+                        }`}
+                      >
                         <Icons.google className="w-5 h-5" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900">
+                        <h4 className={`text-xs font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
                           Autenticación por Google Workspace
                         </h4>
-                        <p className="text-[11px] text-slate-500 mt-0.5">
+                        <p className={`text-[11px] mt-0.5 ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                           Tu sesión está vinculada a tu cuenta institucional de Google.
                         </p>
                       </div>
@@ -353,40 +401,46 @@ export function SettingsDialog({
                 ) : (
                   <form onSubmit={handleSavePassword} className="space-y-3">
                     <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">Contraseña Actual</Label>
+                      <Label className={`text-xs font-semibold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                        Contraseña Actual
+                      </Label>
                       <Input
                         type="password"
                         value={currentPassword}
                         onChange={(e) => setCurrentPassword(e.target.value)}
                         required
-                        className="h-10 rounded-xl border-slate-200"
+                        className={isDark ? "bg-[#070d18] border-[#1e293b]" : "bg-white border-slate-200"}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">Nueva Contraseña</Label>
+                      <Label className={`text-xs font-semibold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                        Nueva Contraseña
+                      </Label>
                       <Input
                         type="password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
-                        className="h-10 rounded-xl border-slate-200"
+                        className={isDark ? "bg-[#070d18] border-[#1e293b]" : "bg-white border-slate-200"}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-slate-700">Confirmar Contraseña</Label>
+                      <Label className={`text-xs font-semibold ${isDark ? "text-slate-300" : "text-slate-700"}`}>
+                        Confirmar Contraseña
+                      </Label>
                       <Input
                         type="password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
-                        className="h-10 rounded-xl border-slate-200"
+                        className={isDark ? "bg-[#070d18] border-[#1e293b]" : "bg-white border-slate-200"}
                       />
                     </div>
                     <Button
                       type="submit"
                       disabled={isLoading}
                       style={{ backgroundColor: liveAccentColor }}
-                      className="w-full text-white font-bold h-10 rounded-xl mt-2 cursor-pointer shadow-xs hover:opacity-90 transition-opacity"
+                      className="w-full text-white font-bold h-10 rounded-xl mt-2 cursor-pointer shadow-xs hover:opacity-90 transition-opacity border-0"
                     >
                       {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Actualizar Contraseña
                     </Button>
@@ -395,16 +449,9 @@ export function SettingsDialog({
               </div>
             )}
 
-            {/* OTRAS SUB-PESTAÑAS */}
             {activeSubTab === "language" && (
-              <div className="space-y-4 max-w-lg animate-in fade-in duration-200">
-                <div className="flex items-center gap-2">
-                  <Globe className="w-5 h-5" style={{ color: liveAccentColor }} />
-                  <h3 className="text-base font-bold text-slate-900">Idioma y Región</h3>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  El idioma predeterminado del sistema es Español (América Latina). Los formatos de moneda y zonas horarias se adaptan automáticamente a la sede clínica.
-                </p>
+              <div className="animate-in fade-in duration-200">
+                <LanguageRegionSettings accentColor={liveAccentColor} />
               </div>
             )}
 
@@ -412,9 +459,9 @@ export function SettingsDialog({
               <div className="space-y-4 max-w-lg animate-in fade-in duration-200">
                 <div className="flex items-center gap-2">
                   <Clock className="w-5 h-5" style={{ color: liveAccentColor }} />
-                  <h3 className="text-base font-bold text-slate-900">Fecha y Hora</h3>
+                  <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Fecha y Hora</h3>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                   Formato de 24 horas habilitado para la agenda quirúrgica y citas odontológicas.
                 </p>
               </div>
@@ -424,22 +471,20 @@ export function SettingsDialog({
               <div className="space-y-4 max-w-lg animate-in fade-in duration-200">
                 <div className="flex items-center gap-2">
                   <Command className="w-5 h-5" style={{ color: liveAccentColor }} />
-                  <h3 className="text-base font-bold text-slate-900">Atajos de Teclado</h3>
+                  <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Atajos de Teclado</h3>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Presiona <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-[10px] font-mono font-bold text-slate-700">Ctrl + K</kbd> para abrir el buscador global de pacientes.
-                </p>
-              </div>
-            )}
-
-            {activeSubTab === "plans" && (
-              <div className="space-y-4 max-w-lg animate-in fade-in duration-200">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="w-5 h-5" style={{ color: liveAccentColor }} />
-                  <h3 className="text-base font-bold text-slate-900">Planes y Mejoras</h3>
-                </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Plan Activo: Carmo Dental Pro Edition. Facturación electrónica y módulos clínicos habilitados.
+                <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+                  Presiona{" "}
+                  <kbd
+                    className={`px-1.5 py-0.5 rounded border text-[10px] font-mono font-bold ${
+                      isDark
+                        ? "bg-[#111827] border-[#1e293b] text-slate-200"
+                        : "bg-slate-200 border-slate-300 text-slate-800"
+                    }`}
+                  >
+                    Ctrl + K
+                  </kbd>{" "}
+                  para abrir el buscador global de pacientes.
                 </p>
               </div>
             )}
@@ -448,9 +493,9 @@ export function SettingsDialog({
               <div className="space-y-4 max-w-lg animate-in fade-in duration-200">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5" style={{ color: liveAccentColor }} />
-                  <h3 className="text-base font-bold text-slate-900">Privacidad</h3>
+                  <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Privacidad</h3>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                   Los registros clínicos, notas de evolución y firmas biométricas cuentan con cifrado y registro de auditoría estricto.
                 </p>
               </div>
@@ -460,9 +505,9 @@ export function SettingsDialog({
               <div className="space-y-4 max-w-lg animate-in fade-in duration-200">
                 <div className="flex items-center gap-2">
                   <BellRing className="w-5 h-5" style={{ color: liveAccentColor }} />
-                  <h3 className="text-base font-bold text-slate-900">Notificaciones</h3>
+                  <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Notificaciones</h3>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                   Gestión de recordatorios automáticos por WhatsApp y avisos de llegada de pacientes a sala de espera.
                 </p>
               </div>
@@ -472,9 +517,9 @@ export function SettingsDialog({
               <div className="space-y-4 max-w-lg animate-in fade-in duration-200">
                 <div className="flex items-center gap-2">
                   <Eye className="w-5 h-5" style={{ color: liveAccentColor }} />
-                  <h3 className="text-base font-bold text-slate-900">Accesibilidad</h3>
+                  <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Accesibilidad</h3>
                 </div>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
                   Soporte para alto contraste y navegación por teclado optimizada para entornos clínicos.
                 </p>
               </div>

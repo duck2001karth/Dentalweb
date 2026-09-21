@@ -141,24 +141,25 @@ export function DocumentViewerModal({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {!selectedDoc.isVoided && canEditDocs && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => onEdit(selectedDoc)}
-                className="rounded-xl font-bold border-border/80 hover:text-amber-600 text-xs h-8 px-3"
-              >
-                <Edit size={13} className="mr-1.5 text-amber-500" /> Editar
-              </Button>
-            )}
+
+          {!selectedDoc.isVoided && canEditDocs && (
             <Button
               size="sm"
               variant="outline"
-              onClick={() => onPrint(selectedDoc)}
-              className="rounded-xl font-bold border-border/80 hover:text-[#008bcd] text-xs h-8 px-3"
+              onClick={() => onEdit(selectedDoc)}
+              className="rounded-xl font-bold border-border/80 bg-card text-foreground hover:bg-muted text-xs h-8 px-3 shadow-2xs transition-all cursor-pointer"
             >
-              <Printer size={13} className="mr-1.5" /> Imprimir Respaldo
+              <Edit size={13} className="mr-1.5 text-amber-500" /> Editar
             </Button>
+          )}
+         <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onPrint(selectedDoc)}
+            className="rounded-xl font-bold border-border/80 bg-card text-foreground hover:bg-muted hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] text-xs h-8 px-3 shadow-2xs transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
+          >
+            <Printer size={13} className="mr-1.5" style={{ color: 'var(--doctor-accent, #008bcd)' }} /> Imprimir Respaldo
+          </Button>
             <Button
               size="sm"
               variant="ghost"

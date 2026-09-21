@@ -57,7 +57,7 @@ export function BoxesSettingsTab({ settings, setSettings }: BoxesSettingsTabProp
           className="h-10 rounded-xl bg-background text-sm" 
           onKeyDown={(e) => e.key === "Enter" && handleAddBox()}
         />
-        <Button onClick={handleAddBox} type="button" className="bg-[#008bcd] hover:bg-[#007bb6] text-white font-bold h-10 px-5 rounded-xl text-xs cursor-pointer">
+        <Button onClick={handleAddBox} type="button" className="bg-primary hover:bg-[#007bb6] text-white font-bold h-10 px-5 rounded-xl text-xs cursor-pointer">
           <Plus className="w-4 h-4 mr-1.5" /> Añadir
         </Button>
       </div>

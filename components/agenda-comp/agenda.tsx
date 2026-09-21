@@ -72,6 +72,7 @@ export function DashboardAgenda() {
         .catch(err => console.error("Error cargando doctores:", err))
     }
   }, [isAdminOrStaff])
+
   const doctorColorsMap = useMemo(() => {
     const map: Record<string, string> = {}
     doctorsList.forEach(doc => {
@@ -83,14 +84,15 @@ export function DashboardAgenda() {
     return map
   }, [doctorsList, currentUser, defaultUserColor])
 
-    const effectiveDoctorId = isAdminOrStaff 
-      ? (selectedDoctor === "all" ? undefined : selectedDoctor)
-      : currentUser?.id
+  const effectiveDoctorId = isAdminOrStaff 
+    ? (selectedDoctor === "all" ? undefined : selectedDoctor)
+    : currentUser?.id
 
-    const { appointments = [], isLoading, error: isError, refetch } = useGetAppointments({ 
-      fecha: date,
-      doctorId: effectiveDoctorId 
-    })
+  const { appointments = [], isLoading, error: isError, refetch } = useGetAppointments({ 
+    fecha: date,
+    doctorId: effectiveDoctorId 
+  })
+
   const citasActivas = appointments.filter((cita: any) => cita.status !== "CANCELLED")
   const anulacionesCount = appointments.filter((cita: any) => cita.status === "CANCELLED").length
 
@@ -112,10 +114,10 @@ export function DashboardAgenda() {
             <div className="mt-3 flex items-center gap-3 bg-card p-1.5 px-3 rounded-xl border border-border/80 shadow-xs w-max">
               <span className="text-xs font-black text-muted-foreground uppercase tracking-wider">Filtro Médico:</span>
               <Select value={selectedDoctor} onValueChange={setSelectedDoctor}>
-                <SelectTrigger className="w-[230px] h-8 text-xs font-bold bg-background border-border/80 rounded-lg">
+                <SelectTrigger className="w-[230px] h-8 text-xs font-bold bg-background border-border/80 rounded-lg focus:ring-1 focus:ring-[var(--doctor-accent,#008bcd)]">
                   <SelectValue placeholder="Todos los especialistas" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border-border/80 shadow-xl">
+                <SelectContent className="rounded-xl border-border/80 shadow-xl bg-card">
                   <SelectItem value="all" className="font-bold text-xs">👥 Todos los especialistas</SelectItem>
                   {doctorsList.map((doc) => (
                     <SelectItem key={doc.id} value={doc.id} className="font-medium text-xs">
@@ -137,23 +139,23 @@ export function DashboardAgenda() {
         {/* BARRA DE ACCIONES */}
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
           <Button 
-            variant="ghost" 
+            variant="outline" 
             onClick={() => {
               setSelectedAppointment(null) 
               setIsRescheduleOpen(true)
             }}
-            className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground hover:bg-accent/60 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
+            className="flex-1 md:flex-none bg-card border-border/80 text-foreground hover:bg-muted hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] font-bold text-sm h-11 px-4 rounded-xl transition-all shadow-2xs cursor-pointer group focus-visible:ring-[var(--doctor-accent,#008bcd)]"
           >
-            <RefreshCcw className="h-5 w-5 mr-2 text-muted-foreground transition-colors group-hover:text-foreground" /> 
+            <RefreshCcw className="h-4 w-4 mr-2 text-muted-foreground transition-colors group-hover:text-[var(--doctor-accent,#008bcd)]" /> 
             <span>Reprogramar</span>
           </Button>
           
           <Link href="/agenda-global" className="flex-1 md:flex-none">
             <Button 
-              variant="ghost" 
-              className="w-full bg-transparent border border-border/80 text-foreground hover:bg-accent/60 font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
+              variant="outline" 
+              className="w-full bg-card border-border/80 text-foreground hover:bg-muted hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] font-bold text-sm h-11 px-4 rounded-xl transition-all shadow-2xs cursor-pointer group focus-visible:ring-[var(--doctor-accent,#008bcd)]"
             >
-              <CalendarCheck className="h-5 w-5 mr-2 text-muted-foreground transition-colors group-hover:text-foreground" /> 
+              <CalendarCheck className="h-4 w-4 mr-2 text-muted-foreground transition-colors group-hover:text-[var(--doctor-accent,#008bcd)]" /> 
               <span>Agenda Global</span>
             </Button>
           </Link>
@@ -180,10 +182,40 @@ export function DashboardAgenda() {
               <h4 className="font-extrabold text-xs text-muted-foreground uppercase tracking-wider">Navegador</h4>
             </div>
             <div className="p-3 flex flex-col items-center justify-center">
-              {/* Calendario con el día seleccionado teñido con el color del usuario */}
+              {/* Calendario con contraste y tipografía nítida en modo claro y oscuro */}
               <div 
                 style={{ "--calendar-accent": defaultUserColor } as React.CSSProperties}
-                className="w-full flex justify-center [&_.rdp]:w-full [&_.rdp-months]:w-full [&_.rdp-month]:w-full [&_.rdp-table]:w-full [&_.rdp-day_selected]:bg-[var(--calendar-accent)] [&_.rdp-day_selected]:text-white [&_.rdp-day_selected:hover]:opacity-90 [&_.rdp-day]:rounded-xl"
+                className="w-full flex justify-center 
+                  [&_.rdp]:w-full 
+                  [&_.rdp-months]:w-full 
+                  [&_.rdp-month]:w-full 
+                  [&_.rdp-table]:w-full 
+                  [&_.rdp-caption]:text-slate-900 
+                  dark:[&_.rdp-caption]:text-slate-100 
+                  [&_.rdp-caption_label]:text-sm 
+                  [&_.rdp-caption_label]:font-black 
+                  [&_.rdp-caption_label]:capitalize 
+                  [&_.rdp-head_cell]:text-slate-500 
+                  dark:[&_.rdp-head_cell]:text-slate-400 
+                  [&_.rdp-head_cell]:font-bold 
+                  [&_.rdp-head_cell]:text-xs 
+                  [&_.rdp-button]:text-slate-800 
+                  dark:[&_.rdp-button]:text-slate-200 
+                  [&_.rdp-day]:font-bold 
+                  [&_.rdp-day]:text-xs 
+                  [&_.rdp-day]:text-slate-800 
+                  dark:[&_.rdp-day]:text-slate-200 
+                  [&_.rdp-day_outside]:text-slate-300 
+                  dark:[&_.rdp-day_outside]:text-slate-600 
+                  [&_.rdp-day_outside]:opacity-40 
+                  [&_.rdp-day_selected]:bg-[var(--calendar-accent)]! 
+                  [&_.rdp-day_selected]:text-white! 
+                  [&_.rdp-day_selected:hover]:opacity-90 
+                  [&_.rdp-day]:rounded-xl 
+                  [&_.rdp-nav_button]:text-slate-700 
+                  dark:[&_.rdp-nav_button]:text-slate-200 
+                  [&_.rdp-nav_button]:hover:bg-slate-100 
+                  dark:[&_.rdp-nav_button]:hover:bg-slate-800"
               >
                 <Calendar mode="single" selected={date} onSelect={setDate} className="bg-transparent" />
               </div>
@@ -207,7 +239,6 @@ export function DashboardAgenda() {
 
         {/* LISTADO DE CITAS */}
         <div className="xl:col-span-3">
-          
           {isLoading && (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
@@ -256,7 +287,6 @@ export function DashboardAgenda() {
                 };
                 const StatusIcon = statusInfo.icon;
 
-                // Color dinámico asignado al doctor de esta cita
                 const docId = cita.doctorId || cita.doctor?.id;
                 const appointmentDocColor = doctorColorsMap[docId] || cita.doctor?.calendarColor || defaultUserColor;
 
@@ -265,7 +295,6 @@ export function DashboardAgenda() {
                     key={cita.id} 
                     className="group flex flex-col md:flex-row items-stretch md:items-center bg-card rounded-2xl border border-border/80 hover:shadow-lg transition-all duration-200 overflow-hidden relative"
                   >
-                    
                     {/* BARRA LATERAL DE ESTADO */}
                     <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", statusInfo.bg.split(" ")[0])} />
 
@@ -284,7 +313,6 @@ export function DashboardAgenda() {
 
                     {/* DETALLES */}
                     <div className="flex-1 p-4 md:px-6 flex flex-col justify-center gap-2.5">
-                      
                       <div className="flex justify-between items-start gap-4">
                         <div className="flex gap-3.5 items-start">
                           <div 
@@ -338,7 +366,6 @@ export function DashboardAgenda() {
                           </span>
                         )}
                       </div>
-
                     </div>
 
                     {/* BOTONES DE ACCIÓN */}
@@ -363,7 +390,7 @@ export function DashboardAgenda() {
                         </Link>
                       ) : (
                         <Link href={`/paciente/${cita.patientId}`} className="w-full">
-                          <Button variant="outline" className="w-full rounded-xl h-9 text-xs font-bold border-border/80 hover:bg-muted transition-all cursor-pointer">
+                          <Button variant="outline" className="w-full rounded-xl h-9 text-xs font-bold border-border/80 bg-card text-foreground hover:bg-muted hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] shadow-2xs transition-all cursor-pointer">
                             Ver Ficha
                           </Button>
                         </Link>
@@ -380,13 +407,11 @@ export function DashboardAgenda() {
                         <RefreshCcw className="w-3 h-3 mr-1" style={{ color: appointmentDocColor }} /> Reprogramar
                       </Button>
                     </div>
-
                   </div>
                 );
               })}
             </div>
           )}
-          
         </div>
       </div>
 
@@ -396,7 +421,6 @@ export function DashboardAgenda() {
         selectedAppointment={selectedAppointment}
         onSuccessCallback={() => refetch()}
       />
-
     </div>
   )
 }

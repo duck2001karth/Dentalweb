@@ -3,122 +3,135 @@
 @theme {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-ring: hsl(var(--ring));
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-ring: var(--ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
 }
 
-/* 3. VARIABLES ORIGINALES (Modo Claro y Oscuro) */
+/* ==========================================================================
+   VARIABLES DE TEMA (Modo Claro vs Modo Oscuro)
+   ========================================================================== */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 47.4% 11.2%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 47.4% 11.2%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 100% 50%;
-    --destructive-foreground: 210 40% 98%;
-    --ring: 215 20.2% 65.1%;
-    --radius: 0.5rem;
+    --background: #ffffff;
+    --foreground: #090d16;
+    --muted: #f8fafc;
+    --muted-foreground: #64748b;
+    --popover: #ffffff;
+    --popover-foreground: #090d16;
+    --border: #e2e8f0;
+    --input: #e2e8f0;
+    --card: #ffffff;
+    --card-foreground: #090d16;
+    --primary: var(--doctor-accent, #008bcd);
+    --primary-foreground: #ffffff;
+    --secondary: #f1f5f9;
+    --secondary-foreground: #0f172a;
+    --accent: #f1f5f9;
+    --accent-foreground: #0f172a;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --ring: var(--doctor-accent, #008bcd);
+    --radius: 0.75rem;
   }
 
-  .dark {
-    --background: 224 71% 4%;
-    --foreground: 213 31% 91%;
-    --muted: 223 47% 11%;
-    --muted-foreground: 215.4 16.3% 56.9%;
-    --accent: 216 34% 17%;
-    --accent-foreground: 210 40% 98%;
-    --popover: 224 71% 4%;
-    --popover-foreground: 215 20.2% 65.1%;
-    --border: 216 34% 17%;
-    --input: 216 34% 17%;
-    --card: 224 71% 4%;
-    --card-foreground: 213 31% 91%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 1.2%;
-    --secondary: 222.2 47.4% 11.2%;
-    --secondary-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-    --ring: 216 34% 17%;
-    --radius: 0.5rem;
+  .dark,
+  [data-theme="dark"] {
+    --background: #030712;
+    --foreground: #f8fafc;
+    --muted: #0d121f;
+    --muted-foreground: #94a3b8;
+    --popover: #070d18;
+    --popover-foreground: #f8fafc;
+    --border: #1e293b;
+    --input: #1e293b;
+    --card: #070d18;
+    --card-foreground: #f8fafc;
+    --primary: var(--doctor-accent, #008bcd);
+    --primary-foreground: #ffffff;
+    --secondary: #0d121f;
+    --secondary-foreground: #f8fafc;
+    --accent: #111827;
+    --accent-foreground: #f8fafc;
+    --destructive: #ef4444;
+    --destructive-foreground: #ffffff;
+    --ring: var(--doctor-accent, #008bcd);
+    --radius: 0.75rem;
   }
 }
 
 @layer base {
   * {
-    border-color: var(--color-border);
+    border-color: var(--border);
   }
+
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    background-color: var(--background);
+    color: var(--foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11", "rlig" 1, "calt" 1;
+  }
+
+  /* ESTANDARIZACIÓN BIDIRECCIONAL DE INPUTS */
+  input, 
+  textarea, 
+  select {
+    background-color: #ffffff;
+    color: #090d16;
+  }
+
+  .dark input,
+  .dark textarea,
+  .dark select {
+    background-color: #070d18;
+    color: #f8fafc;
   }
 }
 
 /* ==========================================================================
    SCROLLBAR GLOBAL MODERNO, MINIMALISTA Y FLOTANTE
    ========================================================================== */
-
-/* 1. Estandar W3C moderno (Firefox) */
 * {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
 }
 
-/* 2. Motores WebKit (Chrome, Edge, Safari, Opera) */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-/* Eliminar botones y flechas nativas */
 ::-webkit-scrollbar-button {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
 }
 
-/* Fondo de riel transparente */
 ::-webkit-scrollbar-track {
   background: transparent !important;
 }
 
-/* Pastilla redondeada estilo pill */
 ::-webkit-scrollbar-thumb {
   background-color: rgba(148, 163, 184, 0.4);
   border-radius: 9999px;
@@ -135,7 +148,6 @@
   background-color: rgba(71, 85, 105, 0.9);
 }
 
-/* Adaptación a Modo Oscuro */
 .dark *,
 [data-theme="dark"] * {
   scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
@@ -154,7 +166,6 @@
 /* ==========================================================================
    ANIMACIONES Y ESTILOS COMPLEMENTARIOS
    ========================================================================== */
-
 .PopoverContent {
   width: var(--radix-popover-trigger-width);
   max-height: var(--radix-popover-content-available-height);
@@ -172,43 +183,7 @@
 }
 
 [data-theme="dark"] {
-  background-color: var(--color-background) !important;
-}
-
-.ProseMirror {
-  @apply bg-transparent;
-}
-
-.ProseMirror h1 {
-  @apply scroll-m-20 text-2xl font-semibold tracking-tight;
-}
-
-.ProseMirror h2 {
-  @apply scroll-m-20 text-xl font-semibold tracking-tight;
-}
-
-.ProseMirror h3 {
-  @apply scroll-m-20 text-lg font-semibold tracking-tight;
-}
-
-.ProseMirror p {
-  @apply leading-7 [&:not(:first-child)]:mt-2;
-}
-
-.ProseMirror ul {
-  @apply my-6 ml-6 list-disc [&>li]:mt-2;
-}
-
-.dark .ProseMirror-focused {
-  @apply border border-slate-950 outline-none;
-}
-
-.ProseMirror p.is-editor-empty:first-child::before {
-  color: var(--color-muted-foreground);
-  content: attr(data-placeholder);
-  float: left;
-  height: 0;
-  pointer-events: none;
+  background-color: var(--background) !important;
 }
 
 .task-list-item {
@@ -219,4 +194,65 @@
 @keyframes slideIn {
   0% { opacity: 0; transform: translateY(15px); }
   100% { opacity: 1; transform: translateY(0%); }
+}
+
+/* ==========================================================================
+   PROSEMIRROR (EDITOR CLÍNICO)
+   ========================================================================== */
+.ProseMirror {
+  outline: none;
+  background-color: transparent;
+}
+
+.ProseMirror h1 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  scroll-margin-top: 5rem;
+}
+
+.ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  scroll-margin-top: 5rem;
+}
+
+.ProseMirror h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  scroll-margin-top: 5rem;
+}
+
+.ProseMirror p {
+  line-height: 1.75rem;
+}
+
+.ProseMirror p:not(:first-child) {
+  margin-top: 0.5rem;
+}
+
+.ProseMirror ul {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+  margin-left: 1.5rem;
+  list-style-type: disc;
+}
+
+.ProseMirror ul > li {
+  margin-top: 0.5rem;
+}
+
+.dark .ProseMirror-focused {
+  border: 1px solid var(--border);
+  outline: none;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: var(--muted-foreground);
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
 }

@@ -306,21 +306,27 @@ export function OdontogramaTab({
             <OdontogramLegendModal />
 
             {!isPlanView && (
-              <Button variant="outline" size="icon" onClick={handlePrintOdontogram} title="Imprimir Odontograma">
+              <Button 
+                type="button"
+                variant="outline" 
+                size="icon" 
+                onClick={handlePrintOdontogram} 
+                title="Imprimir Odontograma"
+                className="h-10 w-10 shrink-0 rounded-xl bg-background border-border/80 text-muted-foreground hover:text-foreground cursor-pointer shadow-xs transition-all"
+              >
                 <Printer className="w-4 h-4" />
               </Button>
             )}
-
-            <Button 
-              type="button"
-              variant="outline" 
-              size="icon" 
-              onClick={() => setIsFocusMode(!isFocusMode)} 
-              className="bg-background border-border/80 text-foreground hover:bg-accent shrink-0 rounded-xl h-9 w-9 font-bold cursor-pointer transition-all"
-              title={isFocusMode ? "Salir de pantalla completa" : "Modo enfoque"}
-            >
-              {isFocusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
+              <Button 
+                type="button"
+                variant="outline" 
+                size="icon" 
+                onClick={() => setIsFocusMode(!isFocusMode)} 
+                className="h-10 w-10 shrink-0 rounded-xl bg-background border-border/80 text-muted-foreground hover:text-foreground cursor-pointer shadow-xs transition-all"
+                title={isFocusMode ? "Salir de pantalla completa" : "Modo enfoque"}
+              >
+                {isFocusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+              </Button>
           </div>
         </div>
       </div>

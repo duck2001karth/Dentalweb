@@ -34,8 +34,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   width: "device-width",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "white" },
-    { media: "(prefers-color-scheme: dark)", color: "black" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#030712" },
   ],
 };
 
@@ -45,26 +45,25 @@ interface RootLayoutProps {
 
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
-    <html lang="es" className={inter.variable} suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning>
       <body
         suppressHydrationWarning
         className={cn(
-          "min-h-screen bg-background antialiased font-sans",
+          "min-h-screen bg-background text-foreground antialiased font-sans selection:bg-primary/20 selection:text-primary",
           inter.className
         )}
       >
         <NextAuthProvider>
           <ThemeProvider 
             attribute="class" 
-            defaultTheme="system" 
+            defaultTheme="dark" 
             enableSystem
             disableTransitionOnChange
-            enableColorScheme={false}
           >
             <ClientProvider>
               <ClinicSettingsProvider>
-                <div className="relative flex min-h-screen flex-col">
-                  <div className="flex-1">{children}</div>
+                <div className="relative flex min-h-screen flex-col bg-background">
+                  <div className="flex-1 bg-background">{children}</div>
                   <div className="print:hidden">
                     <Toaster />
                   </div>

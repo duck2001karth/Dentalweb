@@ -124,7 +124,7 @@ export default function OdontogramaHubPage() {
                         Módulo Odontograma
                       </span>
                       <Link href={`/paciente/${patient.id}?tab=odontograma`}>
-                        <Button size="sm" className="bg-[#008bcd] hover:bg-[#0070a8] text-white shadow-sm rounded-lg px-4">
+                        <Button size="sm" className="bg-primary hover:bg-[#0070a8] text-white shadow-sm rounded-lg px-4">
                           Abrir <ArrowRight className="w-4 h-4 ml-1.5" />
                         </Button>
                       </Link>

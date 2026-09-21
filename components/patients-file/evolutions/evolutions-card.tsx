@@ -46,15 +46,14 @@ export function EvolutionCard({
 
   return (
     <div className="relative flex items-start gap-4 md:gap-8 group">
-      <div className="hidden md:flex items-center justify-center w-10 h-10 rounded-2xl bg-card border-2 border-[#008bcd] text-[#008bcd] shadow-xs z-10 shrink-0">
+      <div className="hidden md:flex items-center justify-center w-10 h-10 rounded-2xl bg-card border-2 border-primary text-primary shadow-xs z-10 shrink-0">
         <Calendar className="w-4 h-4" />
       </div>
-      <div className="flex-1 bg-card border border-border/80 rounded-2xl p-5 shadow-xs hover:border-[#008bcd]/40 transition-all">
-        <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-3.5 mb-3.5">
+        <div className="flex-1 bg-card border border-border/80 rounded-2xl p-5 shadow-xs hover:border-primary/40 transition-all">        <div className="flex items-start justify-between gap-3 border-b border-border/60 pb-3.5 mb-3.5">
           <div>
             <div className="flex items-center gap-2">
               <h3 className="font-bold text-foreground text-sm">
-                Evolución Clínica <span className="text-[#008bcd] font-mono">{noteCode}</span>
+                Evolución Clínica <span className="text-primary font-mono">{noteCode}</span>
               </h3>
             </div>
             <p className="text-[11px] text-muted-foreground font-medium mt-0.5 flex items-center gap-1">

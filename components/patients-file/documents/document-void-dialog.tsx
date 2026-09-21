@@ -30,12 +30,13 @@ export function DocumentVoidDialog({
     <AlertDialog>
       <AlertDialogTrigger asChild>
         <Button
+          type="button"
           variant="ghost"
           size="icon"
-          className="h-7 w-7 text-red-500 hover:bg-red-500/10 rounded-lg cursor-pointer"
+          className="h-8 w-8 rounded-xl text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/15 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500/40"
           title="Anular documento"
         >
-          <Trash2 size={13} />
+          <Trash2 className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400 group-hover:text-red-700" />
         </Button>
       </AlertDialogTrigger>
       <AlertDialogContent className="rounded-2xl max-w-[420px]">

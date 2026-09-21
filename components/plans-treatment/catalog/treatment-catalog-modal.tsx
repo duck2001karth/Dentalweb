@@ -182,7 +182,7 @@ export function TreatmentCatalogModal({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[650px] h-[85vh] flex flex-col p-0 bg-card text-card-foreground border border-border/80 rounded-2xl overflow-hidden shadow-2xl font-sans">
-        <DialogHeader className="p-5 border-b border-border bg-slate-900 text-white dark:bg-slate-950">
+        <DialogHeader className="p-5 border-b border-border bg-[#0b0f19] text-white dark:bg-slate-950">
           <div className="flex items-center justify-between">
             <div>
               <DialogTitle className="text-xl font-bold tracking-tight">Catálogo de Prestaciones</DialogTitle>

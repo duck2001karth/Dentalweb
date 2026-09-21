@@ -77,7 +77,7 @@ const SignaturePad = ({ onSave, onCancel, title }: any) => {
       <div className="flex gap-2 w-full justify-end mt-2">
         <Button variant="outline" onClick={handleClear} className="rounded-xl font-bold">Limpiar lienzo</Button>
         <Button variant="ghost" onClick={onCancel} className="rounded-xl font-bold">Cancelar</Button>
-        <Button onClick={handleSave} className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl shadow-sm">
+        <Button onClick={handleSave} className="bg-primary hover:bg-[#0070a8] text-white font-bold rounded-xl shadow-sm">
           Guardar Firma
         </Button>
       </div>
@@ -427,7 +427,7 @@ const handlePrintClick = async (p: any) => {
               <Button 
                 onClick={() => handleSave(false)} 
                 disabled={isSaving}
-                className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl h-11 shadow-sm transition-all active:scale-95"
+                className="bg-primary hover:bg-[#0070a8] text-white font-bold rounded-xl h-11 shadow-sm transition-all active:scale-95"
               >
                 {isSaving ? <Loader2 className="mr-2 w-4 h-4 animate-spin"/> : <Save className="mr-2 w-4 h-4"/>} 
                 Guardar Manual
@@ -552,7 +552,7 @@ const handlePrintClick = async (p: any) => {
                           <Button 
                             variant="outline" 
                             size="sm" 
-                            className="text-foreground hover:text-red-500 hover:bg-red-500/10 border-border h-8 text-xs font-bold rounded-lg"
+                            className="text-destructive/80 hover:text-destructive hover:bg-destructive/10 border-border/80 hover:border-destructive/30 rounded-lg cursor-pointer"
                           >
                             <Trash2 size={14} className="mr-1.5"/> Eliminar
                           </Button>

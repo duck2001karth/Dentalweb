@@ -356,7 +356,7 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
           </Button>
 
           {step < 3 ? (
-            <Button onClick={handleNext} className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold h-10 px-8 shadow-md shadow-[#008bcd]/20 rounded-xl text-xs transition-all active:scale-95">
+            <Button onClick={handleNext} className="bg-primary hover:bg-[#0070a8] text-white font-bold h-10 px-8 shadow-md shadow-[#008bcd]/20 rounded-xl text-xs transition-all active:scale-95">
               Siguiente <ChevronRight className="w-4 h-4 ml-1.5 stroke-[2.5]" />
             </Button>
           ) : (
@@ -391,7 +391,7 @@ export const NewPatientModal = ({ onSuccess }: { onSuccess?: () => void }) => {
     <>
       <Button 
         onClick={() => setIsOpen(true)} 
-        className="bg-[#008bcd] hover:bg-[#0070a8] transition-all text-white font-bold px-5 h-11 rounded-xl flex items-center gap-2 shadow-md shadow-[#008bcd]/20 hover:shadow-lg hover:shadow-[#008bcd]/30 hover:-translate-y-0.5"
+        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-5 h-11 rounded-xl flex items-center gap-2 shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/35 transition-all hover:-translate-y-0.5"
       >
         <Plus className="w-5 h-5 stroke-[2.5]" /> Nuevo Paciente
       </Button>

@@ -205,7 +205,7 @@ export function TreatmentPlanModals({
       {/* 5. MODAL DE DIAGNÓSTICO CLÍNICO */}
       <Dialog open={isDiagnosisModalOpen} onOpenChange={setIsDiagnosisModalOpen}>
         <DialogContent className="sm:max-w-[500px] bg-card text-card-foreground border-border rounded-2xl p-0 overflow-hidden shadow-2xl">
-          <DialogHeader className="p-6 border-b border-border bg-slate-100/80 dark:bg-slate-900/80">
+          <DialogHeader className="p-6 border-b border-border bg-slate-100/80 dark:bg-[#0b0f19]/80">
             <DialogTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
               <Stethoscope className="w-5 h-5 text-[#008bcd]" />
               Ingresar Diagnóstico Odontológico
@@ -231,7 +231,7 @@ export function TreatmentPlanModals({
               ))}
             </select>
           </div>
-          <DialogFooter className="px-6 py-4 bg-slate-100/80 dark:bg-slate-900/80 border-t border-border flex justify-end gap-2">
+          <DialogFooter className="px-6 py-4 bg-slate-100/80 dark:bg-[#0b0f19]/80 border-t border-border flex justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => setIsDiagnosisModalOpen(false)}

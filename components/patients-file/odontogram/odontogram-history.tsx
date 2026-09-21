@@ -319,7 +319,8 @@ export function OdontogramHistory({
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-destructive font-bold hover:bg-destructive/10 h-7 px-2.5 text-xs rounded-lg cursor-pointer ml-auto transition-colors"
+                              className="text-destructive/80 hover:text-destructive hover:bg-destructive/10 border-border/80 hover:border-destructive/30 rounded-lg cursor-pointer"
+
                               onClick={() => setRecordToDelete(record)}
                             >
                               <Trash2 className="w-3.5 h-3.5 mr-1" />

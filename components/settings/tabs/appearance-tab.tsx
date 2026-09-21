@@ -1,388 +1,454 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect } from "react"
 import { useTheme } from "next-themes"
 import { useSession } from "next-auth/react"
-import { Check, Loader2, Pencil } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { Check, Edit3 } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
-import { Input } from "@/components/ui/input"
 import { updateUserSettings } from "@/lib/actions"
 import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
-const ACCENT_COLORS = [
-  "#1e293b",
-  "#ef4444",
-  "#10b981",
-  "#008bcd",
-  "#a855f7",
-]
-
-export interface AppearanceTabProps {
+interface AppearanceTabProps {
   currentColor?: string
-  onColorChange?: (color: string) => void
+  onColorChange?: (newCol: string) => void
 }
+
+const PRESET_COLORS = [
+  { name: "Pizarra", hex: "#64748b" },
+  { name: "Rojo Carmín", hex: "#ef4444" },
+  { name: "Verde Esmeralda", hex: "#10b981" },
+  { name: "Azul Médico", hex: "#008bcd" },
+  { name: "Púrpura", hex: "#8b5cf6" },
+]
 
 export function AppearanceTab({
   currentColor = "#008bcd",
   onColorChange,
 }: AppearanceTabProps) {
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, resolvedTheme } = useTheme()
   const { data: session, update } = useSession()
   const { toast } = useToast()
 
-  const [accentColor, setAccentColor] = useState<string>(currentColor)
-  const [customHex, setCustomHex] = useState<string>(currentColor)
-  const [isSavingColor, setIsSavingColor] = useState(false)
-  const [showAnimations, setShowAnimations] = useState(true)
-  const [tableView, setTableView] = useState<"compact" | "comfortable">("comfortable")
-
-  const colorInputRef = useRef<HTMLInputElement>(null)
-  const debounceRef = useRef<NodeJS.Timeout | null>(null)
+  const [mounted, setMounted] = useState(false)
+  const [selectedColor, setSelectedColor] = useState(currentColor)
+  const [animationsEnabled, setAnimationsEnabled] = useState(true)
+  const [tableDensity, setTableDensity] = useState<"compact" | "comfortable">("comfortable")
 
   useEffect(() => {
-    if (currentColor) {
-      setAccentColor(currentColor)
-      setCustomHex(currentColor)
-    }
+    setMounted(true)
+    if (currentColor) setSelectedColor(currentColor)
+    const savedAnim = localStorage.getItem("app_animations") !== "false"
+    const savedDensity =
+      (localStorage.getItem("app_table_density") as "compact" | "comfortable") || "comfortable"
+    setAnimationsEnabled(savedAnim)
+    setTableDensity(savedDensity)
   }, [currentColor])
 
-  const executeSaveColor = async (color: string) => {
-    setIsSavingColor(true)
-    try {
-      const res = await updateUserSettings({ calendarColor: color })
-      if (res?.error) {
-        toast({ title: "Error", description: res.error, variant: "destructive" })
-        return
-      }
+  const isDark = mounted ? (resolvedTheme || theme) === "dark" : false
 
+  const handleThemeChange = (newTheme: "light" | "dark" | "system") => {
+    setTheme(newTheme)
+    const root = document.documentElement
+    if (newTheme === "light") {
+      root.classList.remove("dark")
+      root.classList.add("light")
+      root.style.colorScheme = "light"
+    } else if (newTheme === "dark") {
+      root.classList.add("dark")
+      root.classList.remove("light")
+      root.style.colorScheme = "dark"
+    } else {
+      const isSystemDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+      if (isSystemDark) {
+        root.classList.add("dark")
+        root.classList.remove("light")
+      } else {
+        root.classList.remove("dark")
+        root.classList.add("light")
+      }
+    }
+  }
+
+  const handleColorSelect = async (hex: string) => {
+    setSelectedColor(hex)
+    if (onColorChange) onColorChange(hex)
+    document.documentElement.style.setProperty("--primary", hex)
+    document.documentElement.style.setProperty("--ring", hex)
+    document.documentElement.style.setProperty("--doctor-accent", hex)
+    localStorage.setItem("app_accent_color", hex)
+    try {
+      await updateUserSettings({ calendarColor: hex } as any)
       await update({
         ...session,
         user: {
           ...session?.user,
-          calendarColor: color,
+          calendarColor: hex,
         },
       })
-
-      if (onColorChange) onColorChange(color)
-
       toast({
-        title: "Color guardado automáticamente",
-        description: `Se aplicó ${color} a tu tema y calendario clínico.`,
+        title: "Color actualizado",
+        description: "El color de énfasis se ha guardado correctamente.",
       })
     } catch {
-      toast({ title: "Error", description: "No se pudo guardar el color.", variant: "destructive" })
-    } finally {
-      setIsSavingColor(false)
+      toast({
+        title: "Error al guardar color",
+        variant: "destructive",
+      })
     }
   }
 
-  const handleSelectColor = (color: string) => {
-    setAccentColor(color)
-    setCustomHex(color)
-    if (onColorChange) onColorChange(color)
-
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    executeSaveColor(color)
+  const handleToggleAnimations = (enabled: boolean) => {
+    setAnimationsEnabled(enabled)
+    localStorage.setItem("app_animations", String(enabled))
+    if (!enabled) {
+      document.documentElement.classList.add("disable-animations")
+    } else {
+      document.documentElement.classList.remove("disable-animations")
+    }
+    toast({
+      title: enabled ? "Animaciones activadas" : "Animaciones desactivadas",
+      description: enabled
+        ? "Transiciones y efectos visuales habilitados."
+        : "Interfaz optimizada sin efectos de transición.",
+    })
   }
 
-  const handleCustomHexChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value
-    setCustomHex(val)
-
-    if (/^#[0-9A-F]{6}$/i.test(val)) {
-      setAccentColor(val)
-      if (onColorChange) onColorChange(val)
-
-      if (debounceRef.current) clearTimeout(debounceRef.current)
-      debounceRef.current = setTimeout(() => {
-        executeSaveColor(val)
-      }, 500)
-    }
+  const handleTableDensityChange = (density: "compact" | "comfortable") => {
+    setTableDensity(density)
+    localStorage.setItem("app_table_density", density)
+    document.documentElement.setAttribute("data-table-density", density)
+    toast({
+      title: density === "compact" ? "Vista Compacta aplicada" : "Vista Cómoda aplicada",
+      description: density === "compact"
+        ? "Las tablas ahora muestran más filas con espaciado optimizado."
+        : "Las tablas ahora muestran un espaciado más amplio y cómodo.",
+    })
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-200 font-sans text-slate-800">
+    <div className={`space-y-8 max-w-3xl font-sans animate-in fade-in duration-200 ${
+      isDark ? "text-slate-100" : "text-slate-900"
+    }`}>
+      
       {/* 1. SECCIÓN TEMAS */}
-      <div className="space-y-3.5">
+      <div className="space-y-3">
         <div>
-          <h3 className="text-sm font-bold text-slate-900">Temas</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+            Temas
+          </h3>
+          <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
             Elige el estilo visual o personaliza el tema de tu aplicación
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Modo Claro */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
+          {/* Tarjeta Modo Claro */}
           <div
-            onClick={() => setTheme("light")}
-            style={theme === "light" ? { borderColor: accentColor, backgroundColor: `${accentColor}0D` } : undefined}
+            onClick={() => handleThemeChange("light")}
+            style={theme === "light" ? { borderColor: selectedColor } : undefined}
             className={cn(
-              "group cursor-pointer rounded-2xl border-2 transition-all p-3 flex flex-col justify-between bg-white",
-              theme !== "light" && "border-slate-200 hover:border-slate-300"
+              "p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between group",
+              isDark ? "bg-[#070d18]" : "bg-white",
+              theme === "light"
+                ? "shadow-sm border-current"
+                : isDark
+                ? "border-[#1e293b] hover:border-slate-700"
+                : "border-slate-200 hover:border-slate-300"
             )}
           >
-            <div className="w-full h-24 rounded-xl bg-slate-50 border border-slate-200/80 p-2 flex flex-col gap-1.5 shadow-2xs">
+            <div className={`rounded-xl border p-2.5 space-y-2 shadow-2xs ${
+              isDark ? "border-[#1e293b] bg-[#030712]" : "border-slate-200 bg-slate-50"
+            }`}>
               <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               </div>
-              <div className="flex-1 grid grid-cols-3 gap-1.5 pt-1">
-                <div className="col-span-1 rounded-md bg-white border border-slate-200/60" />
-                <div className="col-span-2 flex flex-col gap-1">
-                  <div className="h-4 rounded bg-slate-200/70" />
-                  <div className="h-7 rounded bg-slate-200/40" />
+              <div className="grid grid-cols-3 gap-1.5 h-12">
+                <div className="bg-slate-200 rounded-md" />
+                <div className="col-span-2 space-y-1">
+                  <div className="h-4 bg-slate-200 rounded-md" />
+                  <div className="h-4 bg-slate-200 rounded-md" />
                 </div>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 pt-3">
+            <div className={`flex items-center gap-2 mt-3 text-xs font-bold ${
+              isDark ? "text-white" : "text-slate-900"
+            }`}>
               <div
-                style={theme === "light" ? { borderColor: accentColor, backgroundColor: accentColor } : undefined}
+                style={theme === "light" ? { backgroundColor: selectedColor, borderColor: selectedColor } : undefined}
                 className={cn(
-                  "w-4 h-4 rounded-full border flex items-center justify-center transition-colors",
-                  theme !== "light" && "border-slate-300"
+                  "w-4 h-4 rounded-full border flex items-center justify-center text-white",
+                  theme === "light" ? "border-transparent" : "border-slate-400"
                 )}
               >
-                {theme === "light" && <Check className="w-2.5 h-2.5 stroke-[3] text-white" />}
+                {theme === "light" && <Check size={10} strokeWidth={3} />}
               </div>
-              <span className="text-xs font-bold text-slate-900">Modo Claro</span>
+              <span>Modo Claro</span>
             </div>
           </div>
 
-          {/* Modo Oscuro */}
+          {/* Tarjeta Modo Oscuro */}
           <div
-            onClick={() => setTheme("dark")}
-            style={theme === "dark" ? { borderColor: accentColor, backgroundColor: `${accentColor}0D` } : undefined}
+            onClick={() => handleThemeChange("dark")}
+            style={theme === "dark" ? { borderColor: selectedColor } : undefined}
             className={cn(
-              "group cursor-pointer rounded-2xl border-2 transition-all p-3 flex flex-col justify-between bg-white",
-              theme !== "dark" && "border-slate-200 hover:border-slate-300"
+              "p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between group",
+              isDark ? "bg-[#070d18]" : "bg-white",
+              theme === "dark"
+                ? "shadow-sm border-current"
+                : isDark
+                ? "border-[#1e293b] hover:border-slate-700"
+                : "border-slate-200 hover:border-slate-300"
             )}
           >
-            <div className="w-full h-24 rounded-xl bg-slate-900 border border-slate-800 p-2 flex flex-col gap-1.5 shadow-2xs">
+            <div className="rounded-xl border border-[#1e293b] bg-[#030712] p-2.5 space-y-2 shadow-2xs">
               <div className="flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-rose-500/80" />
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500/80" />
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80" />
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               </div>
-              <div className="flex-1 grid grid-cols-3 gap-1.5 pt-1">
-                <div className="col-span-1 rounded-md bg-slate-800/80 border border-slate-700/50" />
-                <div className="col-span-2 flex flex-col gap-1">
-                  <div className="h-4 rounded bg-slate-800" />
-                  <div className="h-7 rounded bg-slate-800/50" />
+              <div className="grid grid-cols-3 gap-1.5 h-12">
+                <div className="bg-[#070d18] border border-[#1e293b] rounded-md" />
+                <div className="col-span-2 space-y-1">
+                  <div className="h-4 bg-[#070d18] border border-[#1e293b] rounded-md" />
+                  <div className="h-4 bg-[#070d18] border border-[#1e293b] rounded-md" />
                 </div>
               </div>
             </div>
-
-            <div className="flex items-center gap-2 pt-3">
+            <div className={`flex items-center gap-2 mt-3 text-xs font-bold ${
+              isDark ? "text-white" : "text-slate-900"
+            }`}>
               <div
-                style={theme === "dark" ? { borderColor: accentColor, backgroundColor: accentColor } : undefined}
+                style={theme === "dark" ? { backgroundColor: selectedColor, borderColor: selectedColor } : undefined}
                 className={cn(
-                  "w-4 h-4 rounded-full border flex items-center justify-center transition-colors",
-                  theme !== "dark" && "border-slate-300"
+                  "w-4 h-4 rounded-full border flex items-center justify-center text-white",
+                  theme === "dark" ? "border-transparent" : "border-slate-400"
                 )}
               >
-                {theme === "dark" && <Check className="w-2.5 h-2.5 stroke-[3] text-white" />}
+                {theme === "dark" && <Check size={10} strokeWidth={3} />}
               </div>
-              <span className="text-xs font-bold text-slate-900">Modo Oscuro</span>
+              <span>Modo Oscuro</span>
             </div>
           </div>
 
-          {/* Preferencias del Sistema */}
+          {/* Tarjeta Preferencias del Sistema */}
           <div
-            onClick={() => setTheme("system")}
-            style={theme === "system" ? { borderColor: accentColor, backgroundColor: `${accentColor}0D` } : undefined}
+            onClick={() => handleThemeChange("system")}
+            style={theme === "system" ? { borderColor: selectedColor } : undefined}
             className={cn(
-              "group cursor-pointer rounded-2xl border-2 transition-all p-3 flex flex-col justify-between bg-white",
-              theme !== "system" && "border-slate-200 hover:border-slate-300"
+              "p-3.5 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between group",
+              isDark ? "bg-[#070d18]" : "bg-white",
+              theme === "system"
+                ? "shadow-sm border-current"
+                : isDark
+                ? "border-[#1e293b] hover:border-slate-700"
+                : "border-slate-200 hover:border-slate-300"
             )}
           >
-            <div className="w-full h-24 rounded-xl overflow-hidden border border-slate-200 flex">
-              <div className="w-1/2 bg-slate-50 p-2 flex flex-col gap-1.5 border-r border-slate-200">
-                <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                </div>
-                <div className="h-10 rounded bg-slate-200/60 mt-1" />
+            <div className={`rounded-xl border p-2.5 space-y-2 flex flex-col justify-between shadow-2xs bg-gradient-to-r from-slate-100 to-[#030712] ${
+              isDark ? "border-[#1e293b]" : "border-slate-200"
+            }`}>
+              <div className="flex items-center gap-1">
+                <div className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                <div className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               </div>
-              <div className="w-1/2 bg-slate-900 p-2 flex flex-col gap-1.5">
-                <div className="flex items-center justify-end gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/80" />
-                </div>
-                <div className="h-10 rounded bg-slate-800 mt-1" />
+              <div className="grid grid-cols-2 gap-1.5 h-12">
+                <div className="bg-white rounded-md border border-slate-200" />
+                <div className="bg-[#070d18] rounded-md border border-[#1e293b]" />
               </div>
             </div>
-
-            <div className="flex items-center gap-2 pt-3">
+            <div className={`flex items-center gap-2 mt-3 text-xs font-bold ${
+              isDark ? "text-white" : "text-slate-900"
+            }`}>
               <div
-                style={theme === "system" ? { borderColor: accentColor, backgroundColor: accentColor } : undefined}
+                style={theme === "system" ? { backgroundColor: selectedColor, borderColor: selectedColor } : undefined}
                 className={cn(
-                  "w-4 h-4 rounded-full border flex items-center justify-center transition-colors",
-                  theme !== "system" && "border-slate-300"
+                  "w-4 h-4 rounded-full border flex items-center justify-center text-white",
+                  theme === "system" ? "border-transparent" : "border-slate-400"
                 )}
               >
-                {theme === "system" && <Check className="w-2.5 h-2.5 stroke-[3] text-white" />}
+                {theme === "system" && <Check size={10} strokeWidth={3} />}
               </div>
-              <span className="text-xs font-bold text-slate-900">Preferencias del Sistema</span>
+              <span>Preferencias del Sistema</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="h-px bg-slate-100" />
+      <div className={`border-t ${isDark ? "border-[#1e293b]" : "border-slate-200"}`} />
 
-      {/* 2. COLORES DE ÉNFASIS */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-slate-900">Color de Énfasis del Doctor</h3>
-            {isSavingColor && <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: accentColor }} />}
+      {/* 2. COLOR DE ÉNFASIS */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+              Color de Énfasis del Doctor
+            </h3>
+            <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+              Color identificador para tus turnos, agenda clínica y acentos del sistema
+            </p>
           </div>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Color identificador para tus turnos, agenda clínica y acentos del sistema
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2">
-            {ACCENT_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => handleSelectColor(c)}
-                style={{ backgroundColor: c }}
-                className={cn(
-                  "w-6 h-6 rounded-full transition-all cursor-pointer flex items-center justify-center shadow-xs",
-                  accentColor.toLowerCase() === c.toLowerCase()
-                    ? "ring-2 ring-offset-2 ring-slate-900 scale-110"
-                    : "opacity-85 hover:opacity-100"
-                )}
-              >
-                {accentColor.toLowerCase() === c.toLowerCase() && (
-                  <Check className="w-3 h-3 text-white stroke-[3]" />
-                )}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
-            <span className="text-xs text-slate-500 font-medium">Personalizado</span>
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-1 rounded-xl">
-              <input
-                ref={colorInputRef}
-                type="color"
-                value={accentColor.startsWith("#") ? accentColor : "#008bcd"}
-                onChange={(e) => handleSelectColor(e.target.value)}
-                className="sr-only"
-              />
-
-              <Input
-                type="text"
-                value={customHex}
-                onChange={handleCustomHexChange}
-                placeholder="#000000"
-                className="h-6 w-20 p-0 text-xs font-mono font-bold bg-transparent border-0 focus-visible:ring-0 text-slate-800"
-              />
-
-              <button
-                type="button"
-                onClick={() => colorInputRef.current?.click()}
-                className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-md transition-colors cursor-pointer"
-                title="Elegir con selector visual (Lápiz)"
-              >
-                <Pencil className="w-3 h-3" />
-              </button>
-
-              <div
-                className="w-4 h-4 rounded-full border border-slate-300 shrink-0 cursor-pointer"
-                style={{ backgroundColor: customHex }}
-                onClick={() => colorInputRef.current?.click()}
-              />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              {PRESET_COLORS.map((c) => {
+                const isSelected = selectedColor.toLowerCase() === c.hex.toLowerCase()
+                return (
+                  <button
+                    key={c.hex}
+                    type="button"
+                    onClick={() => handleColorSelect(c.hex)}
+                    style={{ backgroundColor: c.hex }}
+                    className={cn(
+                      "w-7 h-7 rounded-full transition-transform cursor-pointer flex items-center justify-center text-white shadow-2xs",
+                      isSelected
+                        ? "ring-2 ring-offset-2 ring-primary scale-110"
+                        : "hover:scale-105 opacity-90"
+                    )}
+                    title={c.name}
+                  >
+                    {isSelected && <Check size={13} strokeWidth={3} />}
+                  </button>
+                )
+              })}
+            </div>
+            <div className={`flex items-center gap-2 pl-2 border-l ${
+              isDark ? "border-[#1e293b]" : "border-slate-200"
+            }`}>
+              <span className={`text-xs font-semibold ${isDark ? "text-slate-400" : "text-slate-600"}`}>
+                Personalizado
+              </span>
+              <div className={`flex items-center gap-1.5 border rounded-xl px-2.5 py-1 text-xs font-mono font-bold relative ${
+                isDark
+                  ? "bg-[#030712] border-[#1e293b] text-white"
+                  : "bg-slate-100 border-slate-200 text-slate-900"
+              }`}>
+                <span>{selectedColor.toLowerCase()}</span>
+                <label className="cursor-pointer flex items-center justify-center p-0.5 hover:opacity-80">
+                  <Edit3 className="w-3.5 h-3.5 text-slate-400 ml-1" />
+                  <input
+                    type="color"
+                    value={selectedColor}
+                    onChange={(e) => handleColorSelect(e.target.value)}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                  />
+                </label>
+                <div
+                  style={{ backgroundColor: selectedColor }}
+                  className="w-3.5 h-3.5 rounded-full border border-white/40 shadow-xs shrink-0 ml-1"
+                />
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="h-px bg-slate-100" />
+      <div className={`border-t ${isDark ? "border-[#1e293b]" : "border-slate-200"}`} />
 
       {/* 3. ANIMACIONES */}
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900">Mostrar Animaciones</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+        <div className="space-y-0.5">
+          <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+            Mostrar Animaciones
+          </h3>
+          <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
             Habilitar o deshabilitar animaciones y transiciones de la interfaz
           </p>
         </div>
         <Switch
-          checked={showAnimations}
-          onCheckedChange={setShowAnimations}
-          style={showAnimations ? { backgroundColor: accentColor } : undefined}
+          checked={animationsEnabled}
+          onCheckedChange={handleToggleAnimations}
+          style={animationsEnabled ? { backgroundColor: selectedColor } : undefined}
         />
       </div>
 
-      <div className="h-px bg-slate-100" />
+      <div className={`border-t ${isDark ? "border-[#1e293b]" : "border-slate-200"}`} />
 
-      {/* 4. VISTA DE TABLAS */}
-      <div className="space-y-3.5">
+      {/* 4. DENSIDAD DE TABLAS */}
+      <div className="space-y-3">
         <div>
-          <h3 className="text-sm font-bold text-slate-900">Vista de Tablas</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>
+            Vista de Tablas
+          </h3>
+          <p className={`text-xs mt-0.5 ${isDark ? "text-slate-400" : "text-slate-600"}`}>
             Personaliza cómo se estructuran y muestran los listados en la aplicación
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
           <div
-            onClick={() => setTableView("compact")}
-            style={tableView === "compact" ? { borderColor: accentColor, backgroundColor: `${accentColor}0D` } : undefined}
+            onClick={() => handleTableDensityChange("compact")}
+            style={tableDensity === "compact" ? { borderColor: selectedColor } : undefined}
             className={cn(
-              "cursor-pointer rounded-2xl border-2 p-3 transition-all bg-white flex flex-col gap-2.5",
-              tableView !== "compact" && "border-slate-200 hover:border-slate-300"
+              "p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between h-36",
+              isDark ? "bg-[#070d18]" : "bg-white",
+              tableDensity === "compact"
+                ? `shadow-sm border-current ${isDark ? "bg-[#030712]" : "bg-slate-50"}`
+                : isDark
+                ? "border-[#1e293b] hover:border-slate-700"
+                : "border-slate-200 hover:border-slate-300"
             )}
           >
-            <div className="w-full h-20 rounded-xl bg-slate-50 p-2.5 flex flex-col gap-1.5 border border-slate-200/60">
-              <div className="flex justify-between items-center pb-1 border-b border-slate-200">
-                <span className="text-[9px] font-bold text-slate-400">Vista Compacta</span>
+            <div className="space-y-2 opacity-80">
+              <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                <span>Vista Compacta</span>
                 <div className="flex gap-1">
-                  <span className="w-8 h-2 rounded bg-slate-300/60" />
-                  <span className="w-8 h-2 rounded bg-slate-300/60" />
+                  <div className="w-5 h-2 bg-slate-400/40 rounded-full" />
+                  <div className="w-5 h-2 bg-slate-400/40 rounded-full" />
                 </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <span className="w-full h-2 rounded bg-slate-200/80" />
-                <span className="w-full h-2 rounded bg-slate-200/80" />
-                <span className="w-full h-2 rounded bg-slate-200/80" />
-              </div>
+              <div className={`h-px w-full ${isDark ? "bg-[#1e293b]" : "bg-slate-200"}`} />
+              <div className={`h-2 rounded-sm w-full ${isDark ? "bg-slate-700" : "bg-slate-300"}`} />
+              <div className={`h-2 rounded-sm w-full ${isDark ? "bg-slate-700" : "bg-slate-300"}`} />
+              <div className={`h-2 rounded-sm w-full ${isDark ? "bg-slate-700" : "bg-slate-300"}`} />
             </div>
-            <span className="text-xs font-bold text-slate-900 px-1">Vista Compacta</span>
+            <p className={`text-xs font-bold mt-2 ${
+              tableDensity === "compact"
+                ? (isDark ? "text-white" : "text-slate-900")
+                : "text-slate-500"
+            }`}>
+              Vista Compacta
+            </p>
           </div>
 
           <div
-            onClick={() => setTableView("comfortable")}
-            style={tableView === "comfortable" ? { borderColor: accentColor, backgroundColor: `${accentColor}0D` } : undefined}
+            onClick={() => handleTableDensityChange("comfortable")}
+            style={tableDensity === "comfortable" ? { borderColor: selectedColor } : undefined}
             className={cn(
-              "cursor-pointer rounded-2xl border-2 p-3 transition-all bg-white flex flex-col gap-2.5",
-              tableView !== "comfortable" && "border-slate-200 hover:border-slate-300"
+              "p-4 rounded-2xl border-2 cursor-pointer transition-all flex flex-col justify-between h-36",
+              isDark ? "bg-[#070d18]" : "bg-white",
+              tableDensity === "comfortable"
+                ? `shadow-sm border-current ${isDark ? "bg-[#030712]" : "bg-slate-50"}`
+                : isDark
+                ? "border-[#1e293b] hover:border-slate-700"
+                : "border-slate-200 hover:border-slate-300"
             )}
           >
-            <div className="w-full h-20 rounded-xl bg-slate-50 p-2.5 flex flex-col justify-between border border-slate-200/60">
-              <div className="flex justify-between items-center pb-1 border-b border-slate-200">
-                <span className="text-[9px] font-bold text-slate-400">Vista Cómoda</span>
+            <div className="space-y-3 opacity-80">
+              <div className="flex justify-between items-center text-[10px] font-bold text-slate-500">
+                <span>Vista Cómoda</span>
                 <div className="flex gap-1">
-                  <span className="w-8 h-2.5 rounded bg-slate-300/60" />
-                  <span className="w-8 h-2.5 rounded bg-slate-300/60" />
+                  <div className="w-5 h-2.5 bg-slate-400/40 rounded-full" />
+                  <div className="w-5 h-2.5 bg-slate-400/40 rounded-full" />
                 </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <span className="w-full h-3 rounded bg-slate-200/80" />
-                <span className="w-full h-3 rounded bg-slate-200/80" />
-              </div>
+              <div className={`h-px w-full ${isDark ? "bg-[#1e293b]" : "bg-slate-200"}`} />
+              <div className={`h-3 rounded-md w-full ${isDark ? "bg-slate-700" : "bg-slate-300"}`} />
+              <div className={`h-3 rounded-md w-full ${isDark ? "bg-slate-700" : "bg-slate-300"}`} />
             </div>
-            <span className="text-xs font-bold text-slate-900 px-1">Vista Cómoda</span>
+            <p className={`text-xs font-bold mt-2 ${
+              tableDensity === "comfortable"
+                ? (isDark ? "text-white" : "text-slate-900")
+                : "text-slate-500"
+            }`}>
+              Vista Cómoda
+            </p>
           </div>
         </div>
       </div>
+
     </div>
   )
 }

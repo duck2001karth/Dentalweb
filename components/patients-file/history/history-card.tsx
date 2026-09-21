@@ -223,12 +223,14 @@ export function HistoryCard({
                       </div>
                     </div>
                     <Button 
+                      type="button"
                       variant="outline" 
                       size="sm" 
                       onClick={() => handleDownload(note.fileUrl, note.content || "documento.pdf")}
-                      className="h-8 text-xs font-bold rounded-lg border-border/80 hover:bg-[#008bcd]/10 hover:text-[#008bcd] cursor-pointer shrink-0 ml-2"
+                      className="h-8 px-3 rounded-xl font-bold text-xs border border-border/80 bg-card text-foreground shadow-2xs transition-all cursor-pointer shrink-0 ml-2 hover:bg-[var(--doctor-accent,#008bcd)]/10 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
                     >
-                      <Download className="w-3.5 h-3.5 mr-1" /> Descargar
+                      <Download className="w-3.5 h-3.5 mr-1.5 text-[var(--doctor-accent,#008bcd)] transition-colors shrink-0" />
+                      <span>Descargar</span>
                     </Button>
                   </div>
                 )}

@@ -225,7 +225,7 @@ export function PaymentSuccessStep({
           <Button
             type="button"
             onClick={onReset}
-            className="bg-slate-800 hover:bg-slate-900 text-white font-bold h-12 rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer active:scale-[0.98]"
+            className="bg-slate-800 hover:bg-[#0b0f19] text-white font-bold h-12 rounded-xl text-[13px] flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer active:scale-[0.98]"
           >
             <span>Finalizar</span>
             <ArrowRight className="w-4 h-4 opacity-80" />

@@ -103,7 +103,7 @@ export function CashCloseModal({
       <DialogContent className="sm:max-w-[720px] w-[95vw] bg-card border-border rounded-[24px] p-0 overflow-hidden shadow-2xl">
         
         {/* HEADER */}
-        <DialogHeader className="px-7 py-4.5 border-b border-border/70 bg-slate-900 dark:bg-slate-950 text-white flex flex-row items-center justify-between">
+        <DialogHeader className="px-7 py-4.5 border-b border-border/70 bg-[#0b0f19] dark:bg-slate-950 text-white flex flex-row items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center border border-white/15">
               <Lock className="w-4.5 h-4.5 text-white" />
@@ -262,7 +262,7 @@ export function CashCloseModal({
           <Button 
             onClick={handleCloseRegister} 
             disabled={isSaving || countedCash === ""} 
-            className="bg-slate-900 dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white text-white rounded-xl text-xs font-bold h-9.5 px-6 shadow-xs flex items-center gap-2 transition-all active:scale-95"
+            className="bg-[#0b0f19] dark:bg-slate-100 dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-white text-white rounded-xl text-xs font-bold h-9.5 px-6 shadow-xs flex items-center gap-2 transition-all active:scale-95"
           >
             {isSaving ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />

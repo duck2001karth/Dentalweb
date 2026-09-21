@@ -111,7 +111,7 @@ export function SignaturePadModal({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[480px] bg-card border-border rounded-2xl p-0 overflow-hidden shadow-2xl font-sans antialiased">
-        <DialogHeader className="p-5 border-b border-border bg-slate-900 text-white dark:bg-slate-950">
+        <DialogHeader className="p-5 border-b border-border bg-[#0b0f19] text-white dark:bg-slate-950">
           <DialogTitle className="text-lg font-bold flex items-center gap-2">
             <FileSignature className="w-5 h-5 text-[#00b0e9]" />
             Captura de Firma Digital

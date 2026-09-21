@@ -79,7 +79,6 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
             style={{ WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
             className="w-full max-w-[750px] min-h-[960px] bg-white text-black p-8 sm:p-10 rounded-lg shadow-sm border border-neutral-200 relative flex flex-col justify-between"
           >
-            {/* Marca de Agua */}
             {settings?.watermarkUrl && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden" style={{ opacity: ((settings as any)?.watermarkOpacity ?? 14) / 100 }}>
                 <img src={settings.watermarkUrl} alt="Watermark" style={{ transform: `scale(${((settings as any)?.watermarkScale || 100) / 100})` }} className="max-w-[460px] max-h-[460px] object-contain" />
@@ -112,7 +111,6 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
               {/* TÍTULO Y TARJETA PRINCIPAL DEL PACIENTE CON FOTO */}
               <div className="mb-4 bg-neutral-50 border border-neutral-200 rounded-xl p-3.5 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
-                  {/* Foto del paciente */}
                   <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#008bcd] shrink-0 bg-neutral-200 flex items-center justify-center shadow-xs">
                     {patient?.photoUrl ? (
                       <img src={patient.photoUrl} alt={patient?.firstName} className="w-full h-full object-cover" />
@@ -223,7 +221,7 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
           <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl text-xs font-bold cursor-pointer">
             Cerrar
           </Button>
-          <Button onClick={handlePrint} className="bg-[#008bcd] hover:bg-[#007bb6] text-white rounded-xl text-xs font-bold px-6 shadow-md shadow-[#008bcd]/20 cursor-pointer">
+          <Button onClick={handlePrint} className="bg-primary hover:bg-[#007bb6] text-white rounded-xl text-xs font-bold px-6 shadow-md shadow-[#008bcd]/20 cursor-pointer">
             <Printer className="w-4 h-4 mr-2" /> Imprimir Ficha
           </Button>
         </DialogFooter>

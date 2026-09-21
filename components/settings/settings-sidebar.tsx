@@ -1,12 +1,12 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
+import { useTheme } from "next-themes"
 import {
   ChevronDown,
   ChevronUp,
   Settings,
   User,
-  CreditCard,
   Shield,
   Bell,
   Accessibility,
@@ -28,11 +28,15 @@ export function SettingsSidebar({
   isDoctor,
   currentColor = "#008bcd",
 }: SettingsSidebarProps) {
+  const { theme, resolvedTheme } = useTheme()
+  const isDark = (resolvedTheme || theme) === "dark"
+
   const isGeneralActive = ["language", "appearance", "datetime", "shortcuts"].includes(activeSubTab)
   const isAccountActive = ["profile", "clinical", "signature", "security"].includes(activeSubTab)
   const [openSection, setOpenSection] = useState<string | null>(
     isAccountActive ? "account" : "general"
   )
+
   useEffect(() => {
     if (isGeneralActive) {
       setOpenSection("general")
@@ -42,6 +46,7 @@ export function SettingsSidebar({
       setOpenSection(null)
     }
   }, [activeSubTab, isGeneralActive, isAccountActive])
+
   const handleToggle = (key: string) => {
     setOpenSection((prev) => (prev === key ? null : key))
   }
@@ -49,9 +54,17 @@ export function SettingsSidebar({
   const activeColor = currentColor || "#008bcd"
 
   return (
-    <aside className="w-64 bg-white border-r border-slate-100 flex flex-col shrink-0 font-sans select-none text-slate-800">
+    <aside
+      className={`w-64 border-r flex flex-col shrink-0 font-sans select-none transition-colors ${
+        isDark
+          ? "bg-[#070d18] border-[#1e293b] text-slate-200"
+          : "bg-slate-50 border-slate-200 text-slate-800"
+      }`}
+    >
       <div className="p-6 pb-4">
-        <h2 className="text-xl font-bold tracking-tight text-slate-900">Ajustes</h2>
+        <h2 className={`text-xl font-bold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
+          Ajustes
+        </h2>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 space-y-1.5 custom-scrollbar pb-6">
@@ -63,14 +76,17 @@ export function SettingsSidebar({
             style={
               isGeneralActive
                 ? {
-                    background: `linear-gradient(90deg, ${activeColor}1A 0%, ${activeColor}08 100%)`,
+                    background: `linear-gradient(90deg, ${activeColor}22 0%, ${activeColor}08 100%)`,
                     color: activeColor,
                   }
                 : undefined
             }
             className={cn(
               "relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer overflow-hidden",
-              !isGeneralActive && "text-slate-700 hover:bg-slate-50"
+              !isGeneralActive &&
+                (isDark
+                  ? "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                  : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900")
             )}
           >
             {isGeneralActive && (
@@ -79,18 +95,17 @@ export function SettingsSidebar({
                 style={{ backgroundColor: activeColor }}
               />
             )}
-
             <div className="flex items-center gap-2.5 pl-0.5">
               <Settings
                 className="w-4 h-4 transition-colors"
-                style={{ color: isGeneralActive ? activeColor : "#64748b" }}
+                style={{ color: isGeneralActive ? activeColor : undefined }}
               />
               <span style={{ color: isGeneralActive ? activeColor : undefined }}>General</span>
             </div>
             {openSection === "general" ? (
               <ChevronUp
                 className="w-3.5 h-3.5"
-                style={{ color: isGeneralActive ? activeColor : "#94a3b8" }}
+                style={{ color: isGeneralActive ? activeColor : undefined }}
               />
             ) : (
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -117,7 +132,11 @@ export function SettingsSidebar({
                     style={{ color: isActive ? activeColor : undefined }}
                     className={cn(
                       "w-full text-left py-2 text-xs transition-colors cursor-pointer block",
-                      isActive ? "font-black" : "font-semibold text-slate-500 hover:text-slate-900"
+                      isActive
+                        ? "font-black"
+                        : isDark
+                        ? "font-semibold text-slate-400 hover:text-white"
+                        : "font-semibold text-slate-500 hover:text-slate-900"
                     )}
                   >
                     {sub.label}
@@ -136,14 +155,17 @@ export function SettingsSidebar({
             style={
               isAccountActive
                 ? {
-                    background: `linear-gradient(90deg, ${activeColor}1A 0%, ${activeColor}08 100%)`,
+                    background: `linear-gradient(90deg, ${activeColor}22 0%, ${activeColor}08 100%)`,
                     color: activeColor,
                   }
                 : undefined
             }
             className={cn(
               "relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer overflow-hidden",
-              !isAccountActive && "text-slate-700 hover:bg-slate-50"
+              !isAccountActive &&
+                (isDark
+                  ? "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                  : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900")
             )}
           >
             {isAccountActive && (
@@ -152,18 +174,17 @@ export function SettingsSidebar({
                 style={{ backgroundColor: activeColor }}
               />
             )}
-
             <div className="flex items-center gap-2.5 pl-0.5">
               <User
                 className="w-4 h-4 transition-colors"
-                style={{ color: isAccountActive ? activeColor : "#64748b" }}
+                style={{ color: isAccountActive ? activeColor : undefined }}
               />
               <span style={{ color: isAccountActive ? activeColor : undefined }}>Cuenta</span>
             </div>
             {openSection === "account" ? (
               <ChevronUp
                 className="w-3.5 h-3.5"
-                style={{ color: isAccountActive ? activeColor : "#94a3b8" }}
+                style={{ color: isAccountActive ? activeColor : undefined }}
               />
             ) : (
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
@@ -181,7 +202,11 @@ export function SettingsSidebar({
                 style={{ color: activeSubTab === "profile" ? activeColor : undefined }}
                 className={cn(
                   "w-full text-left py-2 text-xs transition-colors cursor-pointer",
-                  activeSubTab === "profile" ? "font-black" : "font-semibold text-slate-500 hover:text-slate-900"
+                  activeSubTab === "profile"
+                    ? "font-black"
+                    : isDark
+                    ? "font-semibold text-slate-400 hover:text-white"
+                    : "font-semibold text-slate-500 hover:text-slate-900"
                 )}
               >
                 Información Personal
@@ -197,7 +222,11 @@ export function SettingsSidebar({
                     style={{ color: activeSubTab === "clinical" ? activeColor : undefined }}
                     className={cn(
                       "w-full text-left py-2 text-xs transition-colors cursor-pointer flex items-center gap-1.5",
-                      activeSubTab === "clinical" ? "font-black" : "font-semibold text-slate-500 hover:text-slate-900"
+                      activeSubTab === "clinical"
+                        ? "font-black"
+                        : isDark
+                        ? "font-semibold text-slate-400 hover:text-white"
+                        : "font-semibold text-slate-500 hover:text-slate-900"
                     )}
                   >
                     <Stethoscope className="w-3.5 h-3.5" /> Perfil Clínico
@@ -211,7 +240,11 @@ export function SettingsSidebar({
                     style={{ color: activeSubTab === "signature" ? activeColor : undefined }}
                     className={cn(
                       "w-full text-left py-2 text-xs transition-colors cursor-pointer flex items-center gap-1.5",
-                      activeSubTab === "signature" ? "font-black" : "font-semibold text-slate-500 hover:text-slate-900"
+                      activeSubTab === "signature"
+                        ? "font-black"
+                        : isDark
+                        ? "font-semibold text-slate-400 hover:text-white"
+                        : "font-semibold text-slate-500 hover:text-slate-900"
                     )}
                   >
                     <FileSignature className="w-3.5 h-3.5" /> Firma y Sello
@@ -227,7 +260,11 @@ export function SettingsSidebar({
                 style={{ color: activeSubTab === "security" ? activeColor : undefined }}
                 className={cn(
                   "w-full text-left py-2 text-xs transition-colors cursor-pointer",
-                  activeSubTab === "security" ? "font-black" : "font-semibold text-slate-500 hover:text-slate-900"
+                  activeSubTab === "security"
+                    ? "font-black"
+                    : isDark
+                    ? "font-semibold text-slate-400 hover:text-white"
+                    : "font-semibold text-slate-500 hover:text-slate-900"
                 )}
               >
                 Contraseña y Seguridad
@@ -236,40 +273,7 @@ export function SettingsSidebar({
           )}
         </div>
 
-        {/* 3. PLANES */}
-        <button
-          type="button"
-          onClick={() => {
-            setActiveSubTab("plans")
-            setOpenSection(null)
-          }}
-          style={
-            activeSubTab === "plans"
-              ? {
-                  background: `linear-gradient(90deg, ${activeColor}1A 0%, ${activeColor}08 100%)`,
-                  color: activeColor,
-                }
-              : undefined
-          }
-          className={cn(
-            "relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer overflow-hidden",
-            activeSubTab !== "plans" && "text-slate-700 hover:bg-slate-50"
-          )}
-        >
-          {activeSubTab === "plans" && (
-            <span
-              className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 rounded-r-full"
-              style={{ backgroundColor: activeColor }}
-            />
-          )}
-          <div className="flex items-center gap-2.5 pl-0.5">
-            <CreditCard className="w-4 h-4" style={{ color: activeSubTab === "plans" ? activeColor : "#64748b" }} />
-            <span>Planes y mejoras</span>
-          </div>
-          <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-        </button>
-
-        {/* 4. PRIVACIDAD */}
+        {/* 3. PRIVACIDAD */}
         <button
           type="button"
           onClick={() => {
@@ -279,14 +283,17 @@ export function SettingsSidebar({
           style={
             activeSubTab === "privacy"
               ? {
-                  background: `linear-gradient(90deg, ${activeColor}1A 0%, ${activeColor}08 100%)`,
+                  background: `linear-gradient(90deg, ${activeColor}22 0%, ${activeColor}08 100%)`,
                   color: activeColor,
                 }
               : undefined
           }
           className={cn(
             "relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer overflow-hidden",
-            activeSubTab !== "privacy" && "text-slate-700 hover:bg-slate-50"
+            activeSubTab !== "privacy" &&
+              (isDark
+                ? "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900")
           )}
         >
           {activeSubTab === "privacy" && (
@@ -296,13 +303,13 @@ export function SettingsSidebar({
             />
           )}
           <div className="flex items-center gap-2.5 pl-0.5">
-            <Shield className="w-4 h-4" style={{ color: activeSubTab === "privacy" ? activeColor : "#64748b" }} />
+            <Shield className="w-4 h-4" style={{ color: activeSubTab === "privacy" ? activeColor : undefined }} />
             <span>Privacidad</span>
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
         </button>
 
-        {/* 5. NOTIFICACIONES */}
+        {/* 4. NOTIFICACIONES */}
         <button
           type="button"
           onClick={() => {
@@ -312,14 +319,17 @@ export function SettingsSidebar({
           style={
             activeSubTab === "notifications"
               ? {
-                  background: `linear-gradient(90deg, ${activeColor}1A 0%, ${activeColor}08 100%)`,
+                  background: `linear-gradient(90deg, ${activeColor}22 0%, ${activeColor}08 100%)`,
                   color: activeColor,
                 }
               : undefined
           }
           className={cn(
             "relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer overflow-hidden",
-            activeSubTab !== "notifications" && "text-slate-700 hover:bg-slate-50"
+            activeSubTab !== "notifications" &&
+              (isDark
+                ? "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900")
           )}
         >
           {activeSubTab === "notifications" && (
@@ -329,13 +339,13 @@ export function SettingsSidebar({
             />
           )}
           <div className="flex items-center gap-2.5 pl-0.5">
-            <Bell className="w-4 h-4" style={{ color: activeSubTab === "notifications" ? activeColor : "#64748b" }} />
+            <Bell className="w-4 h-4" style={{ color: activeSubTab === "notifications" ? activeColor : undefined }} />
             <span>Notificación</span>
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
         </button>
 
-        {/* 6. ACCESIBILIDAD */}
+        {/* 5. ACCESIBILIDAD */}
         <button
           type="button"
           onClick={() => {
@@ -345,14 +355,17 @@ export function SettingsSidebar({
           style={
             activeSubTab === "accessibility"
               ? {
-                  background: `linear-gradient(90deg, ${activeColor}1A 0%, ${activeColor}08 100%)`,
+                  background: `linear-gradient(90deg, ${activeColor}22 0%, ${activeColor}08 100%)`,
                   color: activeColor,
                 }
               : undefined
           }
           className={cn(
             "relative w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs font-bold transition-all cursor-pointer overflow-hidden",
-            activeSubTab !== "accessibility" && "text-slate-700 hover:bg-slate-50"
+            activeSubTab !== "accessibility" &&
+              (isDark
+                ? "text-slate-400 hover:bg-white/[0.04] hover:text-white"
+                : "text-slate-600 hover:bg-slate-200/60 hover:text-slate-900")
           )}
         >
           {activeSubTab === "accessibility" && (
@@ -362,7 +375,7 @@ export function SettingsSidebar({
             />
           )}
           <div className="flex items-center gap-2.5 pl-0.5">
-            <Accessibility className="w-4 h-4" style={{ color: activeSubTab === "accessibility" ? activeColor : "#64748b" }} />
+            <Accessibility className="w-4 h-4" style={{ color: activeSubTab === "accessibility" ? activeColor : undefined }} />
             <span>Accesibilidad</span>
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400" />

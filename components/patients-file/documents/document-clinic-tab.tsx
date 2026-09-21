@@ -305,10 +305,10 @@ export function DocumentosClinicosTab({
               variant={showVoided ? "secondary" : "outline"}
               onClick={() => setShowVoided(!showVoided)}
               className={cn(
-                "h-11 rounded-xl font-bold text-sm px-4 transition-all cursor-pointer",
+                "h-11 rounded-xl font-bold text-sm px-4 transition-all cursor-pointer shadow-2xs focus-visible:outline-none focus-visible:ring-2",
                 showVoided
-                  ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-950/30 dark:border-red-900/50"
-                  : "bg-background border-border/80 hover:bg-muted"
+                  ? "bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:border-red-300 dark:bg-red-950/40 dark:text-red-400 dark:border-red-900/60 focus-visible:ring-red-500"
+                  : "bg-card text-foreground border border-border/80 hover:bg-muted hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:ring-[var(--doctor-accent,#008bcd)]"
               )}
             >
               {showVoided ? "Ver activos" : "Ver anulados"}
@@ -322,9 +322,10 @@ export function DocumentosClinicosTab({
                   setNewContent("")
                   setIsCreating(true)
                 }}
-                className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold rounded-xl h-11 px-5 text-sm shadow-xs transition-transform active:scale-95 cursor-pointer"
+                className="h-11 px-5 rounded-xl font-bold text-sm bg-primary hover:bg-primary/90 text-primary-foreground shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/35 transition-all hover:-translate-y-0.5 active:scale-95 cursor-pointer flex items-center gap-2"
               >
-                <Plus className="w-4 h-4 mr-2" /> Nuevo Documento
+                <Plus className="w-5 h-5 stroke-[2.5]" />
+                Nuevo Documento
               </Button>
             )}
           </div>
@@ -368,14 +369,15 @@ export function DocumentosClinicosTab({
                   {canEditDocs && !doc.isVoided && (
                     <div className="flex items-center gap-1">
                       <Button
+                        type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7 text-amber-500 hover:bg-amber-500/10 rounded-lg cursor-pointer"
+                        className="h-7 w-7 rounded-lg text-amber-600 dark:text-amber-400 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-500/15 transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
                         onClick={() => handleEditInit(doc)}
+                        title="Editar documento"
                       >
-                        <Edit size={14} />
+                        <Edit size={14} className="shrink-0" />
                       </Button>
-
                       <DocumentVoidDialog
                         docId={doc.id}
                         docTitle={doc.title}

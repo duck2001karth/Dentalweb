@@ -341,7 +341,7 @@ export function FichaAnamnesisTab({ patientId }: { patientId: string }) {
           <Button 
             onClick={handleSaveAnamnesis} 
             disabled={isSaving}
-            className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold h-10 px-6 rounded-xl shadow-xs transition-all cursor-pointer text-xs w-full sm:w-auto"
+            className="bg-primary hover:bg-[#0070a8] text-white font-bold h-10 px-6 rounded-xl shadow-xs transition-all cursor-pointer text-xs w-full sm:w-auto"
           >
             {isSaving ? (
               <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...</>

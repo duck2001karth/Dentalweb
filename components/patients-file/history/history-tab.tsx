@@ -398,17 +398,21 @@ useEffect(() => {
 
           {/* Filtros y Acciones */}
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
-            <div className="relative w-full sm:w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
+            <div className="relative w-full sm:w-[220px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none z-10 transition-colors" />
+              <input
                 type="text"
                 placeholder="Buscar registro..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 bg-background border-border/80 text-xs font-medium focus-visible:ring-[#008bcd] w-full h-10 rounded-xl"
+                style={{
+                  backgroundColor: "var(--card, #ffffff)",
+                  color: "var(--foreground, #0f172a)",
+                  borderColor: "var(--border, #e2e8f0)",
+                }}
+                className="h-10 w-full rounded-xl border pl-9 pr-4 text-xs font-semibold placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs transition-colors focus:outline-none focus:ring-2 focus:ring-[#008bcd]/20 focus:border-[#008bcd]"
               />
             </div>
-
             <Select value={monthFilter} onValueChange={setMonthFilter}>
               <SelectTrigger className="w-full sm:w-[140px] h-10 rounded-xl bg-background border-border/80 text-xs font-semibold">
                 <SelectValue placeholder="Meses" />
@@ -446,7 +450,7 @@ useEffect(() => {
             {canEditClinicalData && (
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button className="bg-[#008bcd] hover:bg-[#0070a8] text-white rounded-xl h-10 px-4 text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer">
+                  <Button className="bg-primary hover:bg-[#0070a8] text-white rounded-xl h-10 px-4 text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer">
                     <Plus className="w-4 h-4" /> Nuevo Registro <ChevronDown className="w-3.5 h-3.5 opacity-70" />
                   </Button>
                 </PopoverTrigger>
@@ -491,10 +495,10 @@ useEffect(() => {
               size="icon"
               onClick={handlePrintHistorial}
               disabled={isPatientLoading || !patient}
-              className="bg-background border-border/80 text-foreground hover:bg-accent shrink-0 rounded-xl h-10 w-10 font-bold cursor-pointer transition-all"
+              className="bg-background border-border/80 text-foreground hover:bg-muted/80 shrink-0 rounded-xl h-11 w-11 font-bold cursor-pointer transition-all shadow-xs"
               title="Imprimir Historial General"
             >
-              <Printer className="w-4 h-4" />
+              <Printer className="w-5 h-5 stroke-[2.2]" />
             </Button>
           </div>
         </div>

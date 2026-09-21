@@ -255,15 +255,15 @@ export function EvolutionModal({
                       <Button
                         type="button"
                         variant="outline"
-                        className="w-full h-10 border-dashed border border-input rounded-xl text-xs font-bold flex items-center justify-center gap-2 hover:bg-muted/40 overflow-hidden relative cursor-pointer px-3 bg-background"
+                        className="w-full h-10 border-dashed border border-border/80 rounded-xl text-xs font-bold flex items-center justify-center gap-2 bg-card text-foreground overflow-hidden relative cursor-pointer px-3 shadow-2xs transition-all hover:bg-[var(--doctor-accent,#008bcd)]/5 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)] group"
                       >
                         <input
                           type="file"
                           onChange={handleImageUpload}
                           accept="image/*"
-                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-10"
                         />
-                        <UploadCloud className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <UploadCloud className="w-4 h-4 text-muted-foreground group-hover:text-[var(--doctor-accent,#008bcd)] shrink-0 transition-colors" />
                         <span className="truncate">{fileName || "Subir foto"}</span>
                       </Button>
                     </div>
@@ -414,9 +414,10 @@ export function EvolutionModal({
                             variant="outline"
                             size="sm"
                             onClick={() => setIsSignModalOpen(true)}
-                            className="w-full rounded-xl font-bold border-border/80 hover:bg-muted text-xs h-9 cursor-pointer shadow-2xs"
+                            className="w-full h-9 rounded-xl font-bold text-xs border border-border/80 bg-card text-foreground shadow-2xs transition-all cursor-pointer hover:bg-[var(--doctor-accent,#008bcd)]/10 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
                           >
-                            <PenTool size={13} className="mr-1.5 text-[#008bcd]" /> Firmar en Pantalla
+                            <PenTool size={13} className="mr-1.5 text-[var(--doctor-accent,#008bcd)] transition-colors" />
+                            <span>Firmar en Pantalla</span>
                           </Button>
                         </div>
                       )}
@@ -436,9 +437,9 @@ export function EvolutionModal({
           <DialogFooter className="px-7 py-4 border-t border-border/70 bg-muted/10 flex flex-row items-center justify-end gap-2.5">
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               onClick={() => onOpenChange(false)}
-              className="rounded-xl text-xs font-bold h-10 px-5 hover:bg-muted cursor-pointer"
+              className="h-10 px-5 rounded-xl text-xs font-bold border border-border/80 bg-card text-foreground shadow-2xs transition-all cursor-pointer hover:bg-[var(--doctor-accent,#008bcd)]/10 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
             >
               Cancelar
             </Button>
@@ -446,7 +447,7 @@ export function EvolutionModal({
               type="button"
               onClick={onSave}
               disabled={isWorking || !noteContent.trim()}
-              className="bg-[#008bcd] hover:bg-[#0074a8] text-white rounded-xl text-xs font-bold h-10 px-6 shadow-xs flex items-center gap-2 cursor-pointer transition-all active:scale-95"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-bold h-10 px-6 shadow-xs flex items-center gap-2 cursor-pointer transition-all active:scale-95"
             >
               {isWorking ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

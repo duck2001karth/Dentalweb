@@ -215,9 +215,9 @@ export function ExportIssuedDocuments({
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="h-10 text-xs font-bold rounded-xl border-[#008bcd]/30 bg-[#008bcd]/5 hover:bg-[#008bcd]/15 text-[#008bcd] transition-colors flex items-center gap-2 cursor-pointer"
+          className="h-10 text-xs font-bold rounded-xl border-border bg-card text-foreground/80 hover:text-foreground hover:bg-muted/80 hover:border-border transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
         >
-          <Download className="w-4 h-4" />
+          <Download className="w-4 h-4 text-muted-foreground" />
           Exportar Comprobantes
         </Button>
       </DropdownMenuTrigger>

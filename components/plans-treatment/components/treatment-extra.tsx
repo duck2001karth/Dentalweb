@@ -334,20 +334,29 @@ export function TreatmentExtraSection({
                 onClick={handleSave} 
                 disabled={isSavingComment} 
                 size="sm" 
-                className="bg-[#008bcd] hover:bg-[#0070a8] text-white shadow-xs rounded-xl h-8 px-4 font-bold text-xs cursor-pointer"
+                style={{
+                  backgroundColor: "var(--doctor-accent, #008bcd)",
+                }}
+                className="text-white shadow-xs rounded-xl h-8 px-4 font-bold text-xs cursor-pointer hover:opacity-90 transition-all border-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
               >
-                {isSavingComment ? <Loader2 className="w-3 h-3 mr-1.5 animate-spin" /> : <Save className="w-3 h-3 mr-1.5" />} Guardar
+                {isSavingComment ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Save className="w-3.5 h-3.5 mr-1.5" />
+                )} 
+                Guardar
               </Button>
             ) : (
               <Button 
-                type="button"
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setIsEditingComments(true)} 
-                className="text-[#008bcd] hover:bg-[#008bcd]/10 rounded-xl h-8 px-4 font-bold text-xs cursor-pointer"
-              >
-                <Edit className="w-3 h-3 mr-1.5" /> Editar
-              </Button>
+                  type="button"
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setIsEditingComments(true)} 
+                  className="rounded-xl font-bold border border-border/80 bg-card text-foreground text-xs h-8 px-3 shadow-2xs transition-all cursor-pointer hover:border-[#008bcd] hover:text-[#008bcd] hover:bg-[#008bcd]/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#008bcd]"
+                >
+                  <Edit className="w-3.5 h-3.5 mr-1.5 text-[#008bcd] transition-colors" /> 
+                  Editar
+                </Button>
             )}
           </div>
           

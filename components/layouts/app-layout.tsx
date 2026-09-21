@@ -7,16 +7,16 @@ import { useSession } from "next-auth/react"
 import { useSearch } from "../providers/search-provider"
 import { cn } from "@/lib/utils"
 
-import { NotificationsHelp } from "@/components/notifications-help"
-import { NotificationsDropdown } from "@/components/notifications-tab"
+import { NotificationsHelp } from "@/components/notifications/notifications-help"
+import { NotificationsDropdown } from "@/components/notifications/notifications-tab"
 import { DynamicBreadcrumbs } from "@/components/breadcrumbs"
-import { QuickActions } from "@/components/quick-actions"
-import { NextPatientDropdown } from "@/components/notifications-patient"
+import { QuickActions } from "@/components/dashboard/quick-actions"
+import { NextPatientDropdown } from "@/components/notifications/notifications-patient"
 
 const AppCommand = dynamic(() => import('../app-command').then((mod) => mod.AppCommand))
 const GlobalLoader = dynamic(() => import('../global-loader').then((mod) => mod.GlobalLoader))
 
-const Nav = dynamic(() => import('../nav').then((mod) => mod.Nav), {
+const Nav = dynamic(() => import('@/components/nav').then((mod) => mod.Nav), {
   loading: () => <div className="w-[70px] h-full bg-background border-r" />,
 })
 

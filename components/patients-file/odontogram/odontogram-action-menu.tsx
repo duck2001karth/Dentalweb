@@ -73,7 +73,7 @@ export function OdontogramActionMenu({
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
       <div className="bg-card text-card-foreground w-[90%] max-w-[600px] max-h-[85vh] rounded-[24px] shadow-2xl border border-border flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
-        <div className="bg-slate-900 dark:bg-slate-950 px-7 py-5 flex items-center justify-between text-white shrink-0">
+        <div className="bg-[#0b0f19] dark:bg-slate-950 px-7 py-5 flex items-center justify-between text-white shrink-0">
           <div className="flex items-center gap-4">
             {menuStep !== "OPTIONS" && (
                 <Button variant="ghost" size="icon" onClick={() => setMenuStep("OPTIONS")} className="h-9 w-9 text-white hover:bg-white/20 rounded-full"><ChevronLeft className="w-5 h-5"/></Button>
@@ -159,7 +159,7 @@ export function OdontogramActionMenu({
               </div>
               <div className="flex justify-end gap-3 pt-2">
                 <Button variant="outline" onClick={() => setMenuStep("OPTIONS")} className="font-bold h-11 px-6 rounded-xl border-border">Atrás</Button>
-                <Button onClick={handleSaveRecord} disabled={isSaving} className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold h-11 px-6 rounded-xl shadow-sm">
+                <Button onClick={handleSaveRecord} disabled={isSaving} className="bg-primary hover:bg-[#0070a8] text-white font-bold h-11 px-6 rounded-xl shadow-sm">
                   {isSaving ? <Loader2 className="w-5 h-5 mr-2 animate-spin"/> : null} Guardar Simbología
                 </Button>
               </div>

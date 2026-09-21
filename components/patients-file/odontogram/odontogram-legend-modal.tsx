@@ -21,11 +21,11 @@ export function OdontogramLegendModal() {
     <Dialog>
       <DialogTrigger asChild>
         <Button 
+          type="button"
           variant="outline" 
-          size="sm"
-          className="h-10 rounded-xl bg-background border-border/80 text-xs font-bold text-muted-foreground hover:text-foreground gap-1.5 cursor-pointer shadow-xs transition-all"
+          className="h-10 px-3.5 rounded-xl bg-background border-border/80 text-xs font-bold text-muted-foreground hover:text-foreground gap-2 cursor-pointer shadow-xs transition-all"
         >
-          <HelpCircle className="w-4 h-4 text-[#008bcd]" />
+          <HelpCircle className="w-4 h-4 text-primary" />
           <span className="hidden sm:inline">Guía de Simbología</span>
         </Button>
       </DialogTrigger>

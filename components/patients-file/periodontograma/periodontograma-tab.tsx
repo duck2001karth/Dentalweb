@@ -481,7 +481,7 @@ const fetchHistory = useCallback(async () => {
                 size="sm"
                 onClick={handleSave}
                 disabled={isSaving}
-                className="h-10 text-xs font-bold bg-[#008bcd] hover:bg-[#0070a8] text-white rounded-xl shadow-xs transition-all cursor-pointer px-4"
+                className="h-10 text-xs font-bold bg-primary hover:bg-[#0070a8] text-white rounded-xl shadow-xs transition-all cursor-pointer px-4"
               >
                 {isSaving ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Save size={14} className="mr-1.5" />}
                 Guardar Evaluación

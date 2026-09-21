@@ -150,7 +150,7 @@ export function SignatureSettingsCard() {
             </div>
           </div>
         ) : currentSignature ? (
-          <div className="border border-border/80 rounded-xl p-4 bg-white dark:bg-slate-900 flex items-center justify-center min-h-[140px]">
+          <div className="border border-border/80 rounded-xl p-4 bg-white dark:bg-[#0b0f19] flex items-center justify-center min-h-[140px]">
             <img src={currentSignature} alt="Firma Profesional" className="max-h-32 object-contain" />
           </div>
         ) : (
@@ -161,7 +161,7 @@ export function SignatureSettingsCard() {
       </div>
 
       <div className="flex justify-end pt-2">
-        <Button onClick={handleSave} disabled={isSaving} className="bg-[#008bcd] hover:bg-[#0070a8] text-white font-bold h-10 px-6 rounded-xl">
+        <Button onClick={handleSave} disabled={isSaving} className="bg-primary hover:bg-[#0070a8] text-white font-bold h-10 px-6 rounded-xl">
           {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-1.5" />} Guardar Firma
         </Button>
       </div>

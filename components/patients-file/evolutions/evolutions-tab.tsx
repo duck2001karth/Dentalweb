@@ -436,21 +436,21 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
             {canEditClinicalData && (
               <Button
                 onClick={openNewModal}
-                className="bg-[#008bcd] hover:bg-[#0070a8] text-white rounded-xl h-10 font-bold px-4 text-xs shadow-xs transition-all cursor-pointer"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl h-10 font-bold px-4 text-xs shadow-xs transition-all cursor-pointer"
               >
-                <Plus className="w-4 h-4 mr-1.5 stroke-[2.5]" /> Nueva Evolución
+                <Plus className="w-4 h-4 mr-1.5" />Nueva Evolución
               </Button>
             )}
 
-            <Button
-              onClick={handlePrint}
-              variant="outline"
-              size="icon"
-              className="bg-background border-border/80 text-foreground hover:bg-accent shrink-0 rounded-xl h-10 w-10 font-bold cursor-pointer transition-all"
-              title="Imprimir Evoluciones"
-            >
-              <Printer className="w-4 h-4" />
-            </Button>
+           <Button
+            onClick={handlePrint}
+            variant="outline"
+            size="icon"
+            className="bg-background border-border/80 text-foreground hover:bg-muted/80 shrink-0 rounded-xl h-11 w-11 cursor-pointer transition-all shadow-xs"
+            title="Imprimir Evoluciones"
+          >
+            <Printer className="w-5 h-5 stroke-[2.2]" />
+          </Button>
           </div>
         </div>
       </div>

@@ -10,7 +10,7 @@ export const metadata = {
 export default function UnauthorizedPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-4">
-      <div className="max-w-md w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden text-center">
+      <div className="max-w-md w-full bg-white dark:bg-[#0b0f19] border border-slate-200 dark:border-slate-800 rounded-3xl shadow-xl overflow-hidden text-center">
         <div className="bg-red-50 dark:bg-red-950/30 p-8 flex justify-center border-b border-slate-100 dark:border-slate-800">
           <div className="bg-red-100 dark:bg-red-900/50 p-4 rounded-full shadow-sm">
             <ShieldAlert className="w-12 h-12 text-red-600 dark:text-red-500" />

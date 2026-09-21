@@ -336,7 +336,7 @@ export default function GlobalEvolutionsPage() {
                       
                       <td className="p-4 pr-6 text-center">
                         <Link href={`/paciente/${evo.patientId}?tab=evoluciones`}>
-                          <button className="inline-flex items-center justify-center gap-2 text-[#008bcd] dark:text-blue-400 bg-blue-500/10 hover:bg-[#008bcd] hover:text-white dark:hover:bg-blue-600 transition-all font-semibold px-4 py-2 rounded-lg text-sm border border-transparent hover:shadow-md">
+                          <button className="inline-flex items-center justify-center gap-2 text-[#008bcd] dark:text-blue-400 bg-blue-500/10 hover:bg-primary hover:text-white dark:hover:bg-blue-600 transition-all font-semibold px-4 py-2 rounded-lg text-sm border border-transparent hover:shadow-md">
                             <FileText className="w-4 h-4" /> Ir a la ficha
                           </button>
                         </Link>

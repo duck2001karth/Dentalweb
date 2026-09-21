@@ -107,7 +107,7 @@ export default function AdminSidebar() {
                   </div>
                 )}
                 {!isHovered && (
-                  <div className="fixed left-[84px] px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-xl border border-slate-800 whitespace-nowrap">
+                  <div className="fixed left-[84px] px-3 py-1.5 bg-[#0b0f19] text-white text-xs font-bold rounded-lg opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 shadow-xl border border-slate-800 whitespace-nowrap">
                     {link.name}
                   </div>
                 )}

@@ -7,7 +7,7 @@ import { redirect } from "next/navigation"
 import { DashboardAgenda } from "@/components/agenda-comp/agenda"
 
 const Greeting = dynamic(() =>
-  import('@/components/greeting').then((mod) => mod.Greeting),
+  import('@/components/dashboard/greeting').then((mod) => mod.Greeting),
   { 
     loading: () => (
       <div className="w-full">

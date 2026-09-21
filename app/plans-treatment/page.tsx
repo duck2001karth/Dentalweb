@@ -124,7 +124,7 @@ export default function PlansTreatmentHubPage() {
               />
             </div>
             <Link href="/pacientes">
-              <Button className="bg-[#008bcd] hover:bg-[#0070a8] text-white h-11 px-6 rounded-xl shadow-md font-bold shrink-0">
+              <Button className="bg-primary hover:bg-[#0070a8] text-white h-11 px-6 rounded-xl shadow-md font-bold shrink-0">
                 <Plus className="w-4 h-4 mr-2" /> Nuevo Plan
               </Button>
             </Link>
@@ -290,7 +290,7 @@ export default function PlansTreatmentHubPage() {
 
                       {/* ABRIR PLAN */}
                       <Link href={`/paciente/${plan.patientId}?tab=planes&planId=${plan.id}`}>
-                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl border border-border hover:bg-[#008bcd] hover:text-white transition-all">
+                        <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl border border-border hover:bg-primary hover:text-white transition-all">
                           <ChevronRight className="w-5 h-5" />
                         </Button>
                       </Link>

@@ -219,9 +219,10 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
           <DialogTrigger asChild>
             <Button 
               variant="outline" 
-              className="text-foreground text-xs font-bold hover:text-[#008bcd] hover:border-[#008bcd]/40 hover:bg-[#008bcd]/5 transition-colors rounded-xl h-10 px-4 cursor-pointer"
+              className="h-10 px-4 rounded-xl border border-border/80 bg-card text-foreground text-xs font-bold shadow-2xs transition-all cursor-pointer hover:bg-[var(--doctor-accent,#008bcd)]/10 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
             >
-              <HelpCircle className="mr-2 w-4 h-4 text-[#008bcd]" /> Guía de archivos
+              <HelpCircle className="mr-2 w-4 h-4 text-[var(--doctor-accent,#008bcd)]" /> 
+              Guía de archivos
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-[680px] bg-card border border-border/80 rounded-2xl shadow-xl p-0 overflow-hidden">
@@ -294,7 +295,7 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
 
             <div className="px-6 py-3.5 bg-muted/20 border-t border-border/70 flex justify-end">
               <DialogPrimitive.Close asChild>
-                <Button className="bg-[#008bcd] text-white hover:bg-[#0070a8] text-xs font-bold rounded-xl px-5 h-9 cursor-pointer">
+                <Button className="bg-primary text-white hover:bg-[#0070a8] text-xs font-bold rounded-xl px-5 h-9 cursor-pointer">
                   Entendido
                 </Button>
               </DialogPrimitive.Close>
@@ -443,13 +444,15 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
                             {/* Acciones */}
                             <div className="flex items-center gap-1.5 pt-1">
                               <a href={file.fileUrl} download={file.content || "Documento"} className="flex-1">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="w-full h-7 text-[10px] font-bold bg-background hover:bg-[#008bcd]/10 hover:text-[#008bcd] border-border/80 rounded-lg cursor-pointer"
-                                >
-                                  <Download size={11} className="mr-1" /> Descargar
-                                </Button>
+                               <Button 
+                                type="button"
+                                variant="outline" 
+                                size="sm" 
+                                className="w-full h-7 text-[10px] font-bold border border-border/80 bg-card text-foreground rounded-lg shadow-2xs transition-all cursor-pointer hover:bg-[var(--doctor-accent,#008bcd)]/10 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
+                              >
+                                <Download size={11} className="mr-1 text-[var(--doctor-accent,#008bcd)] transition-colors shrink-0" />
+                                <span>Descargar</span>
+                              </Button>
                               </a>
                               
                               {canDeleteDocs && (

@@ -6,7 +6,6 @@ import { DayPicker } from "react-day-picker"
 import { es } from "date-fns/locale"
 
 import { cn } from "@/lib/utils"
-import { buttonVariants } from "@/components/ui/button"
 
 export type CalendarProps = React.ComponentProps<typeof DayPicker>
 
@@ -20,47 +19,45 @@ function Calendar({
     <DayPicker
       locale={props.locale || es}
       showOutsideDays={showOutsideDays}
-      // CLAVE: Agregamos "relative" aquí para que las flechas no se escapen
-      className={cn("p-3 relative", className)}
+      className={cn("p-3 select-none w-full bg-card rounded-2xl relative", className)}
       classNames={{
-        months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0",
-        month: "space-y-4",
-        month_caption: "flex justify-center pt-1 relative items-center",
-        caption_label: "text-sm font-medium",
-        // Ajustamos el "nav" para que ocupe todo el ancho en la parte superior
-        nav: "flex items-center justify-between absolute w-full z-10 top-3 left-0 px-4",
-        button_previous: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-        ),
-        button_next: cn(
-          buttonVariants({ variant: "outline" }),
-          "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100"
-        ),
-        month_grid: "w-full border-collapse space-y-1 mt-2",
-        weekdays: "flex",
-        weekday: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-        week: "flex w-full mt-2",
-        day: "p-0 text-center text-sm relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-        day_button: cn(
-          buttonVariants({ variant: "ghost" }),
-          "h-9 w-9 p-0 font-normal aria-selected:opacity-100"
-        ),
+        months: "w-full space-y-3",
+        month: "space-y-3 w-full relative",
+
+        // ENCABEZADO Y TÍTULO DEL MES
+        month_caption: "flex justify-center items-center h-9 relative mb-2 w-full px-8",
+        caption_label: "text-sm font-black text-foreground capitalize block text-center select-none",
+
+        // FLECHAS DE NAVEGACIÓN VISIBLES A LOS LADOS
+        nav: "flex items-center justify-between absolute top-0 inset-x-0 h-9 z-10 pointer-events-none px-0.5",
+        button_previous: "h-7 w-7 rounded-xl border border-border/80 text-foreground pointer-events-auto cursor-pointer flex items-center justify-center bg-card shadow-2xs transition-all hover:bg-[var(--doctor-accent,#008bcd)]/10 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]",
+        button_next: "h-7 w-7 rounded-xl border border-border/80 text-foreground pointer-events-auto cursor-pointer flex items-center justify-center bg-card shadow-2xs transition-all hover:bg-[var(--doctor-accent,#008bcd)]/10 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]",
+
+        month_grid: "w-full border-collapse space-y-1 mt-1",
+        weekdays: "flex justify-between w-full mb-1",
+        weekday: "text-muted-foreground font-bold text-[11px] uppercase text-center w-9",
+        week: "flex w-full justify-between mt-1",
+        day: "p-0 text-center text-sm relative flex items-center justify-center",
+
+        // DÍAS
+        day_button: "h-9 w-9 p-0 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center text-foreground hover:bg-[var(--doctor-accent,#008bcd)]/15 hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]",
         range_end: "day-range-end",
-        selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-        today: "bg-accent text-accent-foreground",
-        outside: "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
-        disabled: "text-muted-foreground opacity-50",
-        range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
+
+        // DÍA SELECCIONADO
+        selected: "!bg-[var(--doctor-accent,#008bcd)] !text-white !font-black !rounded-xl shadow-xs hover:!bg-[var(--doctor-accent,#008bcd)] hover:!text-white",
+        today: "font-black text-[var(--doctor-accent,#008bcd)] underline underline-offset-4",
+        outside: "!text-muted-foreground/40 opacity-40 hover:opacity-100 hover:!text-foreground",
+        disabled: "!text-muted-foreground/25 opacity-25 cursor-not-allowed",
+        range_middle: "aria-selected:bg-accent",
         hidden: "invisible",
         ...classNames,
       }}
       components={{
-        Chevron: (props) => {
-          if (props.orientation === "left") {
-            return <ChevronLeft className="h-4 w-4" />
+        Chevron: ({ orientation }) => {
+          if (orientation === "left") {
+            return <ChevronLeft className="h-4 w-4 stroke-[2.5]" />
           }
-          return <ChevronRight className="h-4 w-4" />
+          return <ChevronRight className="h-4 w-4 stroke-[2.5]" />
         },
       }}
       {...props}
