@@ -16,8 +16,9 @@ import { NextPatientDropdown } from "@/components/notifications/notifications-pa
 const AppCommand = dynamic(() => import('../app-command').then((mod) => mod.AppCommand))
 const GlobalLoader = dynamic(() => import('../global-loader').then((mod) => mod.GlobalLoader))
 
+// 1. Corrección del Loader del Nav para que use bg-card y no desentone al cargar
 const Nav = dynamic(() => import('@/components/nav').then((mod) => mod.Nav), {
-  loading: () => <div className="w-[70px] h-full bg-background border-r" />,
+  loading: () => <div className="w-[70px] h-full bg-card border-r border-border/50" />,
 })
 
 const ProfilePicture = dynamic(() => import('../auth/profile-picture').then((mod) => mod.ProfilePicture))
@@ -44,7 +45,9 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
     <div className="min-h-screen bg-background font-sans antialiased">
       <GlobalLoader />
       <div className="md:grid md:grid-cols-[auto_1fr] min-h-screen w-full">
-        <aside className="hidden md:block sticky top-0 h-screen overflow-hidden z-50 min-w-[70px]">
+        
+        {/* 2. Barra lateral con bg-card y su borde sutil integrado */}
+        <aside className="hidden md:block sticky top-0 h-screen overflow-hidden z-50 min-w-[70px] bg-card border-r border-border/50 shadow-xs transition-colors">
           <div className="h-full w-full">
             <Nav />
           </div>
@@ -83,14 +86,15 @@ const Header = () => {
   }, [])
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 h-[70px] flex items-center px-4 md:px-6 gap-3 print:hidden transition-all">  
+    <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/80 backdrop-blur-md supports-[backdrop-filter]:bg-background/60 h-[70px] flex items-center px-4 md:px-6 gap-3 print:hidden transition-colors">  
       
       <div className="md:hidden flex items-center">
         <Sheet>
-          <SheetTrigger className="p-2 -ml-2 rounded-xl hover:bg-accent transition-colors">
+          <SheetTrigger className="p-2 -ml-2 rounded-xl hover:bg-accent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <Menu className="h-5 w-5 text-foreground" />
           </SheetTrigger>
-          <SheetContent position="left" className="p-0 w-[260px]"> 
+          {/* 3. Menú lateral móvil con bg-card igual que la versión de escritorio */}
+          <SheetContent position="left" className="p-0 w-[260px] bg-card border-r border-border/50"> 
             <Nav />
           </SheetContent>
         </Sheet>

@@ -35,7 +35,7 @@ export const viewport: Viewport = {
   width: "device-width",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#030712" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" }, /* Actualizado a negro puro clínico */
   ],
 };
 
@@ -62,6 +62,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
           >
             <ClientProvider>
               <ClinicSettingsProvider>
+                {/* Los bg-background aquí ahora leerán el negro puro #000000 de globals.css */}
                 <div className="relative flex min-h-screen flex-col bg-background">
                   <div className="flex-1 bg-background">{children}</div>
                   <div className="print:hidden">

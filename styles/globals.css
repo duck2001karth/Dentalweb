@@ -28,7 +28,7 @@
 }
 
 /* ==========================================================================
-   VARIABLES DE TEMA (Modo Claro vs Modo Oscuro)
+   VARIABLES DE TEMA (Material Design / SaaS Anti-Fatiga)
    ========================================================================== */
 @layer base {
   :root {
@@ -52,60 +52,59 @@
     --destructive-foreground: #ffffff;
     --ring: var(--doctor-accent, #008bcd);
     --radius: 0.75rem;
+
+    --greeting-bg: #e0f2fe;
+    --greeting-gradient: radial-gradient(circle at 15% 50%, rgba(0, 139, 205, 0.18) 0%, transparent 60%), radial-gradient(circle at 85% 30%, rgba(0, 139, 205, 0.22) 0%, transparent 65%);
   }
 
   .dark,
   [data-theme="dark"] {
-    --background: #030712;
-    --foreground: #f8fafc;
-    --muted: #0d121f;
-    --muted-foreground: #94a3b8;
-    --popover: #070d18;
-    --popover-foreground: #f8fafc;
-    --border: #1e293b;
-    --input: #1e293b;
-    --card: #070d18;
-    --card-foreground: #f8fafc;
-    --primary: var(--doctor-accent, #008bcd);
+    --background: #121212;
+    --foreground: rgba(255, 255, 255, 0.87);
+    --card: #1e1e1e;
+    --card-foreground: rgba(255, 255, 255, 0.87);
+    --popover: #272727;
+    --popover-foreground: rgba(255, 255, 255, 0.87);
+    --muted: #232323;
+    --muted-foreground: rgba(255, 255, 255, 0.60);
+    --border: #333333;
+    --input: #333333;
+    --primary: var(--doctor-accent, #38bdf8);
     --primary-foreground: #ffffff;
-    --secondary: #0d121f;
-    --secondary-foreground: #f8fafc;
-    --accent: #111827;
-    --accent-foreground: #f8fafc;
-    --destructive: #ef4444;
+    --secondary: #232323;
+    --secondary-foreground: rgba(255, 255, 255, 0.87);
+    --accent: #252525;
+    --accent-foreground: rgba(255, 255, 255, 0.87);
+    --destructive: #f87171;
     --destructive-foreground: #ffffff;
-    --ring: var(--doctor-accent, #008bcd);
+    --ring: var(--doctor-accent, #38bdf8);
     --radius: 0.75rem;
+
+    --greeting-bg: #1e1e1e;
+    --greeting-gradient: none;
   }
 }
 
 @layer base {
   * {
-    border-color: var(--border);
+    border-color: var(--color-border);
   }
-
   body {
-    background-color: var(--background);
-    color: var(--foreground);
+    background-color: var(--color-background);
+    color: var(--color-foreground);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11", "rlig" 1, "calt" 1;
   }
 
-  /* ESTANDARIZACIÓN BIDIRECCIONAL DE INPUTS */
-  input, 
-  textarea, 
-  select {
-    background-color: #ffffff;
-    color: #090d16;
+  .dark img {
+    filter: brightness(0.92);
   }
 
-  .dark input,
-  .dark textarea,
-  .dark select {
-    background-color: #070d18;
-    color: #f8fafc;
+  .dark :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
   }
 }
 
@@ -114,7 +113,7 @@
    ========================================================================== */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -133,7 +132,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: rgba(148, 163, 184, 0.4);
+  background-color: rgba(255, 255, 255, 0.2);
   border-radius: 9999px;
   border: 1px solid transparent;
   background-clip: content-box;
@@ -141,26 +140,7 @@
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(100, 116, 139, 0.7);
-}
-
-::-webkit-scrollbar-thumb:active {
-  background-color: rgba(71, 85, 105, 0.9);
-}
-
-.dark *,
-[data-theme="dark"] * {
-  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
-}
-
-.dark ::-webkit-scrollbar-thumb,
-[data-theme="dark"] ::-webkit-scrollbar-thumb {
-  background-color: rgba(148, 163, 184, 0.25);
-}
-
-.dark ::-webkit-scrollbar-thumb:hover,
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(148, 163, 184, 0.5);
+  background-color: rgba(255, 255, 255, 0.4);
 }
 
 /* ==========================================================================
@@ -183,22 +163,9 @@
 }
 
 [data-theme="dark"] {
-  background-color: var(--background) !important;
+  background-color: var(--color-background) !important;
 }
 
-.task-list-item {
-  animation: slideIn 0.35s ease-in;
-  will-change: transform opacity;
-}
-
-@keyframes slideIn {
-  0% { opacity: 0; transform: translateY(15px); }
-  100% { opacity: 1; transform: translateY(0%); }
-}
-
-/* ==========================================================================
-   PROSEMIRROR (EDITOR CLÍNICO)
-   ========================================================================== */
 .ProseMirror {
   outline: none;
   background-color: transparent;
@@ -245,14 +212,24 @@
 }
 
 .dark .ProseMirror-focused {
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-border);
   outline: none;
 }
 
 .ProseMirror p.is-editor-empty:first-child::before {
-  color: var(--muted-foreground);
+  color: var(--color-muted-foreground);
   content: attr(data-placeholder);
   float: left;
   height: 0;
   pointer-events: none;
+}
+
+.task-list-item {
+  animation: slideIn 0.35s ease-in;
+  will-change: transform opacity;
+}
+
+@keyframes slideIn {
+  0% { opacity: 0; transform: translateY(15px); }
+  100% { opacity: 1; transform: translateY(0%); }
 }
