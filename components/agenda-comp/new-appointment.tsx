@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { CalendarIcon, Plus, Loader2, CheckCircle2 } from "lucide-react"
+import { CalendarIcon, Plus, Loader2, CheckCircle2, ShieldAlert } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { format, addMinutes } from "date-fns"
 
@@ -14,18 +14,50 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useGetPatients } from "@/hooks/patients"
-import { useCreateAppointment } from "@/hooks/appointments"
+import { useGetAppointments, useCreateAppointment } from "@/hooks/appointments"
 import { appointmentStatuses } from "@/constants/status"
 import { useClinicSettings } from "@/config/clinic-settings"
 import { AppointmentForm } from "./appointment-form"
+import { AppointmentCollisionAlert } from "./appointment-collision-alert"
+import { DuplicatePatientDialog } from "./duplicate-patient-dialog"
 
 interface NewAppointmentModalProps {
   customTrigger?: React.ReactNode
   defaultDate?: Date
   defaultStartTime?: string
   defaultDoctorId?: string
+}
+
+const timeToMinutes = (timeStr: string) => {
+  if (!timeStr) return 0
+  const [h, m] = timeStr.split(":").map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
+
+// Extrae estrictamente "YYYY-MM-DD" evitando el salto de día por conversión de zona horaria
+const extractDateString = (cita: any): string => {
+  if (!cita) return ""
+
+  const candidate = cita.date || cita.fecha || cita.startTime || ""
+  if (typeof candidate === "string") {
+    const match = candidate.match(/^\d{4}-\d{2}-\d{2}/)
+    if (match) return match[0]
+  }
+
+  if (candidate instanceof Date && !isNaN(candidate.getTime())) {
+    return format(candidate, "yyyy-MM-dd")
+  }
+
+  return ""
+}
+
+// Extrae el ID del paciente sin importar cómo lo estructure el backend
+const extractPatientId = (cita: any): string => {
+  if (!cita) return ""
+  return String(cita.patientId || cita.patient?.id || cita.pacienteId || "")
 }
 
 export function NewAppointmentModal({
@@ -36,6 +68,11 @@ export function NewAppointmentModal({
 }: NewAppointmentModalProps) {
   const [open, setOpen] = useState(false)
   const [isTriggerHovered, setIsTriggerHovered] = useState(false)
+
+  // Estado del modal de bloqueo por cita duplicada
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false)
+  const [existingPatientAppointment, setExistingPatientAppointment] = useState<any>(null)
+
   const { data: session } = useSession()
   const { toast } = useToast()
   const { settings } = useClinicSettings()
@@ -64,6 +101,24 @@ export function NewAppointmentModal({
     endTime: "09:30",
   })
 
+  // Fecha seleccionada convertida a string plano local "YYYY-MM-DD"
+  const targetDateStr = useMemo(() => {
+    const d = formData.date || defaultDate || new Date()
+    return format(d, "yyyy-MM-dd")
+  }, [formData.date, defaultDate])
+
+  // Consultar citas pasando la fecha limpia como string para evitar mutaciones de medianoche UTC
+  const { appointments: rawAppointments = [], refetch } = useGetAppointments({
+    fecha: targetDateStr,
+  })
+
+  // Asegura array plano de citas
+  const existingAppointments: any[] = useMemo(() => {
+    if (Array.isArray(rawAppointments)) return rawAppointments
+    if (Array.isArray((rawAppointments as any)?.citas)) return (rawAppointments as any).citas
+    return []
+  }, [rawAppointments])
+
   const activeDoctorColor = useMemo(() => {
     const selectedDocId = formData.doctorId
     if (selectedDocId) {
@@ -72,6 +127,76 @@ export function NewAppointmentModal({
     }
     return defaultUserColor
   }, [formData.doctorId, doctorsList, defaultUserColor])
+
+  // Detección estricta: comprueba si el paciente ya tiene cita en el día seleccionado
+  const duplicateAppointmentInDay = useMemo(() => {
+    if (!formData.patientId || !formData.date) return null
+
+    const selectedDay = format(formData.date, "yyyy-MM-dd")
+    const targetPatId = String(formData.patientId).trim()
+
+    return (
+      existingAppointments.find((c: any) => {
+        if (c.status === "CANCELLED" || c.status === "CANCELED") return false
+        const cDateStr = extractDateString(c)
+        const cPatId = extractPatientId(c).trim()
+        return cDateStr === selectedDay && cPatId === targetPatId
+      }) || null
+    )
+  }, [formData.patientId, formData.date, existingAppointments])
+
+  // Detección de colisión de horario y box para el día seleccionado
+  const collision = useMemo(() => {
+    if (!formData.date || !formData.startTime || !formData.endTime) return null
+
+    const newStart = timeToMinutes(formData.startTime)
+    const newEnd = timeToMinutes(formData.endTime)
+    if (newEnd <= newStart) return null
+
+    const selectedDay = format(formData.date, "yyyy-MM-dd")
+
+    for (const cita of existingAppointments) {
+      if (cita.status === "CANCELLED" || cita.status === "CANCELED") continue
+
+      const citaDateStr = extractDateString(cita)
+      if (citaDateStr !== selectedDay) continue
+
+      const citaStart = timeToMinutes(cita.startTime)
+      const citaEnd = timeToMinutes(cita.endTime)
+
+      const hasOverlap = Math.max(newStart, citaStart) < Math.min(newEnd, citaEnd)
+      if (!hasOverlap) continue
+
+      const patientName =
+        `${cita.patient?.firstName || ""} ${cita.patient?.lastName || ""}`.trim() ||
+        "Paciente Agendado"
+
+      if (
+        formData.doctorId &&
+        (cita.doctorId === formData.doctorId || cita.doctor?.id === formData.doctorId)
+      ) {
+        return {
+          type: "DOCTOR" as const,
+          patientName,
+          startTime: cita.startTime,
+          endTime: cita.endTime,
+          box: cita.box,
+        }
+      }
+
+      if (formData.box && cita.box === formData.box) {
+        return {
+          type: "BOX" as const,
+          patientName,
+          startTime: cita.startTime,
+          endTime: cita.endTime,
+          box: cita.box,
+        }
+      }
+    }
+
+    return null
+  }, [formData.date, formData.startTime, formData.endTime, formData.doctorId, formData.box, existingAppointments])
 
   const validInitialStatuses = [
     {
@@ -99,6 +224,7 @@ export function NewAppointmentModal({
 
   useEffect(() => {
     if (open) {
+      refetch?.()
       const now = new Date()
       const nowTime = format(now, "HH:mm")
       const autoEndTime = format(addMinutes(now, 30), "HH:mm")
@@ -152,7 +278,6 @@ export function NewAppointmentModal({
     toast,
   ])
 
-  // --- VALIDACIÓN EXHAUSTIVA DE DATOS OBLIGATORIOS ---
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
@@ -160,6 +285,28 @@ export function NewAppointmentModal({
       return toast({
         title: "Campo requerido",
         description: "Debes seleccionar un paciente de la lista.",
+        variant: "destructive",
+      })
+    }
+
+    // 1. RESTRICCIÓN DE DUPLICIDAD DIARIA
+    if (duplicateAppointmentInDay) {
+      setExistingPatientAppointment({
+        startTime: duplicateAppointmentInDay.startTime,
+        endTime: duplicateAppointmentInDay.endTime,
+        box: duplicateAppointmentInDay.box,
+        doctorName: duplicateAppointmentInDay.doctor?.name || "Especialista asignado",
+        reason: duplicateAppointmentInDay.reason,
+      })
+      setDuplicateModalOpen(true)
+      return
+    }
+
+    // 2. RESTRICCIÓN DE SOLAPAMIENTO DE HORARIOS
+    if (collision) {
+      return toast({
+        title: "Conflicto de Horario",
+        description: `El horario colisiona con la cita de ${collision.patientName}. Selecciona otro rango u otro sillón.`,
         variant: "destructive",
       })
     }
@@ -188,7 +335,6 @@ export function NewAppointmentModal({
       })
     }
 
-    // Comprobar que la hora fin sea estrictamente mayor que la de inicio
     if (formData.endTime <= formData.startTime) {
       return toast({
         title: "Horario inválido",
@@ -217,7 +363,8 @@ export function NewAppointmentModal({
       await createAppointment({
         ...formData,
         reason: formData.reason.trim(),
-        date: formData.date.toISOString(),
+        // Enviamos la fecha como string ISO local normalizada sin desfase de medianoche
+        date: format(formData.date, "yyyy-MM-dd"),
       })
 
       toast({
@@ -227,6 +374,7 @@ export function NewAppointmentModal({
 
       setOpen(false)
       setFormData((prev) => ({ ...prev, patientId: "", reason: "" }))
+      refetch?.()
     } catch (error: any) {
       toast({
         title: "Error al agendar",
@@ -236,104 +384,172 @@ export function NewAppointmentModal({
     }
   }
 
+  const selectedPatientObj = patients?.find(
+    (p: any) => String(p.id) === String(formData.patientId)
+  )
+  const patientDisplayName = selectedPatientObj
+    ? `${selectedPatientObj.firstName} ${selectedPatientObj.lastName}`
+    : "Este paciente"
+
+  const hasAnyConflict = Boolean(collision || duplicateAppointmentInDay)
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {customTrigger ? (
-          customTrigger
-        ) : (
-          <Button
-            variant="ghost"
-            onMouseEnter={() => setIsTriggerHovered(true)}
-            onMouseLeave={() => setIsTriggerHovered(false)}
-            style={{
-              color: isTriggerHovered ? defaultUserColor : undefined,
-              backgroundColor: isTriggerHovered ? `${defaultUserColor}15` : undefined,
-              borderColor: isTriggerHovered ? `${defaultUserColor}40` : undefined,
-            }}
-            className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 shadow-none group cursor-pointer"
-          >
-            <Plus
-              className="h-5 w-5 mr-1.5 text-muted-foreground transition-colors stroke-[2.5]"
-              style={{ color: isTriggerHovered ? defaultUserColor : undefined }}
-            />
-            <span>Dar cita</span>
-          </Button>
-        )}
-      </DialogTrigger>
-
-      <DialogContent className="sm:max-w-[850px] p-0 bg-card border-border/80 overflow-hidden rounded-[24px] shadow-2xl">
-        {/* Cabecera con acento de color del doctor */}
-        <div
-          className="px-6 py-5 border-b border-border/80 transition-all duration-300"
-          style={{
-            background: `linear-gradient(to right, ${activeDoctorColor}18, transparent)`,
-          }}
-        >
-          <DialogHeader>
-            <DialogTitle className="text-xl md:text-2xl font-black text-foreground flex items-center gap-3 tracking-tight">
-              <div
-                className="p-2.5 border shadow-xs rounded-xl shrink-0 transition-colors duration-300"
-                style={{
-                  backgroundColor: `${activeDoctorColor}18`,
-                  borderColor: `${activeDoctorColor}35`,
-                  color: activeDoctorColor,
-                }}
-              >
-                <CalendarIcon className="w-5 h-5 stroke-[2.5]" />
-              </div>
-              Agendar Nueva Cita
-            </DialogTitle>
-            <DialogDescription className="text-muted-foreground text-xs font-semibold mt-1 ml-14">
-              Todos los campos marcados con (*) son obligatorios para reservar el horario.
-            </DialogDescription>
-          </DialogHeader>
-        </div>
-
-        <form onSubmit={handleSubmit}>
-          <AppointmentForm
-            formData={formData}
-            setFormData={setFormData}
-            patients={patients}
-            doctorsList={doctorsList}
-            isLoadingPatients={isLoadingPatients}
-            isLoadingDoctors={isLoadingDoctors}
-            isAdminOrStaff={isAdminOrStaff}
-            currentUser={currentUser}
-            validInitialStatuses={validInitialStatuses}
-          />
-
-          <div className="px-6 py-4 border-t border-border/80 bg-muted/10 flex justify-end items-center gap-3">
+    <>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          {customTrigger ? (
+            customTrigger
+          ) : (
             <Button
-              type="button"
               variant="ghost"
-              onClick={() => setOpen(false)}
-              className="hover:bg-muted text-muted-foreground font-bold rounded-xl h-10 px-5 text-xs transition-colors cursor-pointer"
-            >
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={isSaving}
+              onMouseEnter={() => setIsTriggerHovered(true)}
+              onMouseLeave={() => setIsTriggerHovered(false)}
               style={{
-                backgroundColor: activeDoctorColor,
-                boxShadow: `0 8px 16px -4px ${activeDoctorColor}40`,
+                color: isTriggerHovered ? defaultUserColor : undefined,
+                backgroundColor: isTriggerHovered ? `${defaultUserColor}15` : undefined,
+                borderColor: isTriggerHovered ? `${defaultUserColor}40` : undefined,
               }}
-              className="text-white font-bold h-10 px-6 rounded-xl text-xs transition-all duration-200 cursor-pointer hover:opacity-90 active:scale-[0.99]"
+              className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 shadow-none group cursor-pointer"
             >
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Guardando...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4 mr-2 stroke-[2.5]" /> Confirmar Cita
-                </>
-              )}
+              <Plus
+                className="h-5 w-5 mr-1.5 text-muted-foreground transition-colors stroke-[2.5]"
+                style={{ color: isTriggerHovered ? defaultUserColor : undefined }}
+              />
+              <span>Dar cita</span>
             </Button>
+          )}
+        </DialogTrigger>
+
+        <DialogContent className="sm:max-w-[850px] p-0 bg-card border-border/80 overflow-hidden rounded-[24px] shadow-2xl">
+          <div
+            className="px-6 py-5 border-b border-border/80 transition-all duration-300"
+            style={{
+              background: `linear-gradient(to right, ${activeDoctorColor}18, transparent)`,
+            }}
+          >
+            <DialogHeader>
+              <DialogTitle className="text-xl md:text-2xl font-black text-foreground flex items-center gap-3 tracking-tight">
+                <div
+                  className="p-2.5 border shadow-xs rounded-xl shrink-0 transition-colors duration-300"
+                  style={{
+                    backgroundColor: `${activeDoctorColor}18`,
+                    borderColor: `${activeDoctorColor}35`,
+                    color: activeDoctorColor,
+                  }}
+                >
+                  <CalendarIcon className="w-5 h-5 stroke-[2.5]" />
+                </div>
+                Agendar Nueva Cita
+              </DialogTitle>
+              <DialogDescription className="text-muted-foreground text-xs font-semibold mt-1 ml-14">
+                Todos los campos marcados con (*) son obligatorios para reservar el horario.
+              </DialogDescription>
+            </DialogHeader>
           </div>
-        </form>
-      </DialogContent>
-    </Dialog>
+
+          <form onSubmit={handleSubmit}>
+            <div className="flex flex-col">
+              <AppointmentForm
+                formData={formData}
+                setFormData={setFormData}
+                patients={patients}
+                doctorsList={doctorsList}
+                isLoadingPatients={isLoadingPatients}
+                isLoadingDoctors={isLoadingDoctors}
+                isAdminOrStaff={isAdminOrStaff}
+                currentUser={currentUser}
+                validInitialStatuses={validInitialStatuses}
+              />
+
+              {/* Alerta de colisión de horario */}
+              {collision && (
+                <div className="px-6 pb-4">
+                  <AppointmentCollisionAlert conflict={collision} />
+                </div>
+              )}
+                {/* Alerta previa directa si el paciente ya tiene cita en la fecha */}
+              {duplicateAppointmentInDay && (
+                <div className="px-6 pb-4">
+                  <div className="flex items-center gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                    <span>
+                      <strong>{patientDisplayName}</strong> ya tiene una cita reservada a las{" "}
+                      <strong>{duplicateAppointmentInDay.startTime}</strong> en esta misma fecha.
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-border/80 bg-muted/10 flex justify-end items-center gap-3">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setOpen(false)}
+                className="hover:bg-muted text-muted-foreground font-bold rounded-xl h-10 px-5 text-xs transition-colors cursor-pointer"
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                type="submit"
+                disabled={isSaving || hasAnyConflict}
+                style={{
+                  backgroundColor: hasAnyConflict
+                    ? `${activeDoctorColor}18`
+                    : activeDoctorColor,
+                  borderColor: hasAnyConflict
+                    ? `${activeDoctorColor}40`
+                    : "transparent",
+                  color: hasAnyConflict ? activeDoctorColor : "#ffffff",
+                  boxShadow: !hasAnyConflict
+                    ? `0 8px 16px -4px ${activeDoctorColor}40`
+                    : "none",
+                }}
+                className={cn(
+                  "font-bold h-10 px-6 rounded-xl text-xs transition-all duration-200 border",
+                  hasAnyConflict
+                    ? "cursor-not-allowed opacity-100! shadow-none"
+                    : "cursor-pointer hover:opacity-90 active:scale-[0.99]"
+                )}
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" /> Guardando...
+                  </>
+                ) : duplicateAppointmentInDay ? (
+                  <>
+                    <ShieldAlert
+                      className="w-4 h-4 mr-2 shrink-0 stroke-[2.2]"
+                      style={{ color: activeDoctorColor }}
+                    />
+                    Paciente Ya Agendado
+                  </>
+                ) : collision ? (
+                  <>
+                    <ShieldAlert
+                      className="w-4 h-4 mr-2 shrink-0 stroke-[2.2]"
+                      style={{ color: activeDoctorColor }}
+                    />
+                    Horario No Disponible
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 mr-2 stroke-[2.5] text-white" /> Confirmar Cita
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <DuplicatePatientDialog
+        isOpen={duplicateModalOpen}
+        onClose={() => setDuplicateModalOpen(false)}
+        patientName={patientDisplayName}
+        existingAppointment={existingPatientAppointment}
+      />
+    </>
   )
 }
