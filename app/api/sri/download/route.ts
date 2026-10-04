@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
-import { headers } from "next/headers"
 import { prisma } from "@/lib/db"
 import { authOptions } from "@/lib/auth"
+import { logAuditEvent } from "@/lib/audit"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
 export async function GET(req: Request) {
   try {
+    // 1. CONTROL DE ACCESO ESTRICTO (OWASP A01)
     const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: "No autorizado. Inicie sesión para descargar comprobantes fiscales." },
+        { status: 401 }
+      )
+    }
+
     const { searchParams } = new URL(req.url)
     const docId = searchParams.get("id")
     const type = searchParams.get("type") // "pdf" | "xml"
@@ -16,6 +24,7 @@ export async function GET(req: Request) {
     if (!docId) {
       return NextResponse.json({ error: "ID de documento requerido" }, { status: 400 })
     }
+
     const [doc, settings] = await Promise.all([
       prisma.taxDocument.findUnique({
         where: { id: docId },
@@ -33,27 +42,18 @@ export async function GET(req: Request) {
     const clinicRazonSocial = settings?.razonSocial || clinicName
     const clinicAddress = settings?.address ? `${settings.address}, ${settings.city || "Ecuador"}` : "Quito, Ecuador"
     const obligado = settings?.obligadoContab ? "SI" : "NO"
-    if (session?.user && (session.user as any).id) {
-      const headersList = await headers()
-      const forwardedFor = headersList.get("x-forwarded-for")
-      const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
-      const userAgent = headersList.get("user-agent") || "Desconocido"
 
-      await prisma.auditLog.create({
-        data: {
-          userId: (session.user as any).id,
-          action: type === "xml" ? "DOWNLOAD_TAX_XML" : "VIEW_TAX_RIDE",
-          entity: "TaxDocument",
-          entityId: doc.id,
-          patientId: doc.patientId,
-          details: `Descarga/Consulta de ${doc.docType} #${doc.secuencial} en formato ${type === "xml" ? "XML" : "RIDE (HTML/PDF)"}`,
-          ipAddress,
-          userAgent
-        }
-      }).catch((e) => console.error("Error al registrar log de descarga:", e))
-    }
+    // 2. AUDITORÍA CLÍNICA Y TRIBUTARIA
+    await logAuditEvent({
+      userId: (session.user as any).id,
+      action: type === "xml" ? "DOWNLOAD_TAX_XML" : "VIEW_TAX_RIDE",
+      entity: "TaxDocument",
+      entityId: doc.id,
+      patientId: doc.patientId,
+      details: `Descarga/Consulta de comprobante fiscal ${doc.docType} #${doc.secuencial} en formato ${type === "xml" ? "XML" : "RIDE"}`
+    })
 
-    // 3. Generación de XML
+    // 3. GENERACIÓN DE XML
     if (type === "xml") {
       const xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <factura id="comprobante" version="1.1.0">
@@ -121,7 +121,7 @@ export async function GET(req: Request) {
       })
     }
 
-    // 4. Generación de RIDE (HTML imprimible A4)
+    // 4. GENERACIÓN DE RIDE (HTML imprimible A4)
     const formattedDate = format(doc.authorizationDate || doc.createdAt, "dd 'de' MMMM 'de' yyyy", { locale: es })
     const formattedTotal = Number(doc.total || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })
     const isVoided = doc.status === "VOIDED"
@@ -185,14 +185,12 @@ export async function GET(req: Request) {
             <p><b>Emisión:</b> NORMAL</p>
           </div>
         </div>
-
         <div class="box" style="margin-bottom: 15px;">
           <p><b>Razón Social / Nombres:</b> ${doc.businessName}</p>
           <p><b>Identificación (${doc.idType}):</b> ${doc.identification}</p>
           <p><b>Fecha Emisión:</b> ${formattedDate}</p>
           <p><b>Email:</b> ${doc.email || "N/A"}</p>
         </div>
-
         <table class="table">
           <thead>
             <tr>
@@ -213,7 +211,6 @@ export async function GET(req: Request) {
             </tr>
           </tbody>
         </table>
-
         <div class="total-box">
           <table class="total-table">
             <tr>
@@ -243,6 +240,7 @@ export async function GET(req: Request) {
       headers: { "Content-Type": "text/html; charset=utf-8" }
     })
   } catch (error: any) {
+    console.error("Error al procesar descarga de comprobante:", error)
     return NextResponse.json({ error: error.message || "Error al procesar descarga" }, { status: 500 })
   }
 }

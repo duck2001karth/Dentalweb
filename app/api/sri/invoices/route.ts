@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
 import { headers } from "next/headers"
 import { prisma } from "@/lib/db"
-import { authOptions } from "@/lib/auth" // Ajusta la ruta a tu authOptions
+import { authOptions } from "@/lib/auth" 
 
 export async function POST(req: Request) {
   try {
@@ -134,14 +134,18 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
   try {
-    const { searchParams } = new URL(req.url)
-    const patientId = searchParams.get("patientId")
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
+    }
 
+    const { searchParams } = new URL(req.url);
+    const patientId = searchParams.get("patientId");
     if (!patientId) {
       return NextResponse.json(
         { error: "El parámetro patientId es obligatorio" },
         { status: 400 }
-      )
+      );
     }
 
     const documents = await prisma.taxDocument.findMany({
@@ -157,13 +161,13 @@ export async function GET(req: Request) {
           }
         }
       }
-    })
+    });
 
-    return NextResponse.json({ documents })
+    return NextResponse.json({ documents });
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || "Error al consultar facturas" },
       { status: 500 }
-    )
+    );
   }
 }
