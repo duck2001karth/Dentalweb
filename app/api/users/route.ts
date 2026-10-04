@@ -6,10 +6,15 @@ import { logAuditEvent } from "@/lib/audit"
 
 export async function GET(request: Request) {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "Acceso denegado. No autenticado." }, { status: 401 })
+    }
+
     const { searchParams } = new URL(request.url)
     const role = searchParams.get("role")
-
-    const whereClause: any = {}
+    
+    const whereClause: any = { isActive: true } 
     if (role) {
       whereClause.role = role
     }
@@ -19,10 +24,11 @@ export async function GET(request: Request) {
       select: {
         id: true,
         name: true,
-        email: true,
+        email: true, 
         role: true,
         specialty: true,
         language: true,
+        image: true
       },
       orderBy: {
         name: "asc",
@@ -33,7 +39,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Error al obtener usuarios:", error)
     return NextResponse.json(
-      { error: "Error al obtener usuarios" },
+      { error: "Error interno al obtener el listado de usuarios" },
       { status: 500 }
     )
   }
@@ -65,21 +71,13 @@ export async function PATCH(request: Request) {
 
     if (language !== undefined) {
       if (typeof language !== "string" || language.trim().length === 0) {
-        return NextResponse.json(
-          { error: "Formato de idioma no válido." },
-          { status: 400 }
-        )
+        return NextResponse.json({ error: "Formato de idioma no válido." }, { status: 400 })
       }
       updateData.language = language.trim()
     }
 
-    if (calendarColor !== undefined) {
-      updateData.calendarColor = calendarColor
-    }
-
-    if (phoneNumber !== undefined) {
-      updateData.phoneNumber = phoneNumber
-    }
+    if (calendarColor !== undefined) updateData.calendarColor = calendarColor
+    if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber
 
     const previousUser = await prisma.user.findUnique({
       where: { id: currentUserId },
