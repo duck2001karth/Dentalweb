@@ -60,6 +60,31 @@ export async function PATCH(
     return NextResponse.json({ error: "Error al actualizar el paciente" }, { status: 500 })
   }
 }
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
+    const { id } = await params
+    const patient = await prisma.patient.findUnique({
+      where: { id },
+    })
+
+    if (!patient) {
+      return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 })
+    }
+
+    return NextResponse.json({ patient })
+  } catch (error) {
+    console.error("[PATIENT_GET_ERROR]", error)
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+  }
+}
 
 export async function DELETE(
   request: Request,
