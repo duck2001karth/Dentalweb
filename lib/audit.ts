@@ -3,10 +3,10 @@ import { headers } from "next/headers"
 
 interface CreateAuditLogParams {
   userId: string
-  action: "CREATE" | "UPDATE" | "DELETE"
-  entity: "ODONTOGRAM" | "PERIODONTOGRAM" | "CLINICAL_NOTE" | "PATIENT_DOCUMENT" | "TREATMENT_PLAN"
+  action: string 
+  entity: string
   entityId: string
-  patientId?: string
+  patientId?: string | null
   details?: string
   oldData?: Record<string, any> | null
   newData?: Record<string, any> | null
@@ -24,7 +24,6 @@ export async function logAuditEvent({
 }: CreateAuditLogParams) {
   try {
     const headersList = await headers()
-    
     const forwardedFor = headersList.get("x-forwarded-for")
     const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
     const userAgent = headersList.get("user-agent") || "Desconocido"
@@ -44,6 +43,6 @@ export async function logAuditEvent({
       },
     })
   } catch (error) {
-    console.error("Error al registrar auditoría:", error)
+    console.error("[AUDIT_LOG_ERROR] Fallo al registrar auditoría:", error)
   }
 }

@@ -1,0 +1,18 @@
+{
+  "Settings": {
+    "title": "Settings",
+    "home": "Home",
+    "general": "General",
+    "language": "Language & Region",
+    "appearance": "Appearance",
+    "shortcuts": "Keyboard Shortcuts",
+    "account": "Account",
+    "personalInfo": "Personal Info",
+    "clinicalProfile": "Clinical Profile",
+    "signature": "Signature & Seal",
+    "security": "Password & Security",
+    "privacy": "Privacy",
+    "notifications": "Notifications",
+    "accessibility": "Accessibility"
+  }
+}

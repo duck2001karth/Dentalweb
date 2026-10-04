@@ -1,37 +1,8 @@
 "use client"
 
 import React from "react"
-import { Clock, Check, X, User } from "lucide-react"
+import { appointmentStatuses } from "@/constants/status"
 import { cn } from "@/lib/utils"
-
-export type AppointmentStatusType = "COMPLETED" | "SCHEDULED" | "WAITING" | "CANCELED"
-
-export const STATUS_CONFIG: Record<AppointmentStatusType, { label: string; icon: React.ComponentType<{ className?: string }>; badgeClass: string; barClass: string }> = {
-  COMPLETED: {
-    label: "Completed",
-    icon: Check,
-    badgeClass: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
-    barClass: "bg-emerald-500",
-  },
-  SCHEDULED: {
-    label: "Scheduled",
-    icon: Clock,
-    badgeClass: "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20",
-    barClass: "bg-sky-500",
-  },
-  WAITING: {
-    label: "Patient is waiting",
-    icon: User,
-    badgeClass: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
-    barClass: "bg-amber-500",
-  },
-  CANCELED: {
-    label: "Canceled",
-    icon: X,
-    badgeClass: "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20",
-    barClass: "bg-rose-500",
-  },
-}
 
 interface AppointmentCardProps {
   cita: any
@@ -44,25 +15,20 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   doctorColor,
   onClick,
 }) => {
-  const statusKey: AppointmentStatusType = 
-    cita.status === "COMPLETED" ? "COMPLETED" :
-    cita.status === "WAITING" ? "WAITING" :
-    (cita.status === "CANCELLED" || cita.status === "CANCELED") ? "CANCELED" : "SCHEDULED"
-
-  const config = STATUS_CONFIG[statusKey]
+  const config = appointmentStatuses[cita.status] || appointmentStatuses.SCHEDULED
   const StatusIcon = config.icon
 
   return (
     <div
       onClick={onClick}
-      className="group relative flex flex-col justify-between rounded-xl bg-card border border-border/80 p-2.5 shadow-2xs hover:shadow-md hover:border-border transition-all cursor-pointer overflow-hidden text-left"
+      className="group relative flex flex-col justify-between rounded-xl bg-card border border-border/80 p-2.5 shadow-2xs hover:shadow-md hover:border-border transition-all cursor-pointer overflow-hidden text-left h-full"
     >
-      <div 
-        className={cn("absolute left-0 top-0 bottom-0 w-1", config.barClass)} 
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1 transition-colors"
         style={{ backgroundColor: doctorColor }}
       />
-
-      <div className="pl-1.5 space-y-0.5">
+      
+      <div className="pl-1.5 space-y-0.5 min-w-0">
         <span className="text-[10px] font-semibold text-muted-foreground block">
           {cita.startTime} - {cita.endTime}
         </span>
@@ -73,12 +39,13 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
           {cita.reason || "Consulta General"}
         </p>
       </div>
-
+      
       <div className="mt-2 pl-1.5">
-        <span 
+        <span
           className={cn(
             "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors",
-            config.badgeClass
+            config.bg, 
+            config.color
           )}
         >
           <StatusIcon className="w-2.5 h-2.5" />

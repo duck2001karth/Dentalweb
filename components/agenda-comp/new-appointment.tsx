@@ -37,7 +37,6 @@ const timeToMinutes = (timeStr: string) => {
   return (h || 0) * 60 + (m || 0)
 }
 
-// Extrae estrictamente "YYYY-MM-DD" evitando el salto de día por conversión de zona horaria
 const extractDateString = (cita: any): string => {
   if (!cita) return ""
 
@@ -54,7 +53,6 @@ const extractDateString = (cita: any): string => {
   return ""
 }
 
-// Extrae el ID del paciente sin importar cómo lo estructure el backend
 const extractPatientId = (cita: any): string => {
   if (!cita) return ""
   return String(cita.patientId || cita.patient?.id || cita.pacienteId || "")
@@ -68,8 +66,6 @@ export function NewAppointmentModal({
 }: NewAppointmentModalProps) {
   const [open, setOpen] = useState(false)
   const [isTriggerHovered, setIsTriggerHovered] = useState(false)
-
-  // Estado del modal de bloqueo por cita duplicada
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false)
   const [existingPatientAppointment, setExistingPatientAppointment] = useState<any>(null)
 
@@ -101,18 +97,14 @@ export function NewAppointmentModal({
     endTime: "09:30",
   })
 
-  // Fecha seleccionada convertida a string plano local "YYYY-MM-DD"
   const targetDateStr = useMemo(() => {
     const d = formData.date || defaultDate || new Date()
     return format(d, "yyyy-MM-dd")
   }, [formData.date, defaultDate])
 
-  // Consultar citas pasando la fecha limpia como string para evitar mutaciones de medianoche UTC
   const { appointments: rawAppointments = [], refetch } = useGetAppointments({
     fecha: targetDateStr,
   })
-
-  // Asegura array plano de citas
   const existingAppointments: any[] = useMemo(() => {
     if (Array.isArray(rawAppointments)) return rawAppointments
     if (Array.isArray((rawAppointments as any)?.citas)) return (rawAppointments as any).citas
@@ -127,8 +119,6 @@ export function NewAppointmentModal({
     }
     return defaultUserColor
   }, [formData.doctorId, doctorsList, defaultUserColor])
-
-  // Detección estricta: comprueba si el paciente ya tiene cita en el día seleccionado
   const duplicateAppointmentInDay = useMemo(() => {
     if (!formData.patientId || !formData.date) return null
 
@@ -145,7 +135,6 @@ export function NewAppointmentModal({
     )
   }, [formData.patientId, formData.date, existingAppointments])
 
-  // Detección de colisión de horario y box para el día seleccionado
   const collision = useMemo(() => {
     if (!formData.date || !formData.startTime || !formData.endTime) return null
 
@@ -288,8 +277,6 @@ export function NewAppointmentModal({
         variant: "destructive",
       })
     }
-
-    // 1. RESTRICCIÓN DE DUPLICIDAD DIARIA
     if (duplicateAppointmentInDay) {
       setExistingPatientAppointment({
         startTime: duplicateAppointmentInDay.startTime,
@@ -301,8 +288,6 @@ export function NewAppointmentModal({
       setDuplicateModalOpen(true)
       return
     }
-
-    // 2. RESTRICCIÓN DE SOLAPAMIENTO DE HORARIOS
     if (collision) {
       return toast({
         title: "Conflicto de Horario",
@@ -363,7 +348,6 @@ export function NewAppointmentModal({
       await createAppointment({
         ...formData,
         reason: formData.reason.trim(),
-        // Enviamos la fecha como string ISO local normalizada sin desfase de medianoche
         date: format(formData.date, "yyyy-MM-dd"),
       })
 
@@ -392,6 +376,18 @@ export function NewAppointmentModal({
     : "Este paciente"
 
   const hasAnyConflict = Boolean(collision || duplicateAppointmentInDay)
+  const isFormValid = useMemo(() => {
+    return Boolean(
+      formData.patientId?.trim() &&
+      formData.doctorId?.trim() &&
+      formData.date &&
+      formData.startTime?.trim() &&
+      formData.endTime?.trim() &&
+      formData.startTime < formData.endTime && 
+      formData.box?.trim() &&
+      formData.reason?.trim()
+    )
+  }, [formData])
 
   return (
     <>
@@ -461,13 +457,11 @@ export function NewAppointmentModal({
                 validInitialStatuses={validInitialStatuses}
               />
 
-              {/* Alerta de colisión de horario */}
               {collision && (
                 <div className="px-6 pb-4">
                   <AppointmentCollisionAlert conflict={collision} />
                 </div>
               )}
-                {/* Alerta previa directa si el paciente ya tiene cita en la fecha */}
               {duplicateAppointmentInDay && (
                 <div className="px-6 pb-4">
                   <div className="flex items-center gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs">
@@ -493,22 +487,24 @@ export function NewAppointmentModal({
 
               <Button
                 type="submit"
-                disabled={isSaving || hasAnyConflict}
+                disabled={isSaving || hasAnyConflict || !isFormValid}
                 style={{
-                  backgroundColor: hasAnyConflict
-                    ? `${activeDoctorColor}18`
+                  backgroundColor: hasAnyConflict || !isFormValid 
+                    ? `${activeDoctorColor}15` 
                     : activeDoctorColor,
-                  borderColor: hasAnyConflict
-                    ? `${activeDoctorColor}40`
+                  borderColor: hasAnyConflict || !isFormValid 
+                    ? `${activeDoctorColor}40` 
                     : "transparent",
-                  color: hasAnyConflict ? activeDoctorColor : "#ffffff",
-                  boxShadow: !hasAnyConflict
-                    ? `0 8px 16px -4px ${activeDoctorColor}40`
+                  color: hasAnyConflict || !isFormValid 
+                    ? activeDoctorColor 
+                    : "#ffffff",
+                  boxShadow: (!hasAnyConflict && isFormValid)
+                    ? `0 8px 16px -4px ${activeDoctorColor}40` 
                     : "none",
                 }}
                 className={cn(
                   "font-bold h-10 px-6 rounded-xl text-xs transition-all duration-200 border",
-                  hasAnyConflict
+                  (hasAnyConflict || !isFormValid)
                     ? "cursor-not-allowed opacity-100! shadow-none"
                     : "cursor-pointer hover:opacity-90 active:scale-[0.99]"
                 )}

@@ -63,6 +63,8 @@ export async function GET() {
           taxRate: 0,
           estabCode: "001",
           ptoEmiCode: "001",
+          timezone: "America/Guayaquil", // Inicialización por defecto
+          timeFormat: "24h",            // Inicialización por defecto
           availableBoxes: ["Box 1 (Principal)", "Box 2 (Ortodoncia)", "Box 3 (Cirugía)"],
           footerText: "Documento emitido por Carmo Dental. Información médica confidencial.",
           defaultPrintMode: "color",
@@ -115,6 +117,8 @@ export async function PATCH(req: Request) {
       address: body.address ?? null,
       city: body.city ?? null,
       country: body.country ?? null,
+      timezone: body.timezone || "America/Guayaquil", // Persistencia de Zona Horaria
+      timeFormat: body.timeFormat || "24h",           // Persistencia de Formato de Reloj
       phone: body.phone ?? null,
       whatsappNumber: body.whatsappNumber ?? null,
       email: body.email ?? null,
@@ -161,6 +165,8 @@ export async function PATCH(req: Request) {
           ? {
               clinicName: previous.clinicName,
               ruc: previous.ruc,
+              timezone: previous.timezone,
+              timeFormat: previous.timeFormat,
               phone: previous.phone,
               whatsappNumber: previous.whatsappNumber,
               address: previous.address,
@@ -171,6 +177,8 @@ export async function PATCH(req: Request) {
         newData: {
           clinicName: res.clinicName,
           ruc: res.ruc,
+          timezone: res.timezone,
+          timeFormat: res.timeFormat,
           phone: res.phone,
           whatsappNumber: res.whatsappNumber,
           address: res.address,

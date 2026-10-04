@@ -1,14 +1,22 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
 export async function GET(request: Request) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user) {
+      return NextResponse.json({ error: "Acceso denegado. No autenticado." }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const q = searchParams.get('q');
-
+    
     if (!q || q.length < 2) {
       return NextResponse.json({ patients: [], catalog: [] });
     }
+
     const [patients, catalog] = await Promise.all([
       prisma.patient.findMany({
         where: {

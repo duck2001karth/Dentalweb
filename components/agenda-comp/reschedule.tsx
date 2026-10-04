@@ -137,7 +137,7 @@ export function RescheduleModal({
     })
     .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-  const handleClose = () => {
+ const handleClose = () => {
     setNewDateObj(undefined)
     setNewTime("")
     setDuration("30")
@@ -145,7 +145,10 @@ export function RescheduleModal({
     setSearchTerm("")
     setReasonCategory("PATIENT_REQUEST")
     setCustomReasonNote("")
-    setTargetAppointment(null)
+    setTargetAppointment(null)    
+    setAppointmentsList([])
+    setIsSearching(false)
+    
     onClose()
   }
 

@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
-import { headers } from "next/headers"
 import { prisma } from "@/lib/db"
 import { authOptions } from "@/lib/auth"
+import { logAuditEvent } from "@/lib/audit"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user) {
+      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
+    }
+
     const inventoryItems = await prisma.inventoryItem.findMany({
-      where: { isActive: true }, 
+      where: { isActive: true },
       orderBy: { createdAt: "desc" }
     })
     return NextResponse.json(inventoryItems)
@@ -22,20 +27,13 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { error: "No autorizado. Sesión requerida para registrar auditoría." },
-        { status: 401 }
-      )
+    const userRole = String((session?.user as any)?.role || "").toUpperCase()
+
+    if (userRole !== "ADMIN" && userRole !== "ADMINISTRADOR" && userRole !== "DOCTOR") {
+      return NextResponse.json({ error: "Permisos insuficientes para crear insumos." }, { status: 403 })
     }
 
-    const currentUserId = (session.user as any).id
-
-    const headersList = await headers()
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
-
+    const currentUserId = (session!.user as any).id
     const body = await req.json()
     const stockInitial = Number(body.stock) || 0
     const cost = Number(body.unitCost) || 0
@@ -71,30 +69,16 @@ export async function POST(req: Request) {
           }
         })
       }
-
-      await tx.auditLog.create({
-        data: {
-          userId: currentUserId,
-          action: "CREATE_INVENTORY_ITEM",
-          entity: "InventoryItem",
-          entityId: item.id,
-          details: `Creación de producto "${item.name}" (SKU: ${item.sku || "N/A"}) con stock inicial de ${stockInitial} unid. a $${cost.toFixed(2)} c/u`,
-          oldData: undefined,
-          newData: {
-            id: item.id,
-            name: item.name,
-            sku: item.sku,
-            marca: item.marca,
-            stock: item.stock,
-            unitCost: item.unitCost,
-            minStock: item.minStock,
-          },
-          ipAddress,
-          userAgent,
-        }
-      })
-
       return item
+    })
+
+    await logAuditEvent({
+      userId: currentUserId,
+      action: "CREATE",
+      entity: "INVENTORY_ITEM",
+      entityId: newItem.id,
+      details: `Creación de producto "${newItem.name}" (SKU: ${newItem.sku || "N/A"}) con stock inicial de ${stockInitial} unid. a $${cost.toFixed(2)} c/u`,
+      newData: newItem,
     })
 
     return NextResponse.json(newItem, { status: 201 })
@@ -103,188 +87,105 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message || "Error al crear el producto" }, { status: 500 })
   }
 }
+
 export async function PATCH(req: Request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { error: "No autorizado. Sesión requerida para registrar auditoría." },
-        { status: 401 }
-      )
+    const userRole = String((session?.user as any)?.role || "").toUpperCase()
+
+    if (userRole !== "ADMIN" && userRole !== "ADMINISTRADOR" && userRole !== "DOCTOR") {
+      return NextResponse.json({ error: "Permisos insuficientes para editar inventario." }, { status: 403 })
     }
 
-    const currentUserId = (session.user as any).id
-
-    const headersList = await headers()
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
-
+    const currentUserId = (session!.user as any).id
     const body = await req.json()
     const { id, ...data } = body
 
-    if (!id) {
-      return NextResponse.json({ error: "ID de producto requerido" }, { status: 400 })
-    }
+    if (!id) return NextResponse.json({ error: "ID de producto requerido" }, { status: 400 })
 
-    const result = await prisma.$transaction(async (tx) => {
-      const previousItem = await tx.inventoryItem.findUnique({
-        where: { id }
-      })
+    const previousItem = await prisma.inventoryItem.findUnique({ where: { id } })
+    if (!previousItem) return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 })
 
-      if (!previousItem) {
-        throw new Error("ITEM_NOT_FOUND")
+    const updatedItem = await prisma.inventoryItem.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined && { name: String(data.name) }),
+        ...(data.sku !== undefined && { sku: data.sku || null }),
+        ...(data.marca !== undefined && { marca: data.marca || null }),
+        ...(data.presentacion !== undefined && { presentacion: data.presentacion || null }),
+        ...(data.category !== undefined && { category: data.category || null }),
+        ...(data.registroSanitario !== undefined && { registroSanitario: data.registroSanitario || null }),
+        ...(data.concentracion !== undefined && { concentracion: data.concentracion || null }),
+        ...(data.unidadMedida !== undefined && { unidadMedida: data.unidadMedida || null }),
+        ...(data.lote !== undefined && { lote: data.lote || null }),
+        ...(data.fechaExpiracion !== undefined && { fechaExpiracion: data.fechaExpiracion ? new Date(data.fechaExpiracion) : null }),
+        ...(data.minStock !== undefined && { minStock: Number(data.minStock) }),
+        ...(data.unitCost !== undefined && { unitCost: Number(data.unitCost) }),
+        ...(data.supplier !== undefined && { supplier: data.supplier || null }),
+        ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
       }
-
-      const updatedItem = await tx.inventoryItem.update({
-        where: { id },
-        data: {
-          ...(data.name !== undefined && { name: String(data.name) }),
-          ...(data.sku !== undefined && { sku: data.sku || null }),
-          ...(data.marca !== undefined && { marca: data.marca || null }),
-          ...(data.presentacion !== undefined && { presentacion: data.presentacion || null }),
-          ...(data.category !== undefined && { category: data.category || null }),
-          ...(data.registroSanitario !== undefined && { registroSanitario: data.registroSanitario || null }),
-          ...(data.concentracion !== undefined && { concentracion: data.concentracion || null }),
-          ...(data.unidadMedida !== undefined && { unidadMedida: data.unidadMedida || null }),
-          ...(data.lote !== undefined && { lote: data.lote || null }),
-          ...(data.fechaExpiracion !== undefined && { 
-            fechaExpiracion: data.fechaExpiracion ? new Date(data.fechaExpiracion) : null 
-          }),
-          ...(data.minStock !== undefined && { minStock: Number(data.minStock) }),
-          ...(data.unitCost !== undefined && { unitCost: Number(data.unitCost) }),
-          ...(data.supplier !== undefined && { supplier: data.supplier || null }),
-          ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
-        }
-      })
-
-      await tx.auditLog.create({
-        data: {
-          userId: currentUserId,
-          action: "UPDATE_INVENTORY_ITEM",
-          entity: "InventoryItem",
-          entityId: id,
-          details: `Modificación de insumo "${updatedItem.name}". Costo: $${updatedItem.unitCost}, Stock Mínimo: ${updatedItem.minStock}`,
-          oldData: {
-            name: previousItem.name,
-            sku: previousItem.sku,
-            marca: previousItem.marca,
-            presentacion: previousItem.presentacion,
-            unitCost: previousItem.unitCost,
-            minStock: previousItem.minStock,
-            isActive: previousItem.isActive,
-          },
-          newData: {
-            name: updatedItem.name,
-            sku: updatedItem.sku,
-            marca: updatedItem.marca,
-            presentacion: updatedItem.presentacion,
-            unitCost: updatedItem.unitCost,
-            minStock: updatedItem.minStock,
-            isActive: updatedItem.isActive,
-          },
-          ipAddress,
-          userAgent,
-        }
-      })
-
-      return updatedItem
     })
 
-    return NextResponse.json(result)
+    await logAuditEvent({
+      userId: currentUserId,
+      action: "UPDATE",
+      entity: "INVENTORY_ITEM",
+      entityId: id,
+      details: `Modificación de insumo "${updatedItem.name}". Costo: $${updatedItem.unitCost}, Stock Mínimo: ${updatedItem.minStock}`,
+      oldData: previousItem,
+      newData: updatedItem,
+    })
+
+    return NextResponse.json(updatedItem)
   } catch (error: any) {
-    if (error?.message === "ITEM_NOT_FOUND") {
-      return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 })
-    }
     console.error("Error actualizando item:", error)
-    return NextResponse.json({ error: error.message || "Error al actualizar el producto" }, { status: 500 })
+    return NextResponse.json({ error: "Error al actualizar el producto" }, { status: 500 })
   }
 }
 
 export async function DELETE(req: Request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session || !session.user || !(session.user as any).id) {
-      return NextResponse.json(
-        { error: "No autorizado. Sesión requerida para registrar auditoría." },
-        { status: 401 }
-      )
+    const userRole = String((session?.user as any)?.role || "").toUpperCase()
+
+    if (userRole !== "ADMIN" && userRole !== "ADMINISTRADOR") {
+      return NextResponse.json({ error: "Solo administradores pueden eliminar insumos." }, { status: 403 })
     }
 
-    const currentUserId = (session.user as any).id
+    const currentUserId = (session!.user as any).id
     const { searchParams } = new URL(req.url)
     const id = searchParams.get("id")
     const permanent = searchParams.get("permanent") === "true"
 
     if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 })
 
-    const headersList = await headers()
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
+    const itemToDelete = await prisma.inventoryItem.findUnique({ where: { id } })
+    if (!itemToDelete) return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 })
 
-    await prisma.$transaction(async (tx) => {
-      const itemToDelete = await tx.inventoryItem.findUnique({
-        where: { id }
+    if (permanent) {
+      await prisma.inventoryItem.delete({ where: { id } })
+      await logAuditEvent({
+        userId: currentUserId,
+        action: "DELETE",
+        entity: "INVENTORY_ITEM",
+        entityId: id,
+        details: `Eliminación FÍSICA del insumo "${itemToDelete.name}" (SKU: ${itemToDelete.sku || "N/A"})`,
+        oldData: itemToDelete,
       })
-
-      if (!itemToDelete) {
-        throw new Error("ITEM_NOT_FOUND")
-      }
-
-      if (permanent) {
-        await tx.inventoryItem.delete({
-          where: { id }
-        })
-
-        await tx.auditLog.create({
-          data: {
-            userId: currentUserId,
-            action: "PURGE_INVENTORY_ITEM",
-            entity: "InventoryItem",
-            entityId: id,
-            details: `Eliminación física del insumo "${itemToDelete.name}" (SKU: ${itemToDelete.sku || "N/A"}) con ${itemToDelete.stock} unidades en existencia`,
-            oldData: {
-              id: itemToDelete.id,
-              name: itemToDelete.name,
-              sku: itemToDelete.sku,
-              stock: itemToDelete.stock,
-              unitCost: itemToDelete.unitCost,
-              marca: itemToDelete.marca,
-            },
-            newData: undefined,
-            ipAddress,
-            userAgent,
-          }
-        })
-      } else {
-        await tx.inventoryItem.update({
-          where: { id },
-          data: { isActive: false }
-        })
-
-        await tx.auditLog.create({
-          data: {
-            userId: currentUserId,
-            action: "DEACTIVATE_INVENTORY_ITEM",
-            entity: "InventoryItem",
-            entityId: id,
-            details: `Desactivación/Archivo del insumo "${itemToDelete.name}"`,
-            oldData: { isActive: true },
-            newData: { isActive: false },
-            ipAddress,
-            userAgent,
-          }
-        })
-      }
-    })
+    } else {
+      await prisma.inventoryItem.update({ where: { id }, data: { isActive: false } })
+      await logAuditEvent({
+        userId: currentUserId,
+        action: "UPDATE",
+        entity: "INVENTORY_ITEM",
+        entityId: id,
+        details: `Desactivación/Archivo del insumo "${itemToDelete.name}"`,
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error: any) {
-    if (error?.message === "ITEM_NOT_FOUND") {
-      return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 })
-    }
     console.error("Error eliminando item:", error)
-    return NextResponse.json({ error: error.message || "Error al eliminar el producto" }, { status: 500 })
+    return NextResponse.json({ error: "Error al eliminar el producto" }, { status: 500 })
   }
 }

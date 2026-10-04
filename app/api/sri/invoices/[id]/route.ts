@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next"
 import { headers } from "next/headers"
 import { prisma } from "@/lib/db"
 import { authOptions } from "@/lib/auth"
+import { logAuditEvent } from "@/lib/audit"
 
 export async function PATCH(
   request: Request,
@@ -22,14 +23,6 @@ export async function PATCH(
 
     const { id } = await params
     const body = await request.json()
-
-    const headersList = await headers()
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const ipAddress = forwardedFor
-      ? forwardedFor.split(",")[0].trim()
-      : headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
-
     const requestedStatus = body.status === "ANULADO" ? "VOIDED" : body.status || "VOIDED"
 
     const result = await prisma.$transaction(async (tx) => {
@@ -49,27 +42,23 @@ export async function PATCH(
         },
       })
 
-      await tx.auditLog.create({
-        data: {
-          userId: currentUser.id,
-          action: "UPDATE_TAX_DOC_STATUS",
-          entity: "TaxDocument",
-          entityId: id,
-          patientId: previousDoc.patientId,
-          details: `Cambio de estado en ${previousDoc.docType} #${previousDoc.secuencial}: ${previousDoc.status} -> ${requestedStatus}`,
-          oldData: {
-            status: previousDoc.status,
-            sriResponse: previousDoc.sriResponse,
-            secuencial: previousDoc.secuencial,
-            total: previousDoc.total,
-          },
-          newData: {
-            status: requestedStatus,
-            sriResponse: updated.sriResponse,
-          },
-          ipAddress,
-          userAgent,
+      await logAuditEvent({
+        userId: currentUser.id,
+        action: "UPDATE_TAX_DOC_STATUS",
+        entity: "TaxDocument",
+        entityId: id,
+        patientId: previousDoc.patientId,
+        details: `Cambio de estado en ${previousDoc.docType} #${previousDoc.secuencial}: ${previousDoc.status} -> ${requestedStatus}`,
+        oldData: {
+          status: previousDoc.status,
+          sriResponse: previousDoc.sriResponse,
+          secuencial: previousDoc.secuencial,
+          total: previousDoc.total,
         },
+        newData: {
+          status: requestedStatus,
+          sriResponse: updated.sriResponse,
+        }
       })
 
       return updated
@@ -85,6 +74,7 @@ export async function PATCH(
   }
 }
 
+// ELIMINACIÓN FÍSICA (Bloqueada para facturas autorizadas)
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -103,13 +93,6 @@ export async function DELETE(
 
     const { id } = await params
 
-    const headersList = await headers()
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const ipAddress = forwardedFor
-      ? forwardedFor.split(",")[0].trim()
-      : headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
-
     await prisma.$transaction(async (tx) => {
       const docToDelete = await tx.taxDocument.findUnique({
         where: { id },
@@ -117,6 +100,11 @@ export async function DELETE(
 
       if (!docToDelete) {
         throw new Error("DOCUMENT_NOT_FOUND")
+      }
+
+      // PREVENCIÓN OWASP: Regla de Negocio / Cumplimiento Tributario
+      if (docToDelete.status === "AUTHORIZED") {
+        throw new Error("CANNOT_DELETE_AUTHORIZED")
       }
 
       if (docToDelete.paymentId) {
@@ -127,7 +115,6 @@ export async function DELETE(
 
         if (linkedPayment) {
           let cleanRef = linkedPayment.reference || null
-
           if (cleanRef) {
             const escapedSecuencial = docToDelete.secuencial.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
             const regexWithPipe = new RegExp(`\\s*\\|\\s*Factura:\\s*${escapedSecuencial}`, "gi")
@@ -146,36 +133,30 @@ export async function DELETE(
           }).catch(() => null)
         }
       }
+
       await tx.taxDocument.delete({
         where: { id },
       })
 
-      await tx.auditLog.create({
-        data: {
-          userId: currentUser.id,
-          action: "PURGE_TAX_DOCUMENT",
-          entity: "TaxDocument",
-          entityId: id,
-          patientId: docToDelete.patientId,
-          details: `PURGADO FÍSICO de comprobante fiscal ${docToDelete.docType} #${docToDelete.secuencial} emitido a "${docToDelete.businessName}" por $${Number(docToDelete.total).toFixed(2)}`,
-          oldData: {
-            id: docToDelete.id,
-            docType: docToDelete.docType,
-            secuencial: docToDelete.secuencial,
-            accessKey: docToDelete.accessKey,
-            authorizationNum: docToDelete.authorizationNum,
-            total: docToDelete.total,
-            subtotal0: docToDelete.subtotal0,
-            subtotal15: docToDelete.subtotal15,
-            identification: docToDelete.identification,
-            businessName: docToDelete.businessName,
-            status: docToDelete.status,
-            paymentId: docToDelete.paymentId,
-          },
-          newData: undefined,
-          ipAddress,
-          userAgent,
-        },
+      await logAuditEvent({
+        userId: currentUser.id,
+        action: "PURGE_TAX_DOCUMENT",
+        entity: "TaxDocument",
+        entityId: id,
+        patientId: docToDelete.patientId,
+        details: `PURGADO FÍSICO de comprobante fiscal ${docToDelete.docType} #${docToDelete.secuencial} emitido a "${docToDelete.businessName}" por $${Number(docToDelete.total).toFixed(2)}`,
+        oldData: {
+          id: docToDelete.id,
+          docType: docToDelete.docType,
+          secuencial: docToDelete.secuencial,
+          accessKey: docToDelete.accessKey,
+          authorizationNum: docToDelete.authorizationNum,
+          total: docToDelete.total,
+          identification: docToDelete.identification,
+          businessName: docToDelete.businessName,
+          status: docToDelete.status,
+          paymentId: docToDelete.paymentId,
+        }
       })
     })
 
@@ -183,6 +164,12 @@ export async function DELETE(
   } catch (error: any) {
     if (error?.message === "DOCUMENT_NOT_FOUND") {
       return NextResponse.json({ error: "Comprobante tributario no encontrado" }, { status: 404 })
+    }
+    if (error?.message === "CANNOT_DELETE_AUTHORIZED") {
+      return NextResponse.json(
+        { error: "Ilegal: No se pueden eliminar físicamente comprobantes ya autorizados por el SRI. Use la opción de anulación." }, 
+        { status: 403 }
+      )
     }
     console.error("Error al eliminar factura SRI:", error)
     return NextResponse.json({ error: "Error interno al eliminar la factura" }, { status: 500 })

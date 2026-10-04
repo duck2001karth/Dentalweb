@@ -4,12 +4,6 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
-function parseCommercialDiscount(comments?: string | null): number {
-  if (!comments || typeof comments !== "string") return 0;
-  const match = comments.match(/\[COMMERCIAL_DISCOUNT:([\d.]+)\]/);
-  return match ? parseFloat(match[1]) || 0 : 0;
-}
-
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -18,14 +12,12 @@ export async function GET(request: Request) {
     const status = searchParams.get("status");
 
     const where: any = {};
-
     if (patientId) {
       where.patientId = patientId;
     }
     if (status) {
       where.status = status;
     }
-
     if (search) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
@@ -38,38 +30,37 @@ export async function GET(request: Request) {
     const plans = await prisma.treatmentPlan.findMany({
       where,
       include: {
-        patient: { 
-          select: { 
+        patient: {
+          select: {
             id: true,
-            firstName: true, 
-            lastName: true, 
+            firstName: true,
+            lastName: true,
             ci: true,
             convenio: true,
             clinicalDocument: true,
             clinicalNotes: true,
-          } 
+          }
         },
-        doctor: { 
-          select: { id: true, name: true, email: true } 
+        doctor: {
+          select: { id: true, name: true, email: true }
         },
         items: true,
-        sections: { 
-          orderBy: { createdAt: "asc" } 
+        sections: {
+          orderBy: { createdAt: "asc" }
         },
-        agreement: true 
+        agreement: true
       },
       orderBy: { createdAt: "desc" }
     });
 
-    const computedPlans = plans.map((plan) => {
+    const computedPlans = plans.map((plan: any) => {
       const agreementDiscount = plan.agreement ? Number(plan.agreement.discountValue) : 0;
-      const commercialDiscount = parseCommercialDiscount(plan.commentsToPatient);
+      const commercialDiscount = Number(plan.commercialDiscount || 0);
       const effectiveGlobalDiscount = commercialDiscount > 0 ? commercialDiscount : agreementDiscount;
 
       let calculatedSubtotal = 0;
-
       if (plan.items && plan.items.length > 0) {
-        calculatedSubtotal = plan.items.reduce((acc, item) => {
+        calculatedSubtotal = plan.items.reduce((acc: number, item: any) => {
           const cost = Number(item.cost || 0);
           const itemDisc = Number(item.discount || 0);
           const effectiveDisc = itemDisc > 0 ? itemDisc : effectiveGlobalDiscount;
@@ -83,13 +74,8 @@ export async function GET(request: Request) {
       const totalPaid = Number(plan.totalPaid || 0);
       const pendingBalance = Math.max(0, calculatedSubtotal - totalPaid);
 
-      const cleanComments = plan.commentsToPatient
-        ? plan.commentsToPatient.replace(/\[COMMERCIAL_DISCOUNT:[\d.]+\]\s*/, "")
-        : null;
-
       return {
         ...plan,
-        commentsToPatient: cleanComments,
         discount: effectiveGlobalDiscount,
         totalCost: calculatedSubtotal,
         pendingBalance
@@ -106,7 +92,6 @@ export async function GET(request: Request) {
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session || !session.user || !(session.user as any).id) {
       return NextResponse.json(
         { error: "No autorizado. Sesión requerida para registrar auditoría." },
@@ -117,9 +102,7 @@ export async function POST(req: Request) {
     const currentUserId = (session.user as any).id;
     const headersList = await headers();
     const forwardedFor = headersList.get("x-forwarded-for");
-    const ipAddress = forwardedFor 
-      ? forwardedFor.split(",")[0].trim() 
-      : headersList.get("x-real-ip") || "127.0.0.1";
+    const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1";
     const userAgent = headersList.get("user-agent") || "Desconocido";
 
     const body = await req.json();
@@ -139,6 +122,7 @@ export async function POST(req: Request) {
           patientId: input.patientId,
           doctorId: input.doctorId,
           agreementId: input.agreementId || null,
+          commercialDiscount: Number(input.commercialDiscount || 0),
           collaborators: input.collaborators || [],
           status: input.status || "DRAFT",
           totalCost: input.totalCost || 0,
@@ -150,7 +134,7 @@ export async function POST(req: Request) {
           doctor: true,
           items: true,
           sections: {
-            orderBy: { createdAt: "asc" } 
+            orderBy: { createdAt: "asc" }
           }
         }
       });
@@ -163,16 +147,14 @@ export async function POST(req: Request) {
           entityId: newPlan.id,
           patientId: newPlan.patientId,
           details: `Creación de plan de tratamiento: "${newPlan.name}" con costo inicial de $${Number(newPlan.totalCost).toFixed(2)}`,
-          oldData: undefined, 
           newData: {
             id: newPlan.id,
             name: newPlan.name,
             status: newPlan.status,
             totalCost: newPlan.totalCost,
-            totalPaid: newPlan.totalPaid,
             doctorId: newPlan.doctorId,
             agreementId: newPlan.agreementId,
-            collaborators: newPlan.collaborators,
+            commercialDiscount: (newPlan as any).commercialDiscount || 0,
           },
           ipAddress,
           userAgent,

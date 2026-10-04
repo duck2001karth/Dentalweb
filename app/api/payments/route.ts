@@ -3,11 +3,11 @@ import { getServerSession } from "next-auth/next"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { headers } from "next/headers"
+import crypto from "crypto"
 
 const normalizePrismaPaymentMethod = (method?: string): string => {
   if (!method) return "CASH"
   const m = method.toUpperCase().trim()
-
   switch (m) {
     case "EFECTIVO":
     case "CASH":
@@ -52,7 +52,6 @@ export async function GET(request: Request) {
     })
 
     const whereClause: any = {}
-
     if (patientId) {
       whereClause.patientId = patientId
     }
@@ -106,20 +105,23 @@ export async function GET(request: Request) {
       const pReceipt = String(payment.receiptNumber || "").trim().toUpperCase()
       const pAmount = Math.abs(Number(payment.amount || payment.paidAmount || 0))
       const hasTaxNC = payment.taxDocuments?.some((d: any) => d.docType === "NOTA_CREDITO")
+
       const matchingRefund = refundTransactions.find((ref: any) => {
         if (ref.id === payment.id) return false
-
         const refNotes = typeof ref.notes === "string" ? ref.notes.toUpperCase() : ""
         const refRef = typeof ref.reference === "string" ? ref.reference.toUpperCase() : ""
         const refRaw = `${refNotes} ${refRef}`
         const refAmount = Math.abs(Number(ref.amount || ref.paidAmount || 0))
+
         const matchesId =
           ref.paymentId === payment.id ||
           ref.originalPaymentId === payment.id ||
           refRaw.toLowerCase().includes(pId)
+
         const matchesReceipt = pReceipt && pReceipt !== "S/N" && refRaw.includes(pReceipt)
         const refReceipt = String(ref.receiptNumber || ref.refundNumber || "").toUpperCase()
         const matchesGeneratedReceipt = pId.length >= 6 && refReceipt.toLowerCase().includes(pId.slice(-6))
+
         const hasFiscalDoc = Boolean(
           (payment.taxDocuments && payment.taxDocuments.length > 0) ||
           payment.invoiceNumber
@@ -134,7 +136,6 @@ export async function GET(request: Request) {
       })
 
       const hasCreditNote = Boolean(hasTaxNC || matchingRefund)
-
       return {
         ...payment,
         hasCreditNote,
@@ -169,7 +170,6 @@ export async function POST(request: Request) {
     } = body
 
     const parsedAmount = parseFloat(amount || 0)
-
     if (!patientId || parsedAmount <= 0) {
       return NextResponse.json({ error: "Monto o paciente no válido" }, { status: 400 })
     }
@@ -194,29 +194,18 @@ export async function POST(request: Request) {
       if (userExists) validProcessorId = userExists.id
     }
 
-    if (!validProcessorId && session?.user?.email) {
-      const userByEmail = await prisma.user.findUnique({
-        where: { email: session.user.email },
-        select: { id: true },
-      })
-      if (userByEmail) validProcessorId = userByEmail.id
-    }
-
     let targetItemIds: string[] = Array.isArray(itemIds) ? [...itemIds] : []
 
-    // Buscar prestaciones a abonar si viene treatmentPlanId (ordenado por id)
     if (targetItemIds.length === 0 && treatmentPlanId) {
       const planItems = await prisma.treatmentItem.findMany({
         where: { treatmentPlanId },
         orderBy: { id: "asc" }
       })
-
       for (const item of planItems) {
         const cost = Number(item.cost || 0)
         const dscto = Number(item.discount || 0)
         const finalCost = cost - cost * (dscto / 100)
         const paid = Number(item.paidAmount || 0)
-
         if (finalCost - paid > 0 && !item.isPaid) {
           targetItemIds.push(item.id)
         }
@@ -240,7 +229,6 @@ export async function POST(request: Request) {
 
         for (const item of itemsToPay) {
           if (remainingMoneyToDistribute <= 0) break
-
           planIdsToUpdate.add(item.treatmentPlanId)
 
           const cost = Number(item.cost || 0)
@@ -271,7 +259,6 @@ export async function POST(request: Request) {
         }
       }
 
-      // Actualizar los totales del plan de tratamiento
       for (const planId of Array.from(planIdsToUpdate)) {
         const allPlanItems = await tx.treatmentItem.findMany({
           where: { treatmentPlanId: planId },
@@ -302,22 +289,22 @@ export async function POST(request: Request) {
         })
       }
 
-      // Generar número correlativo de recibo si no vino manual
+      // PREVENCIÓN OWASP: ID Criptográfico Libre de Colisiones
       let finalReceiptNumber = receiptNumber?.trim()
       if (!finalReceiptNumber) {
-        const totalPaymentsCount = await tx.payment.count()
-        const nextSequence = totalPaymentsCount + 1
-        finalReceiptNumber = `REC-${nextSequence.toString().padStart(5, "0")}`
+        const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, "")
+        const randomPart = crypto.randomBytes(2).toString("hex").toUpperCase()
+        finalReceiptNumber = `REC-${datePart}-${randomPart}`
       }
 
       const rawMethod = paymentMethod || method
       const validMethod = normalizePrismaPaymentMethod(rawMethod)
       const primaryPlanId = treatmentPlanId || null
 
-      const noteContent = notes?.trim() 
-        ? notes 
-        : paidSnapshotItems.length > 0 
-        ? JSON.stringify(paidSnapshotItems) 
+      const noteContent = notes?.trim()
+        ? notes
+        : paidSnapshotItems.length > 0
+        ? JSON.stringify(paidSnapshotItems)
         : `Cobro en caja: $${parsedAmount.toFixed(2)}`
 
       const newPayment = await tx.payment.create({
@@ -339,16 +326,12 @@ export async function POST(request: Request) {
         },
       })
 
-      // Auditoría
       if (validProcessorId) {
         try {
           const headersList = await headers()
           const forwardedFor = headersList.get("x-forwarded-for")
-          const ipAddress = forwardedFor
-            ? forwardedFor.split(",")[0].trim()
-            : headersList.get("x-real-ip") || "127.0.0.1"
-          const userAgent = headersList.get("user-agent") || "Desconocido"
-
+          const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
+          
           await tx.auditLog.create({
             data: {
               userId: validProcessorId,
@@ -365,7 +348,7 @@ export async function POST(request: Request) {
                 treatmentPlanId: primaryPlanId,
               },
               ipAddress,
-              userAgent,
+              userAgent: headersList.get("user-agent") || "Desconocido",
             },
           })
         } catch (auditErr) {
@@ -399,6 +382,7 @@ export async function PATCH(request: Request) {
 
     const currentUser = session.user as any
     const userRole = String(currentUser?.role || "").toUpperCase().trim()
+
     const isAuthorized =
       userRole === "ADMIN" ||
       userRole === "ADMINISTRADOR" ||
@@ -407,20 +391,14 @@ export async function PATCH(request: Request) {
       userRole === "RECEPCIONISTA"
 
     if (!isAuthorized) {
-      return NextResponse.json(
-        { error: "No tiene permisos para modificar cobros" },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: "No tiene permisos para modificar cobros" }, { status: 403 })
     }
 
     const body = await request.json()
     const paymentId = body.id || body.paymentId
 
     if (!paymentId) {
-      return NextResponse.json(
-        { error: "Se requiere el ID del pago para actualizar" },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: "Se requiere el ID del pago para actualizar" }, { status: 400 })
     }
 
     const { method, paymentMethod, reference, notes, receiptNumber, amount } = body
@@ -429,7 +407,6 @@ export async function PATCH(request: Request) {
       const previous = await tx.payment.findUnique({
         where: { id: paymentId },
       })
-
       if (!previous) {
         throw new Error("NOT_FOUND")
       }
@@ -454,7 +431,6 @@ export async function PATCH(request: Request) {
         },
       })
 
-      // Sincronizar finanzas del plan si se modificó el monto y el cobro pertenece a un tratamiento
       if (updated.treatmentPlanId && parsedAmount !== undefined && parsedAmount !== previous.amount) {
         const activePayments = await tx.payment.findMany({
           where: {
@@ -478,8 +454,8 @@ export async function PATCH(request: Request) {
           const cost = Number(item.cost || 0)
           const dscto = Number(item.discount || 0)
           const finalPrice = cost - cost * (dscto / 100)
-
           let itemPaid = 0
+
           if (remaining > 0 && finalPrice > 0) {
             itemPaid = Math.min(finalPrice, remaining)
             remaining -= itemPaid
@@ -503,15 +479,11 @@ export async function PATCH(request: Request) {
         })
       }
 
-      // Registrar auditoría de la actualización
       try {
         const headersList = await headers()
         const forwardedFor = headersList.get("x-forwarded-for")
-        const ipAddress = forwardedFor
-          ? forwardedFor.split(",")[0].trim()
-          : headersList.get("x-real-ip") || "127.0.0.1"
-        const userAgent = headersList.get("user-agent") || "Desconocido"
-
+        const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
+        
         await tx.auditLog.create({
           data: {
             userId: currentUser.id,
@@ -533,7 +505,7 @@ export async function PATCH(request: Request) {
               receiptNumber: updated.receiptNumber,
             },
             ipAddress,
-            userAgent,
+            userAgent: headersList.get("user-agent") || "Desconocido",
           },
         })
       } catch (auditErr) {

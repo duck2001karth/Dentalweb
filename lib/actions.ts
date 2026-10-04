@@ -32,11 +32,13 @@ export async function updateUserSettings(
 ): Promise<ActionResponse> {
   try {
     const session = await getServerSession(authOptions);
+
     if (!session?.user?.email) {
       throw new AuthenticationError("Debes iniciar sesión para actualizar tu cuenta.");
     }
 
     const userEmail = session.user.email.toLowerCase().trim();
+
     const currentUser = await prisma.user.findUnique({
       where: { email: userEmail },
     });
@@ -55,19 +57,25 @@ export async function updateUserSettings(
       calendarColor?: string;
       password?: string;
     } = {};
-
     if (data.phoneNumber !== undefined) {
       updateData.phoneNumber = data.phoneNumber.trim();
     }
-
     if (data.image !== undefined) {
+      if (
+        data.image && 
+        !data.image.startsWith("https://") && 
+        !data.image.startsWith("data:image/")
+      ) {
+        throw new ValidationError("La imagen proporcionada no tiene un formato o URL segura.");
+      }
       updateData.image = data.image;
     }
-
     if (data.calendarColor !== undefined) {
+      if (data.calendarColor && !/^#[0-9A-Fa-f]{6}$/i.test(data.calendarColor)) {
+        throw new ValidationError("El color del calendario debe ser un código hexadecimal válido (ej. #008bcd).");
+      }
       updateData.calendarColor = data.calendarColor;
     }
-
     if (data.newPassword) {
       if (!data.currentPassword) {
         throw new ValidationError("Debes ingresar tu contraseña actual para establecer una nueva.");
@@ -90,12 +98,10 @@ export async function updateUserSettings(
 
       updateData.password = await bcrypt.hash(data.newPassword, 10);
     }
-
     await prisma.user.update({
       where: { email: userEmail },
       data: updateData,
     });
-
     revalidatePath("/");
 
     return { success: true };
@@ -107,7 +113,8 @@ export async function updateUserSettings(
       };
     }
 
-    console.error("[ACTIONS] Error en updateUserSettings:", error);
+    console.error("[ACTIONS] Error crítico en updateUserSettings:", error);
+    
     return {
       error: "Ocurrió un error inesperado al intentar actualizar tu cuenta.",
       statusCode: 500,

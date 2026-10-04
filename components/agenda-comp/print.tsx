@@ -4,12 +4,9 @@ import React, { useState, useRef } from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { Eye, Printer } from "lucide-react"
-import { useSession } from "next-auth/react"
-
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
 import { useClinicSettings } from "@/config/clinic-settings"
-import { appointmentStatuses } from "@/constants/status"
 
 export interface PrintAgendaModalProps {
   isOpen?: boolean
@@ -32,26 +29,64 @@ const formatReason = (reason?: string) => {
   }
 }
 
-const formatStatus = (status?: string) => {
-  if (!status) return { label: "AGENDADA", color: "text-[#008bcd] bg-[#008bcd]/10 border-[#008bcd]/20" }
-
-  const statusConfig = appointmentStatuses[status]
-  if (statusConfig?.label) {
-    return {
-      label: statusConfig.label.toUpperCase(),
-      color: "text-[#008bcd] bg-[#008bcd]/10 border-[#008bcd]/20"
-    }
-  }
-
+const formatStatus = (status?: string, clinicBrandColor: string = "#008bcd") => {
   switch (status) {
-    case "SCHEDULED": return { label: "AGENDADA", color: "text-[#008bcd] bg-[#008bcd]/10 border-[#008bcd]/20" }
-    case "CONFIRMED": return { label: "CONFIRMADA", color: "text-emerald-700 bg-emerald-50 border-emerald-200" }
-    case "WAITING": return { label: "EN SALA", color: "text-amber-700 bg-amber-50 border-amber-200" }
-    case "IN_PROGRESS": return { label: "EN ATENCIÓN", color: "text-indigo-700 bg-indigo-50 border-indigo-200" }
-    case "COMPLETED": return { label: "COMPLETADA", color: "text-teal-700 bg-teal-50 border-teal-200" }
-    case "NO_SHOW": return { label: "NO ASISTIÓ", color: "text-rose-700 bg-rose-50 border-rose-200" }
-    case "CANCELLED": return { label: "CANCELADA", color: "text-slate-600 bg-slate-100 border-slate-200" }
-    default: return { label: status.toUpperCase(), color: "text-[#008bcd] bg-[#008bcd]/10 border-[#008bcd]/20" }
+    case "SCHEDULED": 
+      return { 
+        label: "AGENDADA", 
+        hexText: clinicBrandColor, 
+        hexBg: `${clinicBrandColor}15`, 
+        hexBorder: `${clinicBrandColor}35` 
+      }
+    case "CONFIRMED": 
+      return { 
+        label: "CONFIRMADA", 
+        hexText: "#047857", 
+        hexBg: "#ecfdf5", 
+        hexBorder: "#a7f3d0" 
+      }
+    case "WAITING": 
+      return { 
+        label: "EN SALA", 
+        hexText: "#b45309", 
+        hexBg: "#fffbeb", 
+        hexBorder: "#fde68a" 
+      }
+    case "IN_PROGRESS": 
+      return { 
+        label: "EN ATENCIÓN", 
+        hexText: "#4338ca", 
+        hexBg: "#eef2ff", 
+        hexBorder: "#c7d2fe" 
+      }
+    case "COMPLETED": 
+      return { 
+        label: "COMPLETADA", 
+        hexText: "#0f766e", 
+        hexBg: "#f0fdfa", 
+        hexBorder: "#99f6e4" 
+      }
+    case "NO_SHOW": 
+      return { 
+        label: "NO ASISTIÓ", 
+        hexText: "#be123c", 
+        hexBg: "#fff1f2", 
+        hexBorder: "#fecdd3" 
+      }
+    case "CANCELLED": 
+      return { 
+        label: "CANCELADA", 
+        hexText: "#475569", 
+        hexBg: "#f1f5f9", 
+        hexBorder: "#cbd5e1" 
+      }
+    default: 
+      return { 
+        label: (status || "AGENDADA").toUpperCase(), 
+        hexText: clinicBrandColor, 
+        hexBg: `${clinicBrandColor}15`, 
+        hexBorder: `${clinicBrandColor}35` 
+      }
   }
 }
 
@@ -64,11 +99,8 @@ export function PrintAgendaModal({
   trigger,
 }: PrintAgendaModalProps) {
   const { settings } = useClinicSettings()
-  const { data: session } = useSession()
   const printSheetRef = useRef<HTMLDivElement>(null)
 
-  const currentUser = session?.user as any
-  const doctorAccentColor = currentUser?.calendarColor || "#008bcd"
   const clinicBrandColor = (settings as any)?.primaryColor || "#008bcd"
 
   const [internalOpen, setInternalOpen] = useState(false)
@@ -89,7 +121,7 @@ export function PrintAgendaModal({
   const validDate = date instanceof Date && !isNaN(date.getTime()) ? date : new Date()
   const filteredAppointments = rawList.filter((cita: any) => cita.status !== "CANCELLED")
 
- const handlePrint = () => {
+  const handlePrint = () => {
     if (!printSheetRef.current) return
 
     const printFrame = document.createElement("iframe")
@@ -132,13 +164,11 @@ export function PrintAgendaModal({
               background: #ffffff !important;
               color: #000000 !important;
               margin: 0 !important;
-              /* Margen físico perimetral exacto en A4 */
               padding: 13mm 15mm 13mm 15mm !important;
               font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
             }
-            /* Ocupa toda la altura útil de la hoja A4 para centrar la marca de agua y anclar la firma */
             #printable-agenda-sheet {
               border: none !important;
               box-shadow: none !important;
@@ -152,20 +182,6 @@ export function PrintAgendaModal({
               flex-direction: column !important;
               justify-content: space-between !important;
               background: transparent !important;
-            }
-            /* Marca de agua centrada en toda la hoja */
-            .watermark-container {
-              position: absolute !important;
-              top: 50% !important;
-              left: 50% !important;
-              transform: translate(-50%, -50%) !important;
-              display: flex !important;
-              align-items: center !important;
-              justify-content: center !important;
-              width: 100% !important;
-              height: 100% !important;
-              pointer-events: none !important;
-              z-index: 0 !important;
             }
             thead {
               display: table-header-group !important;
@@ -199,6 +215,7 @@ export function PrintAgendaModal({
       }, 500)
     }, 300)
   }
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger ? (
@@ -210,15 +227,15 @@ export function PrintAgendaModal({
             onMouseEnter={() => setIsTriggerHovered(true)}
             onMouseLeave={() => setIsTriggerHovered(false)}
             style={{
-              color: isTriggerHovered ? doctorAccentColor : undefined,
-              backgroundColor: isTriggerHovered ? `${doctorAccentColor}15` : undefined,
-              borderColor: isTriggerHovered ? `${doctorAccentColor}40` : undefined,
+              color: isTriggerHovered ? clinicBrandColor : undefined,
+              backgroundColor: isTriggerHovered ? `${clinicBrandColor}15` : undefined,
+              borderColor: isTriggerHovered ? `${clinicBrandColor}40` : undefined,
             }}
             className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
           >
             <Printer 
               className="h-5 w-5 mr-2 text-muted-foreground transition-colors" 
-              style={{ color: isTriggerHovered ? doctorAccentColor : undefined }}
+              style={{ color: isTriggerHovered ? clinicBrandColor : undefined }}
             />
             <span>Imprimir</span>
           </Button>
@@ -227,15 +244,14 @@ export function PrintAgendaModal({
 
       <DialogContent className="sm:max-w-[1000px] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden bg-background border-border/80">
         
-        {/* CABECERA MODAL (INTERFAZ EN PANTALLA) */}
         <div className="px-6 py-4 border-b border-border/70 flex items-center justify-between bg-card shrink-0">
           <div className="flex items-center gap-2.5">
             <div 
               className="p-2 rounded-xl border transition-colors"
               style={{
-                backgroundColor: `${doctorAccentColor}18`,
-                borderColor: `${doctorAccentColor}35`,
-                color: doctorAccentColor,
+                backgroundColor: `${clinicBrandColor}18`,
+                borderColor: `${clinicBrandColor}35`,
+                color: clinicBrandColor,
               }}
             >
               <Eye className="w-5 h-5 stroke-[2.2]" />
@@ -251,9 +267,7 @@ export function PrintAgendaModal({
           </div>
         </div>
 
-        {/* CONTENEDOR VISUALIZADOR CON SCROLL SUTIL */}
         <div className="flex-1 bg-muted/40 p-4 sm:p-6 overflow-y-auto flex justify-center [scrollbar-width:thin]">
-          
           <div
             ref={printSheetRef}
             id="printable-agenda-sheet"
@@ -263,7 +277,6 @@ export function PrintAgendaModal({
             }}
             className="w-full max-w-[800px] bg-white text-black p-8 rounded-lg shadow-sm border border-neutral-200 relative flex flex-col justify-between"
           >
-            {/* MARCA DE AGUA */}
             {settings?.watermarkUrl && (
               <div 
                 className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden"
@@ -278,10 +291,7 @@ export function PrintAgendaModal({
               </div>
             )}
 
-            {/* SECCIÓN SUPERIOR */}
             <div className="relative z-10">
-              
-              {/* CABECERA INSTITUCIONAL */}
               <div 
                 className="flex items-center justify-between pb-3 mb-3 border-b-[3px]"
                 style={{ borderBottomColor: clinicBrandColor }}
@@ -301,7 +311,6 @@ export function PrintAgendaModal({
                       {settings?.clinicName || "Carmo Dental"}
                     </div>
                   )}
-
                   <div className="space-y-0.5">
                     <h1 
                       className="text-lg font-black tracking-tight uppercase leading-tight"
@@ -330,11 +339,10 @@ export function PrintAgendaModal({
                 </div>
               </div>
 
-              {/* TABLA DE CITAS */}
               <table className="w-full text-left border-collapse text-xs mt-1">
                 <thead>
                   <tr className="border-b-2 border-neutral-900 uppercase text-[9.5px] font-black tracking-wider bg-slate-50 text-slate-800">
-                    <th className="py-2 px-1.5 w-6 text-center">✓</th>
+                    <th className="py-2 px-1.5 w-6 text-center"></th>
                     <th className="py-2 px-2 w-20">Horario</th>
                     <th className="py-2 px-2">Paciente / Contacto</th>
                     <th className="py-2 px-2">Especialista / Box</th>
@@ -351,7 +359,7 @@ export function PrintAgendaModal({
                     </tr>
                   ) : (
                     filteredAppointments.map((cita: any) => {
-                      const statusObj = formatStatus(cita.status)
+                      const statusObj = formatStatus(cita.status, clinicBrandColor)
                       return (
                         <tr key={cita.id} className="hover:bg-neutral-50/50">
                           <td className="py-2 px-1.5 text-center align-top">
@@ -368,7 +376,7 @@ export function PrintAgendaModal({
                               {cita.patient?.firstName || cita.patientName} {cita.patient?.lastName || ""}
                             </p>
                             <p className="text-[9.5px] text-neutral-500 font-mono mt-0.5">
-                              CI: {cita.patient?.ci || cita.patientCi || "-"} • Tel: {cita.patient?.phone || cita.patientPhone || "-"}
+                              CI: {cita.patient?.ci || cita.patientCi || "-"} | Tel: {cita.patient?.phone || cita.patientPhone || "-"}
                             </p>
                           </td>
                           <td className="py-2 px-2 align-top">
@@ -381,7 +389,14 @@ export function PrintAgendaModal({
                             <p className="font-semibold text-neutral-800 leading-snug">
                               {formatReason(cita.reason)}
                             </p>
-                            <span className={`inline-block mt-0.5 px-1.5 py-0.2 rounded text-[8.5px] font-bold uppercase tracking-wider border ${statusObj.color}`}>
+                            <span 
+                              className="inline-block mt-0.5 px-1.5 py-0.2 rounded text-[8.5px] font-bold uppercase tracking-wider border"
+                              style={{
+                                color: statusObj.hexText,
+                                backgroundColor: statusObj.hexBg,
+                                borderColor: statusObj.hexBorder,
+                              }}
+                            >
                               {statusObj.label}
                             </span>
                           </td>
@@ -397,10 +412,8 @@ export function PrintAgendaModal({
                   )}
                 </tbody>
               </table>
-
             </div>
 
-            {/* SECCIÓN INFERIOR: FIRMA Y RESUMEN (PROTEGIDO CONTRA RUPTURAS DE PÁGINA) */}
             <div className="relative z-10 pt-3 mt-6 border-t border-neutral-200 print-footer-block">
               <div className="flex items-end justify-between">
                 <div className="text-center w-44">
@@ -409,7 +422,6 @@ export function PrintAgendaModal({
                     Firma del Encargado
                   </p>
                 </div>
-
                 <div className="p-2 bg-neutral-50 border border-neutral-200 rounded-lg text-right">
                   <p className="text-[8.5px] font-bold text-neutral-500 uppercase">Resumen Operativo</p>
                   <p className="text-xs font-black text-neutral-900 mt-0.5">
@@ -417,25 +429,22 @@ export function PrintAgendaModal({
                   </p>
                 </div>
               </div>
-
               <p className="text-[8px] text-center text-neutral-400 mt-3 leading-tight uppercase font-medium">
                 {settings?.footerText || "DOCUMENTO DE USO INTERNO EXCLUSIVO. CONTIENE INFORMACIÓN MÉDICA CONFIDENCIAL."}
               </p>
             </div>
-
           </div>
         </div>
 
-        {/* PIE DEL MODAL */}
         <DialogFooter className="px-6 py-3 border-t border-border/70 bg-card sm:justify-between shrink-0">
           <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl text-xs font-bold cursor-pointer">
             Cerrar
           </Button>
           <Button 
-            onClick={handlePrint} 
+            onClick={handlePrint}
             style={{
-              backgroundColor: doctorAccentColor,
-              boxShadow: `0 8px 16px -4px ${doctorAccentColor}40`,
+              backgroundColor: clinicBrandColor,
+              boxShadow: `0 8px 16px -4px ${clinicBrandColor}40`,
             }}
             className="text-white rounded-xl text-xs font-bold px-6 cursor-pointer hover:opacity-90 transition-opacity"
           >

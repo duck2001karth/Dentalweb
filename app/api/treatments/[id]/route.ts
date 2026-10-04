@@ -1,53 +1,46 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth/next"
-import { headers } from "next/headers"
 import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { logAuditEvent } from "@/lib/audit"
 
-function parseDiscounts(plan: any) {
-  const agreementDisc = plan.agreement ? Number(plan.agreement.discountValue || 0) : 0
-  let commercialDisc = 0
-
-  if (plan.commentsToPatient && typeof plan.commentsToPatient === "string") {
-    const match = plan.commentsToPatient.match(/\[COMMERCIAL_DISCOUNT:([\d.]+)\]/)
-    if (match) {
-      commercialDisc = parseFloat(match[1]) || 0
-    }
-  }
-
-  const effectiveDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
-  return { agreementDisc, commercialDisc, effectiveDiscount }
-}
-
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params
     const plan = await prisma.treatmentPlan.findUnique({
       where: { id },
       include: {
-        doctor: true,
-        patient: true,
+        doctor: {
+          select: { id: true, name: true, email: true, specialty: true }
+        },
+        patient: {
+          select: { id: true, firstName: true, lastName: true, ci: true, convenio: true }
+        },
         items: true,
-        sections: { 
-          orderBy: { createdAt: "asc" } 
+        sections: {
+          orderBy: { createdAt: "asc" }
         },
         payments: true,
-        agreement: true 
+        agreement: true
       }
     })
 
-    if (!plan) return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 })
+    if (!plan) {
+      return NextResponse.json({ error: "Plan de tratamiento no encontrado" }, { status: 404 })
+    }
 
-    const { effectiveDiscount } = parseDiscounts(plan)
+    const agreementDisc = plan.agreement ? Number(plan.agreement.discountValue || 0) : 0
+    const commercialDisc = Number(plan.commercialDiscount || 0)
+    const effectiveDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
+
     const agreementName = plan.agreement?.name || plan.patient?.convenio || null
-    const cleanComment = plan.commentsToPatient
-      ? plan.commentsToPatient.replace(/\[COMMERCIAL_DISCOUNT:[\d.]+\]\s*/, "")
-      : null
 
     return NextResponse.json({
       plan: {
         ...plan,
-        commentsToPatient: cleanComment,
         discount: effectiveDiscount,
         convenio: agreementName
       }
@@ -58,20 +51,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   }
 }
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+// 2. ACTUALIZAR PLAN, FASES O COLABORADORES
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params
     const session = await getServerSession(authOptions)
     const currentUserId = (session?.user as any)?.id
 
     if (!currentUserId) {
-      return NextResponse.json({ error: "No autorizado. Sesión requerida para auditoría." }, { status: 401 })
+      return NextResponse.json(
+        { error: "No autorizado. Sesión requerida para registrar auditoría." },
+        { status: 401 }
+      )
     }
-
-    const headersList = await headers()
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const body = await request.json()
     const { action, input, collaborators, agreementId, agreementName, discount, ...restBody } = body
@@ -86,6 +81,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         throw new Error("NOT_FOUND")
       }
 
+      // ACCIÓN: RESTAURAR DESDE PAPELERA
       if (action === "RESTORE") {
         const restoredPlan = await tx.treatmentPlan.update({
           where: { id },
@@ -99,29 +95,28 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           }
         })
 
-        await tx.auditLog.create({
-          data: {
-            userId: currentUserId,
-            action: "RESTORE_PLAN",
-            entity: "TreatmentPlan",
-            entityId: id,
-            patientId: previousPlan.patientId,
-            details: `Plan "${previousPlan.name}" restaurado a DRAFT`,
-            oldData: { status: previousPlan.status },
-            newData: { status: "DRAFT" },
-            ipAddress,
-            userAgent
-          }
+        await logAuditEvent({
+          userId: currentUserId,
+          action: "RESTORE_PLAN",
+          entity: "TreatmentPlan",
+          entityId: id,
+          patientId: previousPlan.patientId,
+          details: `Plan "${previousPlan.name}" restaurado a estado DRAFT`,
+          oldData: { status: previousPlan.status },
+          newData: { status: "DRAFT" }
         })
 
         return { plan: restoredPlan }
       }
 
+      // ACCIÓN: ACTUALIZAR COLABORADORES
       if (collaborators !== undefined) {
         let finalCollaboratorNames: string[] = []
-
         if (Array.isArray(collaborators) && collaborators.length > 0) {
-          const rawValues = collaborators.map((c: any) => (typeof c === "string" ? c : c.id || c.name)).filter(Boolean)
+          const rawValues = collaborators
+            .map((c: any) => (typeof c === "string" ? c : c.id || c.name))
+            .filter(Boolean)
+
           const matchedUsers = await tx.user.findMany({
             where: { id: { in: rawValues } },
             select: { name: true }
@@ -146,22 +141,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           }
         })
 
-        await tx.auditLog.create({
-          data: {
-            userId: currentUserId,
-            action: "UPDATE_COLLABORATORS",
-            entity: "TreatmentPlan",
-            entityId: id,
-            patientId: previousPlan.patientId,
-            details: `Actualización de especialistas colaboradores en "${previousPlan.name}"`,
-            oldData: { collaborators: previousPlan.collaborators },
-            newData: { collaborators: finalCollaboratorNames },
-            ipAddress,
-            userAgent
-          }
+        await logAuditEvent({
+          userId: currentUserId,
+          action: "UPDATE_COLLABORATORS",
+          entity: "TreatmentPlan",
+          entityId: id,
+          patientId: previousPlan.patientId,
+          details: `Actualización de especialistas colaboradores en "${previousPlan.name}"`,
+          oldData: { collaborators: previousPlan.collaborators },
+          newData: { collaborators: finalCollaboratorNames }
         })
 
-        const { effectiveDiscount } = parseDiscounts(updatedPlan)
+        const agreementDisc = updatedPlan.agreement ? Number(updatedPlan.agreement.discountValue || 0) : 0
+        const commercialDisc = Number(updatedPlan.commercialDiscount || 0)
+        const effectiveDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
+
         return {
           plan: {
             ...updatedPlan,
@@ -172,6 +166,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }
       }
 
+      // ACCIÓN: ACTUALIZACIÓN GENERAL DE DATOS DEL PLAN
       const rawData = input ? { ...input } : { ...restBody }
       const targetConvenio = rawData.convenio || agreementName
 
@@ -179,7 +174,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         const patientData: Record<string, any> = {}
         if (rawData.signatureBase64 !== undefined) patientData.signatureBase64 = rawData.signatureBase64
         if (targetConvenio !== undefined) patientData.convenio = targetConvenio
-
+        
         await tx.patient.update({
           where: { id: previousPlan.patientId },
           data: patientData
@@ -198,25 +193,23 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           planData.agreementId = agreementRecord.id
         }
       }
+
       const targetDiscount = discount !== undefined ? Number(discount) : undefined
       if (targetDiscount !== undefined) {
-        let baseText = rawData.commentsToPatient ?? previousPlan.commentsToPatient ?? ""
-        baseText = baseText.replace(/\[COMMERCIAL_DISCOUNT:[\d.]+\]\s*/, "").trim()
-        planData.commentsToPatient = targetDiscount > 0 
-          ? `[COMMERCIAL_DISCOUNT:${targetDiscount}] ${baseText}`.trim()
-          : baseText
-      } else {
-        if (rawData.commentsToPatient !== undefined) planData.commentsToPatient = rawData.commentsToPatient
-        if (rawData.comments !== undefined) planData.commentsToPatient = rawData.comments
+        planData.commercialDiscount = Math.max(0, targetDiscount)
       }
 
+      if (rawData.commentsToPatient !== undefined) planData.commentsToPatient = rawData.commentsToPatient
+      if (rawData.comments !== undefined) planData.commentsToPatient = rawData.comments
       if (rawData.status !== undefined) planData.status = rawData.status
       if (rawData.doctorId !== undefined) planData.doctorId = rawData.doctorId
 
       const allItems = previousPlan.items || []
-      const effectiveGlobalDisc = targetDiscount !== undefined
-        ? targetDiscount
-        : parseDiscounts(previousPlan).effectiveDiscount
+      const effectiveGlobalDisc = targetDiscount !== undefined 
+        ? targetDiscount 
+        : (Number(previousPlan.commercialDiscount || 0) > 0 
+            ? Number(previousPlan.commercialDiscount) 
+            : Number(previousPlan.agreement?.discountValue || 0))
 
       const recalculatedTotalCost = allItems.reduce((acc, itm) => {
         const baseCost = Number(itm.cost || 0)
@@ -239,42 +232,36 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         }
       })
 
-      await tx.auditLog.create({
-        data: {
-          userId: currentUserId,
-          action: "UPDATE_PLAN_DATA",
-          entity: "TreatmentPlan",
-          entityId: id,
-          patientId: previousPlan.patientId,
-          details: `Modificación en plan "${updatedPlan.name}": Costo: $${updatedPlan.totalCost}, Estado: ${updatedPlan.status}`,
-          oldData: {
-            status: previousPlan.status,
-            totalCost: previousPlan.totalCost,
-            doctorId: previousPlan.doctorId,
-            agreementId: previousPlan.agreementId,
-            commentsToPatient: previousPlan.commentsToPatient
-          },
-          newData: {
-            status: updatedPlan.status,
-            totalCost: updatedPlan.totalCost,
-            doctorId: updatedPlan.doctorId,
-            agreementId: updatedPlan.agreementId,
-            commentsToPatient: updatedPlan.commentsToPatient
-          },
-          ipAddress,
-          userAgent
+      await logAuditEvent({
+        userId: currentUserId,
+        action: "UPDATE_PLAN_DATA",
+        entity: "TreatmentPlan",
+        entityId: id,
+        patientId: previousPlan.patientId,
+        details: `Modificación en plan "${updatedPlan.name}": Costo: $${Number(updatedPlan.totalCost).toFixed(2)}, Estado: ${updatedPlan.status}`,
+        oldData: {
+          status: previousPlan.status,
+          totalCost: previousPlan.totalCost,
+          doctorId: previousPlan.doctorId,
+          agreementId: previousPlan.agreementId,
+          commercialDiscount: previousPlan.commercialDiscount
+        },
+        newData: {
+          status: updatedPlan.status,
+          totalCost: updatedPlan.totalCost,
+          doctorId: updatedPlan.doctorId,
+          agreementId: updatedPlan.agreementId,
+          commercialDiscount: updatedPlan.commercialDiscount
         }
       })
 
-      const { effectiveDiscount } = parseDiscounts(updatedPlan)
-      const cleanComment = updatedPlan.commentsToPatient
-        ? updatedPlan.commentsToPatient.replace(/\[COMMERCIAL_DISCOUNT:[\d.]+\]\s*/, "")
-        : null
+      const agreementDisc = updatedPlan.agreement ? Number(updatedPlan.agreement.discountValue || 0) : 0
+      const commercialDisc = Number(updatedPlan.commercialDiscount || 0)
+      const effectiveDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
 
       return {
         plan: {
           ...updatedPlan,
-          commentsToPatient: cleanComment,
           discount: effectiveDiscount,
           convenio: updatedPlan.agreement?.name || updatedPlan.patient?.convenio || null
         }
@@ -287,27 +274,32 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 })
     }
     console.error("Error PATCH /api/treatments/[id]:", error)
-    return NextResponse.json({ error: error.message || "Error al actualizar el plan" }, { status: 500 })
+    return NextResponse.json(
+      { error: error.message || "Error al actualizar el plan" },
+      { status: 500 }
+    )
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+// 3. ANULAR O PURGAR PLAN
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params
     const session = await getServerSession(authOptions)
     const currentUserId = (session?.user as any)?.id
 
     if (!currentUserId) {
-      return NextResponse.json({ error: "No autorizado. Sesión requerida para registrar auditoría." }, { status: 401 })
+      return NextResponse.json(
+        { error: "No autorizado. Sesión requerida para registrar auditoría." },
+        { status: 401 }
+      )
     }
 
     const { searchParams } = new URL(request.url)
     const forceDelete = searchParams.get("force") === "true"
-
-    const headersList = await headers()
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const ipAddress = forwardedFor ? forwardedFor.split(",")[0].trim() : headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const responseData = await prisma.$transaction(async (tx) => {
       const planToDelete = await tx.treatmentPlan.findUnique({
@@ -325,25 +317,20 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         await tx.odontogramRecord.deleteMany({ where: { planId: id } })
         await tx.treatmentPlan.delete({ where: { id } })
 
-        await tx.auditLog.create({
-          data: {
-            userId: currentUserId,
-            action: "PERMANENT_DELETE_PLAN",
-            entity: "TreatmentPlan",
-            entityId: id,
-            patientId: planToDelete.patientId,
-            details: `Eliminación permanente del plan "${planToDelete.name}", sus fases y prestaciones asociadas`,
-            oldData: {
-              name: planToDelete.name,
-              totalCost: planToDelete.totalCost,
-              totalPaid: planToDelete.totalPaid,
-              status: planToDelete.status,
-              itemsCount: planToDelete.items.length,
-              sectionsCount: planToDelete.sections.length
-            },
-            newData: undefined,
-            ipAddress,
-            userAgent
+        await logAuditEvent({
+          userId: currentUserId,
+          action: "PERMANENT_DELETE_PLAN",
+          entity: "TreatmentPlan",
+          entityId: id,
+          patientId: planToDelete.patientId,
+          details: `Eliminación permanente del plan "${planToDelete.name}", sus fases y prestaciones asociadas`,
+          oldData: {
+            name: planToDelete.name,
+            totalCost: planToDelete.totalCost,
+            totalPaid: planToDelete.totalPaid,
+            status: planToDelete.status,
+            itemsCount: planToDelete.items.length,
+            sectionsCount: planToDelete.sections.length
           }
         })
 
@@ -355,19 +342,15 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
         data: { status: "CANCELLED" }
       })
 
-      await tx.auditLog.create({
-        data: {
-          userId: currentUserId,
-          action: "MOVE_TO_TRASH_PLAN",
-          entity: "TreatmentPlan",
-          entityId: id,
-          patientId: planToDelete.patientId,
-          details: `Plan "${planToDelete.name}" enviado a papelera (CANCELLED)`,
-          oldData: { status: planToDelete.status },
-          newData: { status: "CANCELLED" },
-          ipAddress,
-          userAgent
-        }
+      await logAuditEvent({
+        userId: currentUserId,
+        action: "MOVE_TO_TRASH_PLAN",
+        entity: "TreatmentPlan",
+        entityId: id,
+        patientId: planToDelete.patientId,
+        details: `Plan "${planToDelete.name}" enviado a papelera (CANCELLED)`,
+        oldData: { status: planToDelete.status },
+        newData: { status: "CANCELLED" }
       })
 
       return { success: true, message: "Plan movido a la papelera (Anulado)" }
@@ -379,6 +362,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 })
     }
     console.error("Error en DELETE /api/treatments/[id]:", error)
-    return NextResponse.json({ error: "Error al procesar la eliminación" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Error al procesar la eliminación" },
+      { status: 500 }
+    )
   }
 }

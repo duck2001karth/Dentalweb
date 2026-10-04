@@ -8,8 +8,7 @@ import {
   ChevronRight, 
   Calendar as CalendarIcon, 
   List, 
-  Stethoscope, 
-  SlidersHorizontal 
+  Stethoscope 
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -21,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { NewAppointmentModal } from "@/components/agenda-comp/new-appointment"
+import { AgendaFiltersModal, AgendaFiltersState } from "./agenda-filters-modal"
 import { cn } from "@/lib/utils"
 
 interface AgendaHeaderProps {
@@ -37,6 +37,9 @@ interface AgendaHeaderProps {
   doctors: Array<{ id: string; name: string; calendarColor: string }>
   activeAppointmentsCount: number
   defaultUserColor: string
+  filters: AgendaFiltersState
+  onFiltersChange: (filters: AgendaFiltersState) => void
+  availableBoxes: string[]
 }
 
 export const AgendaHeader: React.FC<AgendaHeaderProps> = ({
@@ -53,11 +56,12 @@ export const AgendaHeader: React.FC<AgendaHeaderProps> = ({
   doctors,
   activeAppointmentsCount,
   defaultUserColor,
+  filters,
+  onFiltersChange,
+  availableBoxes,
 }) => {
   return (
-    <div className="w-full flex flex-col md:flex-row items-center justify-between bg-card border border-border/70 rounded-2xl p-4 md:px-6 shadow-xs gap-4 mb-4 shrink-0 transition-colors">
-      
-      {/* Switcher Vista y Fechas */}
+    <div className="w-full flex flex-col md:flex-row items-center justify-between bg-card border border-border/70 rounded-2xl p-4 md:px-6 shadow-xs gap-4 mb-4 shrink-0 transition-colors">      
       <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
         <div className="flex items-center gap-1 p-1 bg-muted rounded-xl border border-border/40">
           <button
@@ -90,7 +94,6 @@ export const AgendaHeader: React.FC<AgendaHeaderProps> = ({
 
         <div className="h-6 w-[1px] bg-border/80 mx-1 hidden sm:block" />
 
-        {/* Navegación por Semanas */}
         <div className="flex items-center gap-1.5 bg-muted/20 border border-border/80 p-1 rounded-xl">
           <Button 
             variant="ghost" 
@@ -143,7 +146,7 @@ export const AgendaHeader: React.FC<AgendaHeaderProps> = ({
         </span>
       </div>
 
-      {/* Selector de Médico y Botón de Agendar */}
+      {/* Selector de Especialista, Filtros y Modal Dar Cita */}
       <div className="flex items-center gap-2 w-full md:w-auto justify-end">
         {canSwitchDoctor ? (
           <div className="w-56">
@@ -162,7 +165,7 @@ export const AgendaHeader: React.FC<AgendaHeaderProps> = ({
                   <SelectItem key={doc.id} value={doc.id} className="text-xs font-semibold cursor-pointer">
                     <div className="flex items-center gap-2">
                       <span 
-                        className="w-2 h-2 rounded-full shrink-0" 
+                        className="w-2.5 h-2.5 rounded-full shrink-0" 
                         style={{ backgroundColor: doc.calendarColor }} 
                       />
                       <span>{doc.name}</span>
@@ -175,17 +178,19 @@ export const AgendaHeader: React.FC<AgendaHeaderProps> = ({
         ) : (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-muted/80 border border-border/60 text-xs font-semibold text-foreground">
             <span 
-              className="w-2 h-2 rounded-full" 
+              className="w-2.5 h-2.5 rounded-full" 
               style={{ backgroundColor: defaultUserColor }} 
             />
             <span>Mi Calendario</span>
           </div>
         )}
 
-        <Button variant="outline" size="sm" className="h-9 rounded-xl gap-2 text-xs font-semibold">
-          <SlidersHorizontal className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Filtros</span>
-        </Button>
+        <AgendaFiltersModal 
+          filters={filters}
+          onFiltersChange={onFiltersChange}
+          availableBoxes={availableBoxes}
+          accentColor={defaultUserColor}
+        />
 
         <NewAppointmentModal defaultDate={currentWeekStart} />
       </div>

@@ -79,7 +79,6 @@ export function AppointmentForm({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-5">
-      {/* SECCIÓN 1: DETALLES CLÍNICOS */}
       <div className="space-y-5">
         <h3 
           style={{ color: activeDoctorColor }}
@@ -88,7 +87,6 @@ export function AppointmentForm({
           <User className="w-3.5 h-3.5" /> 1. Detalles Clínicos
         </h3>
         
-        {/* PACIENTE (OBLIGATORIO) */}
         <div className="space-y-2">
           <Label className="text-foreground font-bold text-xs flex items-center justify-between">
             <span>Paciente <span className="text-destructive font-black">*</span></span>
@@ -97,14 +95,14 @@ export function AppointmentForm({
             )}
           </Label>
           <PatientSelector 
-            patientId={formData.patientId} 
-            setPatientId={(id) => setFormData({ ...formData, patientId: id })} 
-            patients={patients} 
-            isLoading={isLoadingPatients} 
-          />
+             patientId={formData.patientId} 
+             setPatientId={(id) => setFormData({ ...formData, patientId: id })} 
+             patients={patients} 
+             isLoading={isLoadingPatients}
+             themeColor={activeDoctorColor} 
+           />
         </div>
 
-        {/* ESPECIALISTA ASIGNADO (OBLIGATORIO) */}
         <div className="space-y-2">
           <Label className="text-foreground font-bold text-xs flex items-center justify-between">
             <span>Especialista Asignado <span className="text-destructive font-black">*</span></span>
@@ -274,7 +272,6 @@ export function AppointmentForm({
         </div>
 
         <div className="grid grid-cols-2 gap-3.5">
-          {/* SILLÓN / BOX (OBLIGATORIO) */}
           <div className="space-y-2">
             <Label className="text-foreground font-bold text-xs flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5" style={{ color: activeDoctorColor }} /> 
@@ -298,7 +295,6 @@ export function AppointmentForm({
             </Select>
           </div>
 
-          {/* DETALLE CORTO / MOTIVO (OBLIGATORIO) */}
           <div className="space-y-2">
             <Label className="text-foreground font-bold text-xs flex items-center gap-1.5">
               <AlignLeft className="w-3.5 h-3.5 text-muted-foreground" /> 

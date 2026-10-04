@@ -108,6 +108,7 @@ model User {
   phoneNumber   String?
   password      String?   
   calendarColor String?
+  language      String?    @default("es-EC")
   
   role          UserRole  @default(DOCTOR)
   specialty     String?   
@@ -398,14 +399,15 @@ model TreatmentPlan {
   doctor      User?    @relation(fields: [doctorId], references: [id])
   agreementId String?
   agreement Agreement? @relation(fields: [agreementId], references: [id])
-  
+  commercialDiscount Float @default(0)
+
   collaborators String[] @default([])
 
   name        String   
   status      String   @default("DRAFT")
   
-  totalCost   Float    @default(0) // Presupuesto Total
-  totalPaid   Float    @default(0) // Lo que el paciente ya pagó (Abonado)
+  totalCost   Float    @default(0) 
+  totalPaid   Float    @default(0) 
   
   odontogramRecords OdontogramRecord[]
   commentsToPatient String? @db.Text
@@ -422,7 +424,7 @@ model TreatmentPlan {
 
 model TreatmentSection {
   id              String        @id @default(cuid())
-  name            String        // Ej: "Fase 1: Higiene y Operatoria"
+  name            String       
   order           Int           @default(0)
   
   treatmentPlanId String
@@ -498,12 +500,10 @@ model Laboratory {
 model PatientComment {
   id        String   @id @default(uuid())
   text      String   @db.Text
-  
-  // Relación con el paciente
+
   patientId String
   patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   
-  // Relación con el usuario (Doctor/Recepcionista) que escribió el comentario
   authorId  String
   author    User     @relation("DoctorComments", fields: [authorId], references: [id])
   
@@ -533,11 +533,11 @@ model Notification {
   id          String   @id @default(cuid())
   title       String
   message     String
-  type        String   // Ej: "PAYMENT", "APPOINTMENT", "CLINICAL", "SYSTEM", "ALERT"
-  targetRole  String   // Ej: "DOCTOR", "RECEPTIONIST", "ADMIN", "ALL"
+  type        String   
+  targetRole  String   
   isRead      Boolean  @default(false)
   
-  // Opcional: Relacionar la notificación con un usuario específico si es privada
+
   userId      String?
   user        User?    @relation(fields: [userId], references: [id])
 
@@ -550,11 +550,11 @@ model Notification {
 
 model ProcedureCatalog {
   id          String   @id @default(cuid())
-  code        String?  @unique // Ej: "OP-01" para Operatoria 01
-  name        String   // Ej: "Resina Simple"
-  category    String   // Ej: "Operatoria", "Cirugía", "Endodoncia"
-  basePrice   Float    @default(0) // Precio en dólares o moneda local
-  isActive    Boolean  @default(true) // El admin puede pausar un tratamiento sin borrarlo
+  code        String?  @unique 
+  name        String  
+  category    String   
+  basePrice   Float    @default(0)
+  isActive    Boolean  @default(true)
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -598,7 +598,7 @@ model Payment {
   method          PaymentMethod @default(CASH)
   status          PaymentState  @default(COMPLETED)
   reference       String?
-  receiptNumber   String?       @unique // Nro de factura o recibo interno fiscal
+  receiptNumber   String?       @unique 
   receiptImage    String?
   notes           String?       @db.Text
 
@@ -654,7 +654,7 @@ model Liquidation {
 
 model ClinicSettings {
   id              String   @id @default("default-clinic-settings")
-  clinicName      String   @default("Carmo Dental") // Nombre comercial
+  clinicName      String   @default("Carmo Dental")
   
   ruc             String? 
   slogan          String? 
@@ -673,7 +673,10 @@ model ClinicSettings {
  
   address         String?
   city              String? 
-  country           String?
+  country          String  @default("Ecuador")
+  timezone         String   @default("America/Guayaquil") 
+  timeFormat       String   @default("24h")
+
   phone           String?
   whatsappNumber  String? 
   email           String?
@@ -682,8 +685,8 @@ model ClinicSettings {
   watermarkScale   Int?     @default(100)
 
   defaultPrintMode  String?  @default("color")
-  availableBoxes  String[] @default(["Box 1", "Box 2", "Box 3"]) // Sillones habilitados
-  footerText      String?  @db.Text // Descargo legal en recetas y RIDE
+  availableBoxes  String[] @default(["Box 1", "Box 2", "Box 3"])
+  footerText      String?  @db.Text
 
   updatedAt       DateTime @updatedAt
 }
@@ -744,7 +747,7 @@ model TaxDocument {
   // Datos del Comprobante Fiscal
   docType           TaxDocType     @default(FACTURA)
   secuencial        String         
-  accessKey         String?        @unique // Clave de acceso de 49 dígitos del SRI
+  accessKey         String?        @unique 
   authorizationNum  String?        
   authorizationDate DateTime?
   status            TaxDocStatus   @default(PENDING)
@@ -758,15 +761,15 @@ model TaxDocument {
   address           String?
 
   // Desglose Tributario Ecuador (Servicios Odontológicos IVA 0%)
-  subtotal0         Float          @default(0) // Gravado 0%
-  subtotal15        Float          @default(0) // Gravado tarifa general (si vende productos)
+  subtotal0         Float          @default(0) 
+  subtotal15        Float          @default(0) 
   ivaAmount         Float          @default(0)
   total             Float          @default(0)
 
   // Archivos Digitales Generados
   xmlUrl            String?        @db.Text
   ridePdfUrl        String?        @db.Text
-  sriResponse       String?        @db.Text // Mensaje de error/éxito retornado por el SRI
+  sriResponse       String?        @db.Text 
 
   // Relaciones Clínicas
   patientId         String
@@ -808,12 +811,12 @@ model Agreement {
 }
 // Tipo o categoría de documento clínico
 enum ClinicalDocType {
-  CONSENT         // Consentimiento Informado (Cirugía, Endodoncia, Implantes, etc.)
-  CERTIFICATE     // Certificado Médico / Reposo
-  PRESCRIPTION    // Receta / Prescripción Médica tipo
-  REPORT          // Informe Clínico / Epicrisis
-  AUTHORIZATION   // Autorización de Tratamiento / Menores de edad
-  INSTRUCTIONS    // Cuidados Postoperatorios
+  CONSENT         
+  CERTIFICATE     
+  PRESCRIPTION    
+  REPORT          
+  AUTHORIZATION   
+  INSTRUCTIONS    
 }
 
 model DocumentTemplate {
@@ -827,7 +830,7 @@ model DocumentTemplate {
   requiresDoctorSignature  Boolean @default(true)
   
   isActive        Boolean          @default(true)
-  isDefault       Boolean          @default(false) // Si es la plantilla predeterminada de su tipo
+  isDefault       Boolean          @default(false) 
   
   createdById     String?
   createdBy       User?            @relation("CreatedTemplates", fields: [createdById], references: [id], onDelete: SetNull)
@@ -844,9 +847,9 @@ model DocumentTemplate {
 // ==========================================
 
 enum CashCloseStatus {
-  BALANCED  // Caja cuadrada
-  SURPLUS   // Sobrante
-  DEFICIT   // Faltante
+  BALANCED  
+  SURPLUS  
+  DEFICIT   
 }
 
 model CashRegisterClose {
@@ -854,13 +857,13 @@ model CashRegisterClose {
   userId       String
   user         User            @relation("UserCashCloses", fields: [userId], references: [id], onDelete: Cascade)
 
-  expectedCash Float           // Monto teórico calculado por el sistema
-  countedCash  Float           // Monto físico contado por el cajero
-  difference   Float           // countedCash - expectedCash
+  expectedCash Float          
+  countedCash  Float          
+  difference   Float           
   status       CashCloseStatus @default(BALANCED)
   
   notes        String?         @db.Text // Justificación obligatoria en descuadres
-  breakdown    Json?           // Desglose de billetes y monedas en formato JSON
+  breakdown    Json?           
 
   createdAt    DateTime        @default(now())
 

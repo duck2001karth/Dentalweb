@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import os from "os"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/lib/auth"
 
 export const dynamic = "force-dynamic"
 
 export async function GET() {
   try {
+    const session = await getServerSession(authOptions)
+    if (!session?.user || (session.user as any).role !== "ADMIN") {
+      return NextResponse.json({ error: "Acceso denegado a métricas del sistema." }, { status: 403 })
+    }
+
     const start = performance.now()
     await prisma.$queryRaw`SELECT 1`
     const dbLatency = Math.round(performance.now() - start)
+
     const totalMem = Math.round(os.totalmem() / 1024 / 1024)
     const freeMem = Math.round(os.freemem() / 1024 / 1024)
     const usedMem = totalMem - freeMem
+
     const systemLogs = [
       {
         id: "sys-1",
@@ -22,7 +31,7 @@ export async function GET() {
       {
         id: "sys-2",
         level: dbLatency > 500 ? "WARN" : "INFO",
-        message: `Conexión a PostgreSQL (Supabase) operativa. Latencia actual: ${dbLatency}ms.`,
+        message: `Conexión a PostgreSQL operativa. Latencia actual: ${dbLatency}ms.`,
         createdAt: new Date(Date.now() - 1000 * 60 * 15) 
       },
       {

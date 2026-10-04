@@ -5,6 +5,8 @@ import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import { prisma } from "@/lib/db";
 import bcrypt from "bcryptjs";
 
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
 export const authOptions: NextAuthOptions = {
   adapter: PrismaAdapter(prisma) as any,
   session: {
@@ -13,7 +15,7 @@ export const authOptions: NextAuthOptions = {
   },
   pages: {
     signIn: "/auth", 
-    error: "/auth",  
+    error: "/auth",
   },
   providers: [
     GoogleProvider({
@@ -37,6 +39,7 @@ export const authOptions: NextAuthOptions = {
         });
 
         if (!user || !user.password) {
+          await delay(2000 + Math.random() * 1000); 
           throw new Error("Usuario no encontrado o debe ingresar por Google.");
         }
 
@@ -45,8 +48,9 @@ export const authOptions: NextAuthOptions = {
         }
 
         const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
-
+        
         if (!isPasswordValid) {
+          await delay(2000 + Math.random() * 1000); 
           throw new Error("La contraseña es incorrecta.");
         }
 
@@ -59,22 +63,20 @@ export const authOptions: NextAuthOptions = {
       if (account?.provider === "google") {
         const userEmail = user.email?.toLowerCase().trim();
         if (!userEmail) return false;
-
+        
         const existingUser = await prisma.user.findUnique({
           where: { email: userEmail },
         });
-
+        
         if (!existingUser) {
           return "/auth?error=AccessDenied"; 
         }
-
         if (!existingUser.isActive) {
           return "/auth?error=AccountSuspended";
         }
       }
       return true;
     },
-
     async jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id;
@@ -83,13 +85,20 @@ export const authOptions: NextAuthOptions = {
         token.phoneNumber = user.phoneNumber;
         token.specialty = user.specialty;
         token.calendarColor = user.calendarColor;
+        token.language = (user as any).language || "es-EC"; 
       } else if (token?.id) {
         try {
           const dbUser = await prisma.user.findUnique({
             where: { id: token.id as string },
-            select: { isActive: true, role: true, phoneNumber: true, specialty: true, calendarColor: true }
+            select: { 
+              isActive: true, 
+              role: true, 
+              phoneNumber: true, 
+              specialty: true, 
+              calendarColor: true,
+              language: true 
+            }
           });
-
           if (!dbUser || !dbUser.isActive) {
             token.isActive = false;
           } else {
@@ -98,22 +107,25 @@ export const authOptions: NextAuthOptions = {
             token.phoneNumber = dbUser.phoneNumber;
             token.specialty = dbUser.specialty;
             token.calendarColor = dbUser.calendarColor;
+            token.language = dbUser.language || "es-EC"; 
           }
         } catch (error) {
           console.error("Error verificando estado del usuario en JWT:", error);
         }
       }
 
+      // Permite actualizar en caliente sin desloguearse
       if (trigger === "update" && session?.user) {
         token.name = session.user.name ?? token.name;
         token.picture = session.user.image ?? token.picture;
         token.phoneNumber = session.user.phoneNumber ?? token.phoneNumber;
         token.calendarColor = session.user.calendarColor ?? token.calendarColor;
+        if (session.user.language) {
+          token.language = session.user.language; 
+        }
       }
-
       return token;
     },
-
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
@@ -123,21 +135,9 @@ export const authOptions: NextAuthOptions = {
         session.user.specialty = token.specialty as string | null;
         session.user.calendarColor = token.calendarColor as string | null;
         session.user.image = token.picture as string | null;
+        (session.user as any).language = (token.language as string) || "es-EC"; 
       }
       return session;
-    },
-  },
-  
-  useSecureCookies: process.env.NODE_ENV === "production",
-  cookies: {
-    sessionToken: {
-      name: process.env.NODE_ENV === "production" ? "__Secure-next-auth.session-token" : "next-auth.session-token",
-      options: {
-        httpOnly: true, 
-        sameSite: "lax", 
-        path: "/",
-        secure: process.env.NODE_ENV === "production", 
-      },
     },
   },
 };

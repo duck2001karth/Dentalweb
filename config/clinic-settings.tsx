@@ -16,6 +16,9 @@ export interface ClinicSettings {
   address: string | null
   city?: string      
   country?: string
+  timezone: string
+  timeFormat: "12h" | "24h" | string
+
   phone: string | null
   whatsappNumber: string | null
   email: string | null
@@ -53,7 +56,11 @@ export function ClinicSettingsProvider({ children }: { children: React.ReactNode
       const res = await fetch("/api/configuration")
       if (res.ok) {
         const data = await res.json()
-        setSettings(data)
+        setSettings({
+          ...data,
+          timezone: data.timezone || "America/Guayaquil",
+          timeFormat: data.timeFormat || "24h"
+        })
       }
     } catch (error) {
       console.error("Error cargando configuración global:", error)

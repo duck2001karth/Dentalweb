@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react"
 import { useTheme } from "next-themes"
+import { useSession } from "next-auth/react"
 import { Globe, Check, Loader2 } from "lucide-react"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -32,52 +33,78 @@ export function LanguageRegionSettings({
   accentColor = "#008bcd",
 }: LanguageRegionSettingsProps) {
   const { theme, resolvedTheme } = useTheme()
+  const { data: session, update } = useSession()
   const isDark = (resolvedTheme || theme) === "dark"
   const { toast } = useToast()
-
+  
   const [selectedLanguage, setSelectedLanguage] = useState<string>("es-EC")
   const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
-    const savedLang = localStorage.getItem("app_language")
-    if (savedLang) setSelectedLanguage(savedLang)
-  }, [])
+    const userLang = (session?.user as any)?.language || localStorage.getItem("app_language")
+    if (userLang) {
+      setSelectedLanguage(userLang)
+    }
+  }, [session])
 
   const handleSavePreferences = async () => {
     setIsSaving(true)
     try {
       localStorage.setItem("app_language", selectedLanguage)
-      try {
-        await fetch("/api/users/preferences", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ language: selectedLanguage }),
-        })
-      } catch {}
+      document.documentElement.lang = selectedLanguage.split("-")[0]
+
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: selectedLanguage }),
+      })
+
+      if (!res.ok) {
+        throw new Error("No se pudo actualizar el idioma en el servidor")
+      }
+
+      await update({
+        ...session,
+        user: {
+          ...session?.user,
+          language: selectedLanguage,
+        },
+      })
+
       toast({
         title: "Idioma actualizado",
-        description: "La preferencia de idioma se ha guardado correctamente.",
+        description: "Aplicando cambios en toda la plataforma...",
       })
-    } catch {
+
+      window.dispatchEvent(new Event("languagechange"))
+      setTimeout(() => {
+        window.location.reload()
+      }, 700)
+
+    } catch (err: any) {
+      console.error(err)
       toast({
         title: "Error",
-        description: "No se pudo actualizar el idioma.",
+        description: err.message || "No se pudo actualizar el idioma.",
         variant: "destructive",
       })
-    } finally {
       setIsSaving(false)
     }
   }
 
   return (
-    <div className={`space-y-6 font-sans max-w-2xl animate-in fade-in duration-200 ${
-      isDark ? "text-slate-100" : "text-slate-900"
-    }`}>
+    <div
+      className={`space-y-6 font-sans max-w-2xl animate-in fade-in duration-200 ${
+        isDark ? "text-slate-100" : "text-slate-900"
+      }`}
+    >
       {/* CABECERA */}
       <div className={`border-b pb-4 ${isDark ? "border-[#1e293b]" : "border-slate-200"}`}>
-        <h3 className={`text-xl font-bold flex items-center gap-2.5 ${
-          isDark ? "text-white" : "text-slate-900"
-        }`}>
+        <h3
+          className={`text-xl font-bold flex items-center gap-2.5 ${
+            isDark ? "text-white" : "text-slate-900"
+          }`}
+        >
           <Globe className="w-5 h-5" style={{ color: accentColor }} />
           Idioma de la Plataforma
         </h3>
@@ -88,9 +115,11 @@ export function LanguageRegionSettings({
 
       {/* SELECTOR DE IDIOMAS */}
       <div className="space-y-3">
-        <Label className={`text-xs font-bold uppercase tracking-wider ${
-          isDark ? "text-slate-300" : "text-slate-700"
-        }`}>
+        <Label
+          className={`text-xs font-bold uppercase tracking-wider ${
+            isDark ? "text-slate-300" : "text-slate-700"
+          }`}
+        >
           Idiomas Disponibles
         </Label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -137,8 +166,12 @@ export function LanguageRegionSettings({
                       className={cn(
                         "text-sm font-bold leading-tight",
                         isSelected
-                          ? isDark ? "text-white" : "text-slate-900"
-                          : isDark ? "text-slate-200" : "text-slate-800"
+                          ? isDark
+                            ? "text-white"
+                            : "text-slate-900"
+                          : isDark
+                          ? "text-slate-200"
+                          : "text-slate-800"
                       )}
                     >
                       {lang.name}
@@ -148,7 +181,6 @@ export function LanguageRegionSettings({
                     </p>
                   </div>
                 </div>
-
                 {isSelected && (
                   <div
                     style={{ backgroundColor: accentColor }}
