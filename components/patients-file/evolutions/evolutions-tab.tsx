@@ -159,15 +159,11 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
 
   const handlePrint = () => {
     printEvolutionsSheet({
-      evolutionNotes,
-      patientFullName,
-      patientAge,
-      patientDocId,
-      doctorName: doctorCreds.name,
-      doctorSpecialty: doctorCreds.specialty,
-      doctorLicense: doctorCreds.license,
-      doctorSignature: doctorCreds.signature,
-      settings,
+      patient: patient,
+      evolutions: evolutionNotes || [], 
+      doctorName: currentUser?.name || "Especialista Tratante",
+      specialty: currentUser?.specialty || "Odontología General",
+      settings: settings
     })
   }
 
