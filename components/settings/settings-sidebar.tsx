@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from "react"
 import { useTheme } from "next-themes"
-import { useTranslations } from "next-intl"
 import {
   Home,
   ChevronDown,
@@ -32,7 +31,6 @@ export function SettingsSidebar({
 }: SettingsSidebarProps) {
   const { theme, resolvedTheme } = useTheme()
   const isDark = (resolvedTheme || theme) === "dark"
-  const t = useTranslations("Settings")
 
   const isGeneralActive = ["language", "appearance", "shortcuts"].includes(activeSubTab)
   const isAccountActive = ["profile", "clinical", "signature", "security"].includes(activeSubTab)
@@ -67,12 +65,11 @@ export function SettingsSidebar({
     >
       <div className="p-6 pb-4">
         <h2 className={`text-xl font-bold tracking-tight ${isDark ? "text-white" : "text-slate-900"}`}>
-          {t("title")}
+          Ajustes
         </h2>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 space-y-1.5 custom-scrollbar pb-6">
-        
         {/* INICIO */}
         <button
           type="button"
@@ -108,7 +105,7 @@ export function SettingsSidebar({
               style={{ color: activeSubTab === "home" ? activeColor : undefined }}
             />
             <span style={{ color: activeSubTab === "home" ? activeColor : undefined }}>
-              {t("home")}
+              Inicio
             </span>
           </div>
         </button>
@@ -146,7 +143,7 @@ export function SettingsSidebar({
                 style={{ color: isGeneralActive ? activeColor : undefined }}
               />
               <span style={{ color: isGeneralActive ? activeColor : undefined }}>
-                {t("general")}
+                General
               </span>
             </div>
             {openSection === "general" ? (
@@ -177,7 +174,7 @@ export function SettingsSidebar({
                     : "font-semibold text-slate-500 hover:text-slate-900"
                 )}
               >
-                {t("language")}
+                Idioma
               </button>
 
               <button
@@ -196,7 +193,7 @@ export function SettingsSidebar({
                     : "font-semibold text-slate-500 hover:text-slate-900"
                 )}
               >
-                {t("appearance")}
+                Apariencia
               </button>
 
               <button
@@ -215,7 +212,7 @@ export function SettingsSidebar({
                     : "font-semibold text-slate-500 hover:text-slate-900"
                 )}
               >
-                {t("shortcuts")}
+                Atajos de teclado
               </button>
             </div>
           )}
@@ -254,7 +251,7 @@ export function SettingsSidebar({
                 style={{ color: isAccountActive ? activeColor : undefined }}
               />
               <span style={{ color: isAccountActive ? activeColor : undefined }}>
-                {t("account")}
+                Cuenta
               </span>
             </div>
             {openSection === "account" ? (
@@ -285,7 +282,7 @@ export function SettingsSidebar({
                     : "font-semibold text-slate-500 hover:text-slate-900"
                 )}
               >
-                {t("personalInfo")}
+                Información Personal
               </button>
 
               {isDoctor && (
@@ -306,7 +303,7 @@ export function SettingsSidebar({
                         : "font-semibold text-slate-500 hover:text-slate-900"
                     )}
                   >
-                    <Stethoscope className="w-3.5 h-3.5" /> {t("clinicalProfile")}
+                    <Stethoscope className="w-3.5 h-3.5" /> Perfil Clínico
                   </button>
 
                   <button
@@ -325,7 +322,7 @@ export function SettingsSidebar({
                         : "font-semibold text-slate-500 hover:text-slate-900"
                     )}
                   >
-                    <FileSignature className="w-3.5 h-3.5" /> {t("signature")}
+                    <FileSignature className="w-3.5 h-3.5" /> Firma Digital
                   </button>
                 </>
               )}
@@ -346,7 +343,7 @@ export function SettingsSidebar({
                     : "font-semibold text-slate-500 hover:text-slate-900"
                 )}
               >
-                {t("security")}
+                Seguridad
               </button>
             </div>
           )}
@@ -383,7 +380,7 @@ export function SettingsSidebar({
           )}
           <div className="flex items-center gap-2.5 pl-0.5">
             <Shield className="w-4 h-4" style={{ color: activeSubTab === "privacy" ? activeColor : undefined }} />
-            <span>{t("privacy")}</span>
+            <span>Privacidad</span>
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
         </button>
@@ -419,7 +416,7 @@ export function SettingsSidebar({
           )}
           <div className="flex items-center gap-2.5 pl-0.5">
             <Bell className="w-4 h-4" style={{ color: activeSubTab === "notifications" ? activeColor : undefined }} />
-            <span>{t("notifications")}</span>
+            <span>Notificaciones</span>
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
         </button>
@@ -455,11 +452,10 @@ export function SettingsSidebar({
           )}
           <div className="flex items-center gap-2.5 pl-0.5">
             <Accessibility className="w-4 h-4" style={{ color: activeSubTab === "accessibility" ? activeColor : undefined }} />
-            <span>{t("accessibility")}</span>
+            <span>Accesibilidad</span>
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
         </button>
-
       </nav>
     </aside>
   )

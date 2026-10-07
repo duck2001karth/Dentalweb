@@ -1,5 +1,4 @@
 "use client"
-
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 
@@ -14,6 +13,15 @@ interface ReceiptPrintSheetProps {
   clinic?: any
 }
 
+const escapeHtml = (unsafe: string | null | undefined): string => {
+  return String(unsafe || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 export function generateReceiptHTML({
   receiptNumber,
   patientName,
@@ -24,20 +32,25 @@ export function generateReceiptHTML({
   emissionDate = new Date(),
   clinic
 }: ReceiptPrintSheetProps) {
-  const clinicName = clinic?.clinicName || "CARMO DENTAL"
-  const clinicSlogan = clinic?.slogan || "Clínica de Especialidades Odontológicas"
-  const clinicRuc = clinic?.ruc || "1719231696001"
-  const logoUrl = clinic?.logoUrl || ""
-  const currency = clinic?.currency || "$"
   
-  const watermarkUrl = clinic?.watermarkUrl || clinic?.logoUrl || ""
+  const safeReceiptNumber = escapeHtml(receiptNumber)
+  const safePatientName = escapeHtml(patientName)
+  const safePatientDocumentId = escapeHtml(patientDocumentId || "Consumidor Final")
+  const safePaymentMethod = escapeHtml(paymentMethod)
+  
+  const clinicName = escapeHtml(clinic?.clinicName || "C")
+  const clinicSlogan = escapeHtml(clinic?.slogan || "C")
+  const clinicRuc = escapeHtml(clinic?.ruc || "1")
+  const logoUrl = escapeHtml(clinic?.logoUrl || "")
+  const currency = escapeHtml(clinic?.currency || "$")
+  const watermarkUrl = escapeHtml(clinic?.watermarkUrl || clinic?.logoUrl || "")
   const watermarkOpacity = clinic?.watermarkOpacity ? Number(clinic.watermarkOpacity) / 100 : 0.05
-
+  
   const addressParts = [clinic?.city, clinic?.country].filter(Boolean)
-  const clinicLocation = addressParts.length > 0 ? addressParts.join(", ") : "Quito, Ecuador"
-  const clinicEmail = clinic?.email || "carmodental@gmail.com"
-
-  const formattedDate = format(emissionDate, "dd 'de' MMMM 'de' yyyy - HH:mm", { locale: es })
+  const clinicLocation = escapeHtml(addressParts.length > 0 ? addressParts.join(", ") : "or")
+  const clinicEmail = escapeHtml(clinic?.email || "")
+  
+  const formattedDate = escapeHtml(format(emissionDate, "dd 'de' MMMM 'de' yyyy - HH:mm", { locale: es }))
   const formattedAmount = Number(totalPaid || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })
 
   // LÓGICA DE DESGLOSE
@@ -74,7 +87,7 @@ export function generateReceiptHTML({
     <html lang="es">
     <head>
       <meta charset="UTF-8">
-      <title>Comprobante de Pago - ${receiptNumber}</title>
+      <title>Comprobante de Pago - ${safeReceiptNumber}</title>
       <style>
         @page {
           size: A4 portrait;
@@ -367,7 +380,6 @@ export function generateReceiptHTML({
       </style>
     </head>
     <body>
-
       ${watermarkUrl ? `<img src="${watermarkUrl}" class="watermark" alt="" />` : ''}
 
       <!-- ENCABEZADO -->
@@ -387,7 +399,7 @@ export function generateReceiptHTML({
         <div class="header-right">
           <div class="status-box">
             <div class="status-title">Comprobante de Pago</div>
-            <div class="status-number">${receiptNumber}</div>
+            <div class="status-number">${safeReceiptNumber}</div>
             <div class="status-badge">Pagado en Caja</div>
           </div>
         </div>
@@ -398,11 +410,11 @@ export function generateReceiptHTML({
         <div class="info-col">
           <div class="info-group">
             <span class="info-label">Paciente</span>
-            <span class="info-value">${patientName}</span>
+            <span class="info-value">${safePatientName}</span>
           </div>
           <div class="info-group">
             <span class="info-label">Identificación (CI/RUC)</span>
-            <span class="info-value">${patientDocumentId || "Consumidor Final"}</span>
+            <span class="info-value">${safePatientDocumentId}</span>
           </div>
         </div>
         <div class="info-col" style="text-align: right;">
@@ -412,7 +424,7 @@ export function generateReceiptHTML({
           </div>
           <div class="info-group">
             <span class="info-label">Método de Pago</span>
-            <span class="method-value">${paymentMethod}</span>
+            <span class="method-value">${safePaymentMethod}</span>
           </div>
         </div>
       </div>
@@ -432,15 +444,18 @@ export function generateReceiptHTML({
               items.length > 0
                 ? items.map(item => {
                     const hasDiscount = item.discountPercent > 0;
+                    const safeItemName = escapeHtml(item.name || item.procedureName || 'Tratamiento Odontológico');
+                    const safePlanName = escapeHtml(item.planName || 'General');
+                    const safeToothLabel = escapeHtml(item.toothLabel || (item.tooth ? 'Pieza ' + item.tooth : 'General'));
+
                     return `
                       <tr>
                         <td>
-                          <div class="item-name">${item.name || item.procedureName || 'Tratamiento Odontológico'}</div>
-                          <div class="item-plan">Plan: ${item.planName || 'General'}</div>
-                          ${hasDiscount ? `<div class="discount-badge">Aplica ${item.discountPercent}% desc. (Convenio)</div>` : ''}
+                          <div class="item-name">${safeItemName}</div>
+                          <div class="item-plan">Plan: ${safePlanName}</div>${hasDiscount ? `<div class="discount-badge">Aplica ${escapeHtml(String(item.discountPercent))}% desc. (Convenio)</div>` : ''}
                         </td>
                         <td style="text-align: center;">
-                          <span class="tooth-text">${item.toothLabel || (item.tooth ? 'Pieza ' + item.tooth : 'General')}</span>
+                          <span class="tooth-text">${safeToothLabel}</span>
                         </td>
                         <td style="text-align: right;">
                           <span class="amount-text">${currency}${Number(item.itemDebt || item.appliedAmount || item.finalPrice || totalPaid).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
@@ -494,7 +509,7 @@ export function generateReceiptHTML({
       <div class="footer">
         <div class="footer-left">
           <p>Este documento es un comprobante de control interno emitido para<br/>certificar la recepción del pago detallado en caja.</p>
-          <p class="mt-3"><strong>Atendido por:</strong> Patricio Capa</p>
+          <p class="mt-3"><strong>Atendido por:</strong> Usuario de Caja</p>
           <p class="blue-thanks">¡Gracias por confiar su sonrisa en ${clinicName}!</p>
         </div>
         <div class="footer-right">
@@ -502,7 +517,6 @@ export function generateReceiptHTML({
           <div class="signature-label">Firma Autorizada - Caja</div>
         </div>
       </div>
-
     </body>
     </html>
   `

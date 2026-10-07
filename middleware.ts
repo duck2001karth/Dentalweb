@@ -22,9 +22,15 @@ export default withAuth(
     const role = token.role as string;
 
     // ==========================================
-    // 2. RUTAS EXCLUSIVAS DE ADMINISTRADOR
+    // 2. RUTAS EXCLUSIVAS DE ADMINISTRADOR (Admin y Ajustes)
     // ==========================================
-    if (pathname.startsWith("/admin")) {
+    const adminOnlyRoutes = [
+      "/admin",
+      "/ajustes",
+      "/convenios"
+    ];
+
+    if (adminOnlyRoutes.some(route => pathname.startsWith(route))) {
       if (role !== "ADMIN") {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
@@ -38,7 +44,8 @@ export default withAuth(
       "/odontograma",
       "/evoluciones",
       "/tratamientos", 
-      "/tratamiento"
+      "/tratamiento",
+      "/laboratorio" // Añadido: gestión de trabajos de laboratorio dental
     ];
 
     if (strictMedicalRoutes.some(route => pathname.startsWith(route))) {
@@ -48,17 +55,19 @@ export default withAuth(
     }
 
     // ==========================================
-    // 4. RUTAS GENERALES CLÍNICAS (Todos los roles)
+    // 4. RUTAS GENERALES Y OPERATIVAS (Admin, Doctores y Recepción)
     // ==========================================
-    const generalClinicalRoutes = [
+    const generalOperationalRoutes = [
       "/pacientes",
       "/paciente",
       "/agenda",
       "/agenda-global",
       "/dashboard",
+      "/cajas",         // Añadido: módulo de caja y arqueos
+      "/inventario",    // Añadido: control de insumos y stock
     ];
 
-    if (generalClinicalRoutes.some(route => pathname.startsWith(route))) {
+    if (generalOperationalRoutes.some(route => pathname.startsWith(route))) {
       const allowedRoles = ["ADMIN", "DOCTOR", "RECEPTIONIST"];
       
       if (!allowedRoles.includes(role)) {
@@ -80,17 +89,24 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    // Admin
+    // Admin & Configuración
     "/admin/:path*",
+    "/ajustes/:path*",
+    "/convenios/:path*",
 
     // Dashboard
     "/dashboard/:path*",
 
-    // Gestión
+    // Gestión de Pacientes y Agenda
     "/pacientes/:path*",
     "/paciente/:path*",
     "/agenda/:path*",
     "/agenda-global/:path*",
+
+    // Módulos Financieros, Inventario y Laboratorio
+    "/cajas/:path*",
+    "/inventario/:path*",
+    "/laboratorio/:path*",
 
     // Clínica Estricta
     "/historia-clinica/:path*",

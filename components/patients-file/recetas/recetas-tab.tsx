@@ -5,13 +5,14 @@ import { Printer, Save, Trash2, Edit, Send, Loader2, CalendarIcon, PlusCircle, C
 import { useSession } from "next-auth/react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
+import DOMPurify from "isomorphic-dompurify"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { ConfirmDestructiveDialog } from "@/components/ui/confirm-destructive-dialog"
 
 import { useGetPatient } from "@/hooks/patients"
 import { PrescriptionPrint } from "./recetas-print"
@@ -44,6 +45,7 @@ const SignaturePad = ({ onSave, onCancel, title }: any) => {
     const rect = canvas.getBoundingClientRect()
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+
     ctx.lineWidth = 3
     ctx.lineCap = "round"
     ctx.strokeStyle = "#000000"
@@ -60,18 +62,18 @@ const SignaturePad = ({ onSave, onCancel, title }: any) => {
     <div className="flex flex-col gap-4 items-center w-full">
       <p className="font-medium text-xs text-muted-foreground">{title}</p>
       <div className="relative w-full rounded-xl border-2 border-dashed border-border/80 bg-white shadow-xs overflow-hidden touch-none">
-        <canvas 
-          ref={canvasRef} 
-          width={500} 
-          height={200} 
-          onMouseDown={startDrawing} 
-          onMouseUp={stopDrawing} 
-          onMouseOut={stopDrawing} 
+        <canvas
+          ref={canvasRef}
+          width={500}
+          height={200}
+          onMouseDown={startDrawing}
+          onMouseUp={stopDrawing}
+          onMouseOut={stopDrawing}
           onMouseMove={draw}
-          onTouchStart={startDrawing} 
-          onTouchEnd={stopDrawing} 
-          onTouchMove={draw} 
-          className="cursor-crosshair w-full h-40" 
+          onTouchStart={startDrawing}
+          onTouchEnd={stopDrawing}
+          onTouchMove={draw}
+          className="cursor-crosshair w-full h-40"
         />
       </div>
       <div className="flex gap-2 w-full justify-end mt-2">
@@ -96,7 +98,6 @@ export function RecetasTab({ patientId }: { patientId: string }) {
   const canEditClinicalData = isDoctor || isAdmin
 
   const { patient } = useGetPatient(patientId)
-
   const [prescriptions, setPrescriptions] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -106,14 +107,18 @@ export function RecetasTab({ patientId }: { patientId: string }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [medications, setMedications] = useState("")
   const [indications, setIndications] = useState("")
-  const [observations, setObservations] = useState("") 
+  const [observations, setObservations] = useState("")
 
   const [printingDoc, setPrintingDoc] = useState<any>(null)
   const [signingRecipe, setSigningRecipe] = useState<any>(null)
   const [pendingActionAfterSign, setPendingActionAfterSign] = useState<"print" | "whatsapp" | null>(null)
-
+  
   const [sharingRecipe, setSharingRecipe] = useState<any>(null)
   const [isShareModalOpen, setIsShareModalOpen] = useState(false)
+
+  // Estado para el modal destructivo unificado
+  const [recipeToDelete, setRecipeToDelete] = useState<string | null>(null)
+  const [isDeletingRecipe, setIsDeletingRecipe] = useState(false)
 
   const patientFullName = patient ? `${patient.firstName} ${patient.lastName}` : "Cargando..."
   const patientDocId = patient?.ci || "No registrado"
@@ -127,15 +132,15 @@ export function RecetasTab({ patientId }: { patientId: string }) {
       if (!res.ok) throw new Error()
       const data = await res.json()
       setPrescriptions(data || [])
-    } catch (e) { 
-      toast({ title: "Error al cargar recetas", variant: "destructive" }) 
-    } finally { 
-      setIsLoading(false) 
+    } catch (e) {
+      toast({ title: "Error al cargar recetas", variant: "destructive" })
+    } finally {
+      setIsLoading(false)
     }
   }, [patientId, toast])
 
-  useEffect(() => { 
-    fetchPrescriptions() 
+  useEffect(() => {
+    fetchPrescriptions()
   }, [fetchPrescriptions])
 
   useEffect(() => {
@@ -151,7 +156,6 @@ export function RecetasTab({ patientId }: { patientId: string }) {
 
   const handleSave = async (isAutoSave = false) => {
     if (!canEditClinicalData || isSaving) return
-
     if (!medications.trim() && !indications.trim() && !observations.trim()) {
       if (!isAutoSave) toast({ title: "La receta está vacía", variant: "destructive" })
       return
@@ -161,26 +165,26 @@ export function RecetasTab({ patientId }: { patientId: string }) {
     try {
       const method = editingId ? "PUT" : "POST"
       const url = editingId ? `/api/prescriptions/${editingId}` : `/api/prescriptions`
-      
+
       const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        patientId,
-        medications,
-        indications,
-        observations,
-        authorId: currentUser?.id,
-        doctorSignature: currentUser?.signatureBase64 || null, 
-        doctorLicense: currentUser?.professionalCard || currentUser?.licenseNumber || "", 
-      }),
-    })
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          patientId,
+          medications,
+          indications,
+          observations,
+          authorId: currentUser?.id,
+          doctorSignature: currentUser?.signatureBase64 || null,
+          doctorLicense: currentUser?.professionalCard || currentUser?.licenseNumber || "",
+        }),
+      })
 
       if (!res.ok) throw new Error("Error en la respuesta del servidor")
-
       const savedDoc = await res.json()
-      setIsDirty(false)
       
+      setIsDirty(false)
+
       if (!isAutoSave) {
         toast({ title: editingId ? "Receta actualizada" : "Receta creada con éxito", variant: "default" })
         handleNewRecipe()
@@ -191,10 +195,10 @@ export function RecetasTab({ patientId }: { patientId: string }) {
         }
         await fetchPrescriptions()
       }
-    } catch (error) { 
+    } catch (error) {
       if (!isAutoSave) toast({ title: "Error al guardar la receta", variant: "destructive" })
-    } finally { 
-      setIsSaving(false) 
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -216,23 +220,24 @@ export function RecetasTab({ patientId }: { patientId: string }) {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  const handleDelete = async (id: string) => {
-    if (!canEditClinicalData) return
+  const handleConfirmDelete = async () => {
+    if (!recipeToDelete) return
+    setIsDeletingRecipe(true)
     try {
-      const res = await fetch(`/api/prescriptions/${id}`, { method: "DELETE" })
-      if (!res.ok) {
-        const err = await res.json()
-        throw new Error(err.error || "No se pudo eliminar")
-      }
+      const res = await fetch(`/api/prescriptions/${recipeToDelete}`, { method: "DELETE" })
+      if (!res.ok) throw new Error("No se pudo eliminar")
       toast({ title: "Receta eliminada correctamente" })
-      if (editingId === id) handleNewRecipe()
+      if (editingId === recipeToDelete) handleNewRecipe()
       fetchPrescriptions()
-    } catch (error: any) { 
-      toast({ title: "Error", description: error.message, variant: "destructive" }) 
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" })
+    } finally {
+      setIsDeletingRecipe(false)
+      setRecipeToDelete(null)
     }
   }
 
-const handleWhatsApp = async (p: any) => {
+  const handleWhatsApp = async (p: any) => {
     let sig = p.doctorSignature || p.author?.signatureBase64 || currentUser?.signatureBase64 || null
     let license = p.doctorLicense || p.author?.professionalCard || p.author?.licenseNumber || currentUser?.professionalCard || ""
 
@@ -259,7 +264,7 @@ const handleWhatsApp = async (p: any) => {
     setIsShareModalOpen(true)
   }
 
-const handlePrintClick = async (p: any) => {
+  const handlePrintClick = async (p: any) => {
     let sig = p.doctorSignature || p.author?.signatureBase64 || currentUser?.signatureBase64 || null
     let license = p.doctorLicense || p.author?.professionalCard || p.author?.licenseNumber || currentUser?.professionalCard || ""
 
@@ -273,6 +278,7 @@ const handlePrintClick = async (p: any) => {
         }
       } catch {}
     }
+
     const docToPrint = {
       ...p,
       doctorSignature: sig,
@@ -280,6 +286,7 @@ const handlePrintClick = async (p: any) => {
       doctorSpecialty: p.author?.specialty || currentUser?.specialty || "Ortodoncia",
       doctorName: p.author?.name || currentUser?.name || "Dr. Especialista",
     }
+
     setPrintingDoc(docToPrint)
     setTimeout(() => {
       window.print()
@@ -292,26 +299,26 @@ const handlePrintClick = async (p: any) => {
   const filteredPrescriptions = prescriptions.filter(p => {
     if (!searchTerm) return true
     const term = searchTerm.toLowerCase()
-    return p.medications?.toLowerCase().includes(term) || 
-           p.indications?.toLowerCase().includes(term) || 
+    return p.medications?.toLowerCase().includes(term) ||
+           p.indications?.toLowerCase().includes(term) ||
            p.author?.name?.toLowerCase().includes(term)
   })
 
   return (
     <div className="animate-in fade-in duration-300 pb-20">
       
-      {/* 1. IMPRESIÓN MODULAR */}
-      <PrescriptionPrint 
-        printingDoc={printingDoc} 
-        patientFullName={patientFullName} 
-        patientAge={patientAge} 
-        patientDocId={patientDocId} 
-        patientAllergies={patientAllergies} 
+      {/* 1. IMPRESIÓN MODULAR DOBLE PÁGINA (Se mantiene para respetar el formato médico) */}
+      <PrescriptionPrint
+        printingDoc={printingDoc}
+        patientFullName={patientFullName}
+        patientAge={patientAge}
+        patientDocId={patientDocId}
+        patientAllergies={patientAllergies}
       />
 
       {/* 2. MODAL DE FIRMA DIGITAL */}
-      <Dialog 
-        open={!!signingRecipe} 
+      <Dialog
+        open={!!signingRecipe}
         onOpenChange={(open) => {
           if (!open) {
             setSigningRecipe(null)
@@ -327,20 +334,21 @@ const handlePrintClick = async (p: any) => {
           </DialogHeader>
           <div className="p-6">
             {signingRecipe && (
-              <SignaturePad 
-                title="Firme aquí para validar la receta digital antes de imprimir o compartir" 
+              <SignaturePad
+                title="Firme aquí para validar la receta digital antes de imprimir o compartir"
                 onCancel={() => {
                   setSigningRecipe(null)
                   setPendingActionAfterSign(null)
-                }} 
+                }}
                 onSave={async (img: string) => {
                   try {
-                    await fetch(`/api/prescriptions/${signingRecipe.id}`, { 
-                      method: "PUT", 
-                      headers: { "Content-Type": "application/json" }, 
-                      body: JSON.stringify({ doctorSignature: img }) 
+                    await fetch(`/api/prescriptions/${signingRecipe.id}`, {
+                      method: "PUT",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ doctorSignature: img })
                     })
                     const docConFirma = { ...signingRecipe, doctorSignature: img }
+                    
                     setSigningRecipe(null)
                     fetchPrescriptions()
 
@@ -348,22 +356,22 @@ const handlePrintClick = async (p: any) => {
                       setSharingRecipe(docConFirma)
                       setIsShareModalOpen(true)
                     } else {
-                      setPrintingDoc(docConFirma) 
-                      setTimeout(() => { 
+                      setPrintingDoc(docConFirma)
+                      setTimeout(() => {
                         window.print()
-                        setPrintingDoc(null) 
-                      }, 300) 
+                        setPrintingDoc(null)
+                      }, 300)
                     }
                     setPendingActionAfterSign(null)
                   } catch (e) {
                     toast({ title: "Error al guardar firma", variant: "destructive" })
                   }
-                }} 
+                }}
               />
             )}
           </div>
         </DialogContent>
-      </Dialog> 
+      </Dialog>
 
       {/* 3. CABECERA Y ACCIONES */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-5 bg-card p-5 rounded-2xl border border-border shadow-sm sticky top-0 z-20 print:hidden">
@@ -405,31 +413,29 @@ const handlePrintClick = async (p: any) => {
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
           <div className="relative w-full sm:w-[240px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              type="text" 
-              placeholder="Buscar medicamento..." 
-              value={searchTerm} 
-              onChange={(e) => setSearchTerm(e.target.value)} 
-              className="pl-9 bg-background border-border text-sm font-medium focus-visible:ring-[#008bcd] w-full h-11 rounded-xl" 
+            <Input
+              type="text"
+              placeholder="Buscar medicamento..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 bg-background border-border text-sm font-medium focus-visible:ring-[#008bcd] w-full h-11 rounded-xl"
             />
           </div>
-
           {canEditClinicalData && (
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <Button 
-                variant="outline" 
-                onClick={handleNewRecipe} 
+              <Button
+                variant="outline"
+                onClick={handleNewRecipe}
                 className="bg-background text-foreground hover:bg-muted font-bold border-border rounded-xl h-11"
               >
                 <PlusCircle size={16} className="mr-1.5 text-[#008bcd]"/> Nueva Receta
               </Button>
-
-              <Button 
-                onClick={() => handleSave(false)} 
+              <Button
+                onClick={() => handleSave(false)}
                 disabled={isSaving}
                 className="bg-primary hover:bg-[#0070a8] text-white font-bold rounded-xl h-11 shadow-sm transition-all active:scale-95"
               >
-                {isSaving ? <Loader2 className="mr-2 w-4 h-4 animate-spin"/> : <Save className="mr-2 w-4 h-4"/>} 
+                {isSaving ? <Loader2 className="mr-2 w-4 h-4 animate-spin"/> : <Save className="mr-2 w-4 h-4"/>}
                 Guardar Manual
               </Button>
             </div>
@@ -437,13 +443,13 @@ const handlePrintClick = async (p: any) => {
         </div>
       </div>
 
-      {/* 4. CONTENIDO PRINCIPAL */}
+      {/* 4. CONTENIDO PRINCIPAL (Diseño Integrado Original) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
-        
-        {/* EDITOR */}
+         
+        {/* EDITOR (Izquierda) */}
         {canEditClinicalData && (
           <div className="lg:col-span-5">
-            <PrescriptionEditor 
+            <PrescriptionEditor
               editingId={editingId}
               medications={medications} setMedications={setMedications}
               indications={indications} setIndications={setIndications}
@@ -453,7 +459,7 @@ const handlePrintClick = async (p: any) => {
           </div>
         )}
 
-        {/* HISTORIAL DE RECETAS */}
+        {/* HISTORIAL DE RECETAS (Derecha) */}
         <div className={cn("flex flex-col gap-5", canEditClinicalData ? "lg:col-span-7" : "lg:col-span-12")}>
           {isLoading ? (
             <div className="flex justify-center py-20"><Loader2 className="animate-spin text-[#008bcd] w-8 h-8"/></div>
@@ -466,12 +472,11 @@ const handlePrintClick = async (p: any) => {
           ) : (
             filteredPrescriptions.map((p) => {
               const canDeleteThis = isAdmin || (isDoctor && p.authorId === currentUser?.id)
-
               return (
-                <div 
-                  key={p.id} 
+                <div
+                  key={p.id}
                   className={cn(
-                    "bg-card border rounded-2xl shadow-xs overflow-hidden flex flex-col transition-all hover:shadow-sm", 
+                    "bg-card border rounded-2xl shadow-xs overflow-hidden flex flex-col transition-all hover:shadow-sm",
                     editingId === p.id ? "border-[#008bcd] ring-1 ring-[#008bcd]/20" : "border-border/80 hover:border-border"
                   )}
                 >
@@ -495,14 +500,15 @@ const handlePrintClick = async (p: any) => {
                       <p className="font-extrabold text-[11px] text-[#008bcd] mb-1.5 uppercase tracking-wider flex items-center gap-1">
                         <Pill className="w-3.5 h-3.5" /> R.P. (Medicamentos)
                       </p>
-                      <div dangerouslySetInnerHTML={{ __html: p.medications }} className="pl-1"/>
+                      {/* Sanitización contra XSS */}
+                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(p.medications) }} className="pl-1"/>
                     </div>
                     
                     <div>
                       <p className="font-extrabold text-[11px] text-[#008bcd] mb-1.5 uppercase tracking-wider">
                         Indicaciones
                       </p>
-                      <div dangerouslySetInnerHTML={{ __html: p.indications }} className="pl-1"/>
+                      <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(p.indications) }} className="pl-1"/>
                     </div>
 
                     {p.observations && (
@@ -510,8 +516,8 @@ const handlePrintClick = async (p: any) => {
                         <p className="font-extrabold text-[11px] text-amber-600 mb-1.5 uppercase tracking-wider">
                           Observaciones Especiales
                         </p>
-                        <div 
-                          dangerouslySetInnerHTML={{ __html: p.observations }} 
+                        <div
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(p.observations) }}
                           className="text-foreground text-xs font-medium leading-relaxed pl-1"
                         />
                       </div>
@@ -519,62 +525,44 @@ const handlePrintClick = async (p: any) => {
                   </div>
 
                   <div className="bg-muted/10 px-4 py-3 border-t border-border/60 flex flex-wrap justify-end gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => handleWhatsApp(p)} 
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleWhatsApp(p)}
                       className="text-[#25D366] hover:text-[#1da851] hover:bg-[#25D366]/10 border-[#25D366]/20 h-8 text-xs font-bold rounded-lg"
                     >
                       <Send size={14} className="mr-1.5"/> WhatsApp
                     </Button>
                     
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => handlePrintClick(p)} 
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePrintClick(p)}
                       className="text-foreground hover:text-[#008bcd] hover:bg-[#008bcd]/10 border-border h-8 text-xs font-bold rounded-lg"
                     >
                       <Printer size={14} className="mr-1.5"/> Imprimir
                     </Button>
+
                     {canEditClinicalData && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleEdit(p)} 
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(p)}
                         className="text-foreground hover:text-amber-600 hover:bg-amber-500/10 border-border h-8 text-xs font-bold rounded-lg"
                       >
                         <Edit size={14} className="mr-1.5"/> Editar
                       </Button>
                     )}
+
                     {canDeleteThis && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="text-destructive/80 hover:text-destructive hover:bg-destructive/10 border-border/80 hover:border-destructive/30 rounded-lg cursor-pointer"
-                          >
-                            <Trash2 size={14} className="mr-1.5"/> Eliminar
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="bg-card border-border rounded-[24px]">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle className="text-foreground font-bold">¿Eliminar receta?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Esta acción eliminará el registro de forma permanente del expediente médico y quedará asentada en la auditoría.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel className="text-foreground border-border rounded-xl font-bold">Cancelar</AlertDialogCancel>
-                            <AlertDialogAction 
-                              onClick={() => handleDelete(p.id)} 
-                              className="bg-red-600 text-white hover:bg-red-700 rounded-xl font-bold"
-                            >
-                              Eliminar
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setRecipeToDelete(p.id)}
+                        className="text-destructive/80 hover:text-destructive hover:bg-destructive/10 border-border/80 hover:border-destructive/30 rounded-lg cursor-pointer"
+                      >
+                        <Trash2 size={14} className="mr-1.5"/> Eliminar
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -584,7 +572,18 @@ const handlePrintClick = async (p: any) => {
         </div>
       </div>
 
-     {/* 5. MODAL DE COMPARTIR RECETA */}
+      {/* MODAL DESTRUCTIVO UNIFICADO */}
+      <ConfirmDestructiveDialog
+        isOpen={Boolean(recipeToDelete)}
+        onClose={() => setRecipeToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        isLoading={isDeletingRecipe}
+        title="¿Eliminar receta?"
+        description="Esta acción eliminará el registro de forma permanente del expediente médico y quedará asentada en la auditoría."
+        confirmText="Eliminar"
+      />
+
+      {/* 5. MODAL DE COMPARTIR RECETA */}
       {sharingRecipe && (
         <RecipeShareModal
           isOpen={isShareModalOpen}

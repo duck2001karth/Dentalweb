@@ -2,6 +2,7 @@
 
 import React from "react"
 import { format } from "date-fns"
+import DOMPurify from "isomorphic-dompurify" 
 import { useClinicSettings } from "@/config/clinic-settings"
 
 interface PrescriptionPrintProps {
@@ -20,10 +21,10 @@ export function PrescriptionPrint({
   patientAllergies,
 }: PrescriptionPrintProps) {
   const { settings } = useClinicSettings()
+
   if (!printingDoc) return null
 
   const today = format(new Date(), "dd/MM/yyyy")
-
   const clinicName = settings?.clinicName?.trim() || "No registrado"
   const clinicSlogan = settings?.slogan?.trim() || "No registrado"
   const clinicRuc = settings?.ruc?.trim() || "No registrado"
@@ -34,6 +35,7 @@ export function PrescriptionPrint({
   const clinicCity = (settings as any)?.city?.trim() || "No registrado"
   const clinicCountry = (settings as any)?.country?.trim() || "No registrado"
   const clinicLocation = `${clinicCity} - ${clinicCountry}`
+
   const logoUrl = settings?.logoUrl || ""
   const watermarkUrl = settings?.watermarkUrl || ""
   const watermarkOpacity = ((settings as any)?.watermarkOpacity ?? 12) / 100
@@ -105,7 +107,6 @@ export function PrescriptionPrint({
           </div>
         )}
       </div>
-
       <div className="border-t-2 border-[#008bcd] pt-1.5 text-[9px] text-slate-800 flex flex-col text-center">
         <p className="font-semibold uppercase tracking-wider mb-0.5">
           Dirección: {clinicAddress}
@@ -173,6 +174,7 @@ export function PrescriptionPrint({
       `}</style>
 
       <div className="hidden print:flex fixed inset-0 z-50 print-wrapper text-sm bg-white font-sans">
+        
         {/* LADO 1: MEDICAMENTOS (R.P.) */}
         <div className="print-pane relative">
           <div
@@ -218,7 +220,7 @@ export function PrescriptionPrint({
               Fecha de emisión: <span className="font-semibold">{today}</span>
             </p>
             <p className="text-red-600 font-bold">
-              N° {printingDoc.id?.substring(0, 6).toUpperCase()}
+              Nº {printingDoc.id?.substring(0, 6).toUpperCase()}
             </p>
           </div>
 
@@ -241,14 +243,14 @@ export function PrescriptionPrint({
             </p>
           </div>
 
-          {/* CUERPO MEDICAMENTOS */}
+          {/* CUERPO MEDICAMENTOS (Sanitizado) */}
           <div className="flex-1 text-black relative z-10">
             <h3 className="font-bold text-base mb-1.5 text-[#008bcd] border-b border-slate-200 pb-1">
               Medicamentos (R.P.)
             </h3>
             <div
               className="whitespace-pre-wrap leading-relaxed [&>ul]:list-disc [&>ul]:ml-5 text-xs"
-              dangerouslySetInnerHTML={{ __html: printingDoc.medications }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(printingDoc.medications) }}
             />
           </div>
 
@@ -301,7 +303,7 @@ export function PrescriptionPrint({
               Fecha de emisión: <span className="font-semibold">{today}</span>
             </p>
             <p className="text-red-600 font-bold">
-              N° {printingDoc.id?.substring(0, 6).toUpperCase()}
+              Nº {printingDoc.id?.substring(0, 6).toUpperCase()}
             </p>
           </div>
 
@@ -324,18 +326,18 @@ export function PrescriptionPrint({
             </p>
           </div>
 
-          {/* INDICACIONES */}
+          {/* INDICACIONES (Sanitizado) */}
           <div className="flex-1 text-black relative z-10">
             <h3 className="font-bold text-base mb-1.5 text-[#008bcd] border-b border-slate-200 pb-1">
               Indicaciones
             </h3>
             <div
               className="whitespace-pre-wrap leading-relaxed [&>ul]:list-disc [&>ul]:ml-5 text-xs"
-              dangerouslySetInnerHTML={{ __html: printingDoc.indications }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(printingDoc.indications) }}
             />
           </div>
 
-          {/* OBSERVACIONES */}
+          {/* OBSERVACIONES (Sanitizado) */}
           {printingDoc.observations && (
             <div className="mb-4 pb-2 border-t border-slate-200 relative z-10">
               <h3 className="font-bold text-[11px] mt-2 mb-1 text-amber-700 uppercase tracking-wider">
@@ -343,7 +345,7 @@ export function PrescriptionPrint({
               </h3>
               <div
                 className="whitespace-pre-wrap leading-relaxed [&>ul]:list-disc [&>ul]:ml-5 text-xs text-slate-800 font-medium"
-                dangerouslySetInnerHTML={{ __html: printingDoc.observations }}
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(printingDoc.observations) }}
               />
             </div>
           )}

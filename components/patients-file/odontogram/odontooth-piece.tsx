@@ -89,7 +89,7 @@ export function ToothPiece({
         height="40" 
         viewBox="-4 -4 108 108" 
         className={cn(
-          "transition-all relative overflow-visible",
+          "transition-all relative overflow-visible touch-none select-none",
           canEdit ? "cursor-pointer hover:scale-105 active:scale-95" : "cursor-default",
           isSelectedTotal && "ring-2 ring-[#008bcd] ring-offset-2 rounded-lg"
         )}

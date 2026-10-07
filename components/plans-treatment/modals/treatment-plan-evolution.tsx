@@ -1,219 +1,295 @@
 "use client"
 
-import React, { useState } from "react"
-import { Lock, Paperclip, AlertCircle } from "lucide-react"
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogDescription, 
-  DialogFooter 
+import React, { useState, useEffect } from "react"
+import { Stethoscope, Loader2 } from "lucide-react"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Textarea } from "@/components/ui/textarea"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Checkbox } from "@/components/ui/checkbox"
-import { useToast } from "@/hooks/use-toast"
-import { EvolutionInput } from "@/types/treatments"
 
-interface EvolutionModalProps {
-  isOpen: boolean
-  setIsOpen: (open: boolean) => void
-  patient: any
-  plan: any
-  selectedItemToEvolve: any
-  evolutionProgress: number
-  evolutionNote: string
-  setEvolutionNote: (note: string | ((prev: string) => string)) => void
-  handleSaveEvolution: (data?: EvolutionInput) => void
-  availableDoctors?: Array<{ id: string; name: string }>
-}
+import  EvolutionModal  from "@/components/plans-treatment/modals/treatment-plan-evolution"
+import { TreatmentCatalogModal } from "@/components/plans-treatment/catalog/treatment-catalog-modal"
 
-export function EvolutionModal({
-  isOpen,
-  setIsOpen,
-  patient,
+const COMMON_DIAGNOSES = [
+  "K02.1 - Caries de la dentina",
+  "K02.0 - Caries limitada al esmalte",
+  "K04.0 - Pulpitis irreversible",
+  "K04.1 - Necrosis pulpar",
+  "K05.0 - Gingivitis aguda",
+  "K05.3 - Periodontitis crónica",
+  "K08.1 - Pérdida de dientes por traumatismo o extracción",
+  "K07.2 - Anomalías de la relación maxilobasilar (Maloclusión)",
+]
+
+export function TreatmentPlanModals({
   plan,
-  selectedItemToEvolve,
+  patient,
+  currentUser,
+  isSectionModalOpen,
+  setIsSectionModalOpen,
+  sectionName,
+  setSectionName,
+  handleAddSection,
+  handleCreateSection,
+  isDiscountModalOpen,
+  setIsDiscountModalOpen,
+  tempDiscount,
+  setTempDiscount,
+  handleApplyDiscount,
+  isCatalogModalOpen,
+  setIsCatalogModalOpen,
+  catalogSearch,
+  setCatalogSearch,
+  filteredCatalog,
+  handleAddManualProcedure,
+  isAddingProcedure,
+  initialLocation,
+  targetSectionId = null,
+  targetSectionName = null,
+  isEvolutionModalOpen,
+  setIsEvolutionModalOpen,
   evolutionProgress,
+  selectedItemToEvolve,
   evolutionNote,
   setEvolutionNote,
   handleSaveEvolution,
-  availableDoctors = []
-}: EvolutionModalProps) {
-  const { toast } = useToast()
+  isDiagnosisModalOpen,
+  setIsDiagnosisModalOpen,
+  selectedDiagnosis,
+  setSelectedDiagnosis,
+  handleSaveDiagnosis,
+}: any) {
+  const [isSubmittingSection, setIsSubmittingSection] = useState(false)
 
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string>(
-    plan?.doctor?.id || plan?.doctorId || ""
-  )
-  const [isPrivateEvolution, setIsPrivateEvolution] = useState(false)
-  const [attachedFile, setAttachedFile] = useState<File | null>(null)
-  const [hasIncident, setHasIncident] = useState(false)
-  const [hasAdverseEvent, setHasAdverseEvent] = useState(false)
-  const [showError, setShowError] = useState(false)
+  // Clave única aislada por plan e ítem para evitar colisiones de notas entre procedimientos
+  const evolutionDraftKey = selectedItemToEvolve?.id
+    ? `carmo_draft_evo_${plan?.id || "plan"}_${selectedItemToEvolve.id}`
+    : null
 
-  const onSubmit = () => {
-    if (!evolutionNote.trim()) {
-      setShowError(true)
-      toast({
-        title: "Campos requeridos",
-        description: "Debe ingresar una nota de evolución clínica para registrar el avance.",
-        variant: "destructive"
-      })
-      return
+  // 1. RECUPERACIÓN AUTOMÁTICA: Si existe un borrador guardado y el campo está vacío, restaurar
+  useEffect(() => {
+    if (isEvolutionModalOpen && evolutionDraftKey) {
+      const savedDraft = localStorage.getItem(evolutionDraftKey)
+      if (savedDraft && (!evolutionNote || evolutionNote.trim() === "")) {
+        setEvolutionNote(savedDraft)
+      }
     }
+  }, [isEvolutionModalOpen, evolutionDraftKey])
 
-    handleSaveEvolution({
-      progress: evolutionProgress,
-      note: evolutionNote,
-      isPrivate: isPrivateEvolution,
-      hasIncident,
-      hasAdverseEvent,
-      doctorId: selectedDoctorId || plan?.doctor?.id || plan?.doctorId
-    })
+  // 2. AUTOGUARDADO (DEBOUNCE 1s): Persistir cambios en localStorage mientras el doctor redacta
+  useEffect(() => {
+    if (!isEvolutionModalOpen || !evolutionDraftKey) return
+
+    const timer = setTimeout(() => {
+      if (typeof evolutionNote === "string" && evolutionNote.trim()) {
+        localStorage.setItem(evolutionDraftKey, evolutionNote)
+      } else {
+        localStorage.removeItem(evolutionDraftKey)
+      }
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [evolutionNote, isEvolutionModalOpen, evolutionDraftKey])
+
+  // 3. LIMPIEZA TRAS PERSISTENCIA REAL: Al guardar en backend, purgar el borrador temporal
+  const handleSaveEvolutionWithCleanup = async (...args: any[]) => {
+    if (evolutionDraftKey) {
+      localStorage.removeItem(evolutionDraftKey)
+    }
+    if (handleSaveEvolution) {
+      return handleSaveEvolution(...args)
+    }
+  }
+
+  const onSectionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!sectionName?.trim() || isSubmittingSection) return
+
+    const action = handleCreateSection || handleAddSection
+    if (!action) return
+
+    try {
+      setIsSubmittingSection(true)
+      await action(sectionName.trim())
+    } finally {
+      setIsSubmittingSection(false)
+    }
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!open) setShowError(false)
-      setIsOpen(open)
-    }}>
-      <DialogContent className="sm:max-w-[900px] w-[95vw] max-h-[88vh] bg-card text-card-foreground border border-border shadow-2xl rounded-2xl p-0 overflow-hidden font-sans">
-        
-        <DialogHeader className="p-5 border-b border-border bg-muted/30">
-          <DialogTitle className="text-lg md:text-xl font-black uppercase text-foreground tracking-tight">
-            EVOLUCIÓN PARA {patient?.firstName} {patient?.lastName}
-          </DialogTitle>
-          <DialogDescription className="text-xs font-semibold text-muted-foreground mt-0.5">
-            Prestación seleccionada: <b className="text-[#008bcd] dark:text-blue-400">{selectedItemToEvolve?.procedureName || selectedItemToEvolve?.name}</b>
-          </DialogDescription>
-        </DialogHeader>
+    <>
+      {/* 1. MODAL AGREGAR FASE / SECCIÓN */}
+      <Dialog open={isSectionModalOpen} onOpenChange={setIsSectionModalOpen}>
+        <DialogContent className="sm:max-w-[420px] bg-card text-card-foreground border-border rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Agregar Nueva Sección</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Agrupa tus prestaciones clínicas por fases o etapas de tratamiento.
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="p-5 grid grid-cols-1 md:grid-cols-12 gap-6 overflow-y-auto max-h-[calc(88vh-130px)]">
-          <div className="md:col-span-7 space-y-4 flex flex-col">
-            
-            {/* PROFESIONAL A CARGO */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1">
-                Profesional Tratante <span className="text-red-500 font-extrabold">*</span>
+          <form onSubmit={onSectionSubmit} className="space-y-4">
+            <div className="py-2 space-y-2">
+              <Label className="text-xs font-bold uppercase text-muted-foreground">
+                Nombre de la Fase / Sección
               </Label>
-              <select 
-                value={selectedDoctorId}
-                onChange={(e) => setSelectedDoctorId(e.target.value)}
-                className="w-full border border-border rounded-xl h-10 px-3 text-xs font-bold bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#008bcd]"
+              <Input
+                placeholder="Ej: Fase 1: Higiene y Operatoria"
+                value={sectionName}
+                onChange={(e) => setSectionName(e.target.value)}
+                autoFocus
+                disabled={isSubmittingSection}
+                className="bg-background border-border text-xs font-semibold"
+              />
+            </div>
+
+            <DialogFooter className="gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setIsSectionModalOpen(false)}
+                disabled={isSubmittingSection}
               >
-                <option value={plan?.doctor?.id || plan?.doctorId || ""}>
-                  👨‍⚕️ {plan?.doctor?.name || "Dr(a). Asignado al Plan"}
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={!sectionName?.trim() || isSubmittingSection}
+                className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold"
+              >
+                {isSubmittingSection ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Guardando...
+                  </>
+                ) : (
+                  "Crear Sección"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* 2. MODAL DESCUENTO GLOBAL */}
+      <Dialog open={isDiscountModalOpen} onOpenChange={setIsDiscountModalOpen}>
+        <DialogContent className="sm:max-w-[400px] bg-card text-card-foreground border-border rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Descuento Comercial</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Porcentaje global aplicado al presupuesto total del plan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="relative">
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                value={tempDiscount}
+                onChange={(e) => setTempDiscount(e.target.value)}
+                className="pr-10 bg-background border-border text-lg font-bold font-mono"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 font-extrabold text-muted-foreground">
+                %
+              </span>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsDiscountModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleApplyDiscount}
+              className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold"
+            >
+              Aplicar Descuento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 3. MODAL CATÁLOGO DESACOPLADO CON FASE ACTIVA */}
+      <TreatmentCatalogModal
+        isOpen={isCatalogModalOpen}
+        setIsOpen={setIsCatalogModalOpen}
+        catalogSearch={catalogSearch}
+        setCatalogSearch={setCatalogSearch}
+        filteredCatalog={filteredCatalog}
+        handleAddManualProcedure={handleAddManualProcedure}
+        isAddingProcedure={isAddingProcedure}
+        initialLocation={initialLocation}
+        targetSectionId={targetSectionId}
+        targetSectionName={targetSectionName}
+      />
+
+      {/* 4. MODAL EVOLUCIÓN CLÍNICA CON PROTECCIÓN DE BORRADOR */}
+      <EvolutionModal
+        isOpen={isEvolutionModalOpen}
+        setIsOpen={setIsEvolutionModalOpen}
+        patient={patient}
+        plan={plan}
+        selectedItemToEvolve={selectedItemToEvolve}
+        evolutionProgress={evolutionProgress}
+        evolutionNote={evolutionNote}
+        setEvolutionNote={setEvolutionNote}
+        handleSaveEvolution={handleSaveEvolutionWithCleanup}
+      />
+
+      {/* 5. MODAL DE DIAGNÓSTICO CLÍNICO */}
+      <Dialog open={isDiagnosisModalOpen} onOpenChange={setIsDiagnosisModalOpen}>
+        <DialogContent className="sm:max-w-[500px] bg-card text-card-foreground border-border rounded-2xl p-0 overflow-hidden shadow-2xl">
+          <DialogHeader className="p-6 border-b border-border bg-slate-100/80 dark:bg-[#0b0f19]/80">
+            <DialogTitle className="text-lg font-extrabold text-foreground flex items-center gap-2">
+              <Stethoscope className="w-5 h-5 text-[#008bcd]" />
+              Ingresar Diagnóstico Odontológico
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Asigne un diagnóstico presuntivo o definitivo según codificación CIE-10.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-6 space-y-4">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">
+              Diagnósticos CIE-10 Odontológicos Frecuentes
+            </Label>
+            <select
+              value={selectedDiagnosis}
+              onChange={(e) => setSelectedDiagnosis(e.target.value)}
+              className="w-full h-11 px-3 border border-border rounded-xl text-xs font-semibold bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#008bcd]"
+            >
+              <option value="">Seleccione un diagnóstico...</option>
+              {COMMON_DIAGNOSES.map((diag) => (
+                <option key={diag} value={diag}>
+                  {diag}
                 </option>
-                {availableDoctors
-                  .filter((d) => d.id !== plan?.doctor?.id && d.id !== plan?.doctorId)
-                  .map((doc) => (
-                    <option key={doc.id} value={doc.id}>
-                      👨‍⚕️ Dr(a). {doc.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            {/* NOTA DE EVOLUCIÓN DIRECTA */}
-            <div className="space-y-1.5 flex-1 flex flex-col">
-              <Label className="text-xs font-bold text-foreground uppercase tracking-wider flex items-center gap-1">
-                Nota Clínica de Evolución <span className="text-red-500 font-extrabold">*</span>
-              </Label>
-
-              <div className={`border rounded-xl overflow-hidden bg-background flex flex-col flex-1 shadow-xs transition-all ${
-                showError && !evolutionNote.trim() 
-                  ? "border-red-500 ring-2 ring-red-500/20" 
-                  : "border-border focus-within:border-[#008bcd]"
-              }`}>
-                <Textarea 
-                  value={evolutionNote} 
-                  onChange={(e) => {
-                    setEvolutionNote(e.target.value)
-                    if (e.target.value.trim()) setShowError(false)
-                  }} 
-                  className="min-h-[170px] border-none shadow-none focus-visible:ring-0 resize-none p-3 text-xs font-medium leading-relaxed bg-transparent text-foreground placeholder:text-muted-foreground" 
-                  placeholder="Detalle el instrumental utilizado, anestésico, procedimiento efectuado y respuesta clínica del paciente..." 
-                />
-              </div>
-
-              {showError && !evolutionNote.trim() && (
-                <p className="text-[11px] font-bold text-red-500 flex items-center gap-1 mt-1">
-                  <AlertCircle className="w-3.5 h-3.5" /> La nota de evolución es obligatoria para continuar.
-                </p>
-              )}
-            </div>
+              ))}
+            </select>
           </div>
-
-          {/* OPCIONES LATERALES */}
-          <div className="md:col-span-5 space-y-4 flex flex-col justify-between border-t md:border-t-0 md:border-l border-border pt-4 md:pt-0 md:pl-6">
-            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-1">
-              <div className="flex items-center gap-2">
-                <Checkbox id="private-evo-chk" checked={isPrivateEvolution} onCheckedChange={(c) => setIsPrivateEvolution(!!c)} />
-                <label htmlFor="private-evo-chk" className="text-xs font-bold text-amber-700 dark:text-amber-400 cursor-pointer flex items-center gap-1">
-                  <Lock className="w-3.5 h-3.5 text-amber-500" /> Esta evolución es privada
-                </label>
-              </div>
-              <p className="text-[10px] text-amber-800/80 dark:text-amber-400 font-medium pl-6">
-                (Opcional) Sólo podrá ser consultada por el doctor tratante emisor.
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="text-xs font-bold text-foreground uppercase tracking-wider">
-                Archivos Adjuntos <span className="text-muted-foreground font-normal text-[11px]">(Opcional)</span>
-              </Label>
-              <label className="flex flex-col items-center justify-center gap-1.5 w-full p-4 border border-dashed border-border rounded-xl cursor-pointer hover:bg-muted/40 transition-colors bg-background">
-                <Paperclip className="w-4 h-4 text-[#008bcd]" />
-                <span className="text-xs font-bold text-foreground text-center truncate max-w-[200px]">
-                  {attachedFile ? attachedFile.name : "Adjuntar radiografía o documento"}
-                </span>
-                <span className="text-[10px] text-muted-foreground">PDF, JPG o PNG (máx 10MB)</span>
-                <input type="file" className="hidden" onChange={(e) => setAttachedFile(e.target.files?.[0] || null)} />
-              </label>
-            </div>
-
-            <div className="space-y-3 border-t border-border pt-3">
-              <div className="space-y-1">
-                <p className="text-xs font-bold text-foreground">
-                  ¿Ocurrió algún incidente? <span className="text-muted-foreground font-normal text-[10px]">(Opcional)</span>
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Checkbox id="inc-chk" checked={hasIncident} onCheckedChange={(c) => setHasIncident(!!c)} />
-                  <label htmlFor="inc-chk" className="text-xs font-semibold text-foreground cursor-pointer">Sí, registrar incidente clínico</label>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-xs font-bold text-foreground">
-                  ¿Ocurrió algún evento adverso? <span className="text-muted-foreground font-normal text-[10px]">(Opcional)</span>
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <Checkbox id="adv-chk" checked={hasAdverseEvent} onCheckedChange={(c) => setHasAdverseEvent(!!c)} />
-                  <label htmlFor="adv-chk" className="text-xs font-semibold text-foreground cursor-pointer">Sí, registrar evento adverso</label>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter className="px-5 py-3.5 bg-muted/30 border-t border-border flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => setIsOpen(false)} className="font-bold border-border text-foreground hover:bg-muted">
-            Cancelar
-          </Button>
-          <Button 
-            size="sm" 
-            onClick={onSubmit} 
-            className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold px-6 rounded-xl shadow-xs cursor-pointer active:scale-95 transition-all"
-          >
-            Guardar y Evolucionar al {evolutionProgress}%
-          </Button>
-        </DialogFooter>
-
-      </DialogContent>
-    </Dialog>
+          <DialogFooter className="px-6 py-4 bg-slate-100/80 dark:bg-[#0b0f19]/80 border-t border-border flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setIsDiagnosisModalOpen(false)}
+              className="font-bold border-border"
+            >
+              Cerrar
+            </Button>
+            <Button
+              onClick={handleSaveDiagnosis}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 rounded-xl"
+            >
+              Guardar Diagnóstico
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
-export default EvolutionModal
+export default TreatmentPlanModals

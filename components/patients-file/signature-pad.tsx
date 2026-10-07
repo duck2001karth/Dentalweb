@@ -142,16 +142,18 @@ export function SignaturePad({
 
       <div className="relative w-full rounded-2xl border-2 border-dashed border-border/80 bg-white dark:bg-slate-100 shadow-2xs overflow-hidden">
         <canvas
-          ref={canvasRef}
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          onTouchStart={startDrawing}
-          onTouchMove={draw}
-          onTouchEnd={stopDrawing}
-          className="w-full h-52 touch-none cursor-crosshair block"
-        />
+        ref={canvasRef}
+        width={600}
+        height={270}
+        className="w-full h-[180px] cursor-crosshair touch-none select-none rounded-lg block"
+        onMouseDown={startDrawing}
+        onMouseMove={draw}
+        onMouseUp={stopDrawing}
+        onMouseLeave={stopDrawing}
+        onTouchStart={startDrawing} 
+        onTouchMove={draw}          
+        onTouchEnd={stopDrawing}    
+      />
         {!hasSignature && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-400 text-sm font-medium select-none">
             Firme aquí con el cursor o pantalla táctil

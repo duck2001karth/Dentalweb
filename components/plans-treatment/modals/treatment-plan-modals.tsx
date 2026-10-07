@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
-import { EvolutionModal } from "@/components/plans-treatment/modals/treatment-plan-evolution"
+import  EvolutionModal  from "@/components/plans-treatment/modals/treatment-plan-evolution"
 import { TreatmentCatalogModal } from "@/components/plans-treatment/catalog/treatment-catalog-modal"
 
 const COMMON_DIAGNOSES = [

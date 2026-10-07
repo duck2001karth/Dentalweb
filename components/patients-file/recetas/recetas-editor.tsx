@@ -2,6 +2,7 @@
 
 import React, { useRef, useEffect } from "react"
 import { Bold, Italic, List, Utensils, Clock, AlertCircle } from "lucide-react"
+import DOMPurify from "isomorphic-dompurify"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -26,18 +27,20 @@ const RichEditor = ({
   placeholder: string
 }) => {
   const editorRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== (value || "")) {
-      editorRef.current.innerHTML = value || ""
+      editorRef.current.innerHTML = DOMPurify.sanitize(value || "")
     }
   }, [value])
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
-    let html = e.currentTarget.innerHTML
+    let html = e.currentTarget.innerHTML    
     if (html === "<br>" || html === "<div><br></div>" || html.trim() === "") {
       html = ""
       if (editorRef.current) editorRef.current.innerHTML = ""
     }
+    
     onChange(html)
   }
 
@@ -70,6 +73,7 @@ export function PrescriptionEditor({
   setObservations,
   setIsDirty,
 }: PrescriptionEditorProps) {
+  
   const applyFormat = (e: React.MouseEvent, cmd: string) => {
     e.preventDefault()
     document.execCommand(cmd, false, "")
@@ -163,7 +167,7 @@ export function PrescriptionEditor({
                 3. Observaciones / Cuidados
               </label>
             </div>
-
+            
             {/* ATAJOS RÁPIDOS */}
             <div className="flex flex-wrap gap-1.5 mb-2.5">
               <button
@@ -173,7 +177,6 @@ export function PrescriptionEditor({
               >
                 <Utensils size={12} className="text-[#008bcd]" /> Con alimentos
               </button>
-
               <button
                 type="button"
                 onClick={() => addQuickObservation("Tomar 30 min después de cada alimento")}
@@ -181,7 +184,6 @@ export function PrescriptionEditor({
               >
                 <Clock size={12} className="text-[#008bcd]" /> 30 min post-comida
               </button>
-
               <button
                 type="button"
                 onClick={() => addQuickObservation("No ingerir bebidas alcohólicas ni lácteos")}

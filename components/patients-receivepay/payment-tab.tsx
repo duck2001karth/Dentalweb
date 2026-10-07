@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo, useEffect } from "react"
-import { DollarSign, CheckCircle2, Loader2 } from "lucide-react"
+import { DollarSign, CheckCircle2, Loader2, X } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button"
 import { PaymentItemsList } from "./payment-list"
 import { PaymentMethodsEcuador } from "./payment-methods"
 import { PaymentSuccessStep } from "./payment-success"
+import { cn } from "@/lib/utils"
 
 const formatToothLocation = (item: any): string => {
   const tooth = item.tooth ?? item.toothNumber ?? item.piece ?? item.piezas ?? item.sector ?? null
@@ -34,40 +35,42 @@ export function PaymentReceiptModal({
 }: any) {
   const [step, setStep] = useState<"SELECT" | "SUCCESS">("SELECT")
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
+  
+  // ESTADOS RESTAURADOS DEL ZIP ORIGINAL (Esto soluciona el error 'startsWith')
   const [paymentMethod, setPaymentMethod] = useState("EFECTIVO")
   const [reference, setReference] = useState("")
   const [customAmount, setCustomAmount] = useState("")
   const [useCustomAmount, setUseCustomAmount] = useState(false)
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
+  
   const [isProcessing, setIsProcessing] = useState(false)
   const [generatedInvoiceId, setGeneratedInvoiceId] = useState<string | null>(null)
   const [confirmedAmount, setConfirmedAmount] = useState<number>(0)
+  const [paidItems, setPaidItems] = useState<any[]>([])
 
-  const [paidItems, setPaidItems] = useState<any[]>([]) 
-  
   const pendingItems = useMemo(() => {
     let itemsList: any[] = []
     let rawPlansList: any[] = []
-
+    
     if (plan && plan.items) rawPlansList.push(plan)
     if (Array.isArray(plans) && plans.length > 0) rawPlansList = [...rawPlansList, ...plans]
     else if (patient?.treatmentPlans) rawPlansList = [...rawPlansList, ...patient.treatmentPlans]
-
+    
     const uniquePlansMap = new Map()
     rawPlansList.forEach((p: any) => {
       if (p && p.id && !uniquePlansMap.has(p.id)) uniquePlansMap.set(p.id, p)
     })
-
+    
     const patientConvenioDiscount = parseFloat(
       patient?.convenioDiscount ?? patient?.agreementDiscount ?? patient?.convenioPercent ?? 0
     )
-
+    
     Array.from(uniquePlansMap.values()).forEach((p: any) => {
       if (p.status !== "CANCELLED" && Array.isArray(p.items || p.treatmentItems)) {
         const planGlobalDiscount = parseFloat(p.discountPercent ?? p.discount ?? p.planDiscountPercent ?? 0)
         const planConvenioDiscount = parseFloat(p.agreementDiscountPercent ?? p.convenioDiscount ?? patientConvenioDiscount ?? 0)
         const effectivePlanDiscount = Math.max(planGlobalDiscount, planConvenioDiscount)
-
+        
         ;(p.items || p.treatmentItems).forEach((item: any) => {
           const cost = parseFloat(item.cost ?? item.price ?? 0)
           const itemDiscount = parseFloat(item.discount ?? 0)
@@ -76,7 +79,7 @@ export function PaymentReceiptModal({
           const finalPrice = Math.max(0, cost - discountAmount)
           const paid = parseFloat(item.paidAmount ?? 0)
           const itemDebt = Math.max(0, finalPrice - paid)
-
+          
           if (itemDebt > 0 && !item.isPaid) {
             itemsList.push({
               ...item,
@@ -98,7 +101,6 @@ export function PaymentReceiptModal({
         })
       }
     })
-
     return itemsList
   }, [plan, plans, patient])
 
@@ -118,7 +120,6 @@ export function PaymentReceiptModal({
   }, [pendingItems, selectedItemIds])
 
   const totalToPay = useCustomAmount && parseFloat(customAmount) > 0 ? parseFloat(customAmount) : selectedTotal
-  
   const requiresReference = paymentMethod === "TRANSFERENCIA" || paymentMethod.startsWith("TARJETA")
   const isReferenceValid = !requiresReference || (requiresReference && reference.trim().length > 0)
   const canProcessPayment = selectedItemIds.length > 0 || (useCustomAmount && parseFloat(customAmount) > 0)
@@ -126,7 +127,7 @@ export function PaymentReceiptModal({
   const handleProcessPayment = async () => {
     if (!isReferenceValid) return
     const amountToCharge = totalToPay
-    setConfirmedAmount(amountToCharge) 
+    setConfirmedAmount(amountToCharge)
     setIsProcessing(true)
     
     try {
@@ -147,9 +148,9 @@ export function PaymentReceiptModal({
           toothLabel: item.toothLabel,
           tooth: item.tooth
         }))
-
+        
       setPaidItems(selectedItemsData)
-
+      
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -164,7 +165,7 @@ export function PaymentReceiptModal({
           treatmentPlanId: pendingItems[0]?.planId || undefined
         })
       })
-
+      
       const data = await res.json().catch(() => ({}))
       setIsProcessing(false)
       setGeneratedInvoiceId(data.payment?.id || `REC-${Date.now().toString().slice(-6)}`)
@@ -187,39 +188,55 @@ export function PaymentReceiptModal({
     setConfirmedAmount(0)
     setUseCustomAmount(false)
     setCustomAmount("")
-    setPaidItems([]) 
+    setPaidItems([])
     onClose()
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleReset()}>
-      <DialogContent className="sm:max-w-[1000px] w-[95vw] bg-card text-foreground border border-border/80 shadow-2xl rounded-2xl p-0 overflow-hidden font-sans antialiased">
+      {/* CAMBIO VISUAL AQUÍ: Se utiliza cn() para encoger el ancho dinámicamente cuando step === "SUCCESS" */}
+      <DialogContent className={cn(
+        "bg-card text-foreground border border-border/80 shadow-2xl rounded-2xl p-0 overflow-hidden font-sans antialiased transition-all duration-300",
+        step === "SUCCESS" 
+          ? "!max-w-[420px] w-[95vw] [&>button]:hidden" 
+          : "sm:max-w-[1000px] w-[95vw]"
+      )}>
         {step === "SELECT" ? (
           <>
-            <DialogHeader className="px-6 py-4 border-b border-border/70 bg-muted/20">
-              <DialogTitle className="text-lg font-semibold text-foreground flex items-center gap-2.5">
-                <div className="p-1.5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0 border border-emerald-500/20">
-                  <DollarSign className="w-5 h-5 stroke-[2]" />
-                </div>
-                Recibir Pago de Tratamiento
-              </DialogTitle>
-              <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
-                Paciente: <b className="text-foreground font-medium">{patient?.firstName} {patient?.lastName}</b>
-              </DialogDescription>
+            <DialogHeader className="px-6 py-4 border-b border-border/70 bg-muted/20 flex flex-row items-center justify-between">
+              <div>
+                <DialogTitle className="text-lg font-semibold text-foreground flex items-center gap-2.5">
+                  <div className="p-1.5 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 rounded-lg shrink-0 border border-emerald-500/20">
+                    <DollarSign className="w-5 h-5 stroke-[2]" />
+                  </div>
+                  Recibir Pago de Tratamiento
+                </DialogTitle>
+                <DialogDescription className="text-[13px] text-muted-foreground mt-0.5">
+                  Paciente: <b className="text-foreground font-medium">{patient?.firstName} {patient?.lastName}</b>
+                </DialogDescription>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={handleReset}
+                className="h-8 w-8 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
             </DialogHeader>
             
             <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               <div className="lg:col-span-7">
-                <PaymentItemsList 
+                <PaymentItemsList
                   pendingItems={pendingItems}
                   selectedItemIds={selectedItemIds}
                   onToggleItem={toggleSelectItem}
                   onToggleAll={toggleSelectAll}
                 />
               </div>
-
               <div className="lg:col-span-5 bg-muted/20 p-5 rounded-2xl border border-border/60 shadow-sm max-h-[380px] overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                <PaymentMethodsEcuador 
+                <PaymentMethodsEcuador
                   paymentMethod={paymentMethod}
                   setPaymentMethod={setPaymentMethod}
                   reference={reference}
@@ -234,7 +251,6 @@ export function PaymentReceiptModal({
                 />
               </div>
             </div>
-
             <DialogFooter className="px-6 py-4 border-t border-border/70 bg-muted/20 flex flex-row items-center justify-between">
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Total a Cobrar</p>
@@ -242,19 +258,18 @@ export function PaymentReceiptModal({
                   ${totalToPay.toLocaleString("en-US", { minimumFractionDigits: 2 })} USD
                 </p>
               </div>
-
               <div className="flex items-center gap-2">
-                <Button 
-                  type="button" 
-                  variant="ghost" 
-                  onClick={handleReset} 
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleReset}
                   className="font-medium text-[13px] h-10 px-4 rounded-xl hover:bg-muted cursor-pointer"
                 >
                   Cancelar
                 </Button>
-                <Button 
+                <Button
                   type="button"
-                  onClick={handleProcessPayment} 
+                  onClick={handleProcessPayment}
                   disabled={isProcessing || !canProcessPayment || !isReferenceValid}
                   className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium text-[13px] h-10 px-5 rounded-xl shadow-sm cursor-pointer transition-all flex items-center gap-1.5"
                 >
@@ -265,13 +280,13 @@ export function PaymentReceiptModal({
             </DialogFooter>
           </>
         ) : (
-          <PaymentSuccessStep 
-            invoiceId={generatedInvoiceId} 
-            totalPaid={confirmedAmount} 
-            paymentMethod={paymentMethod} 
+          <PaymentSuccessStep
+            invoiceId={generatedInvoiceId}
+            totalPaid={confirmedAmount}
+            paymentMethod={paymentMethod}
             patient={patient}
-            items={paidItems} 
-            onReset={handleReset} 
+            items={paidItems}
+            onReset={handleReset}
           />
         )}
       </DialogContent>
