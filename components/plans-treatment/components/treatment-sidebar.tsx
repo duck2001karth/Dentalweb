@@ -4,23 +4,12 @@ import React, { useState, useEffect, useMemo, useCallback } from "react"
 import { format, addDays } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
-  Handshake, 
-  Pencil, 
-  Clock, 
-  User, 
-  Users, 
-  ClipboardList, 
-  Calendar,
-  Loader2, 
-  Check 
+  Handshake, Pencil, Clock, User, Users, 
+  ClipboardList, Calendar, Loader2, Check 
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog"
 import { useClinicSettings } from "@/config/clinic-settings"
 
@@ -59,15 +48,12 @@ export function TreatmentSidebar({
   const [isLoadingAgreements, setIsLoadingAgreements] = useState<boolean>(false)
   const [isAgreementModalOpen, setIsAgreementModalOpen] = useState<boolean>(false)
   const [selectedAgreement, setSelectedAgreement] = useState<any>(null)
-
   const [fetchedAppointments, setFetchedAppointments] = useState<any[]>([])
   const [isLoadingAppointments, setIsLoadingAppointments] = useState<boolean>(false)
 
-  // Carga protegida de convenios
   useEffect(() => {
     let isMounted = true
     setIsLoadingAgreements(true)
-
     fetch("/api/agreements")
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
@@ -79,13 +65,9 @@ export function TreatmentSidebar({
       .finally(() => {
         if (isMounted) setIsLoadingAgreements(false)
       })
-
-    return () => {
-      isMounted = false
-    }
+    return () => { isMounted = false }
   }, [])
 
-  // Carga controlada de citas del paciente
   const targetPatientId = patient?.id || plan?.patientId
   useEffect(() => {
     if (appointmentList && appointmentList.length > 0) {
@@ -93,10 +75,8 @@ export function TreatmentSidebar({
       return
     }
     if (!targetPatientId) return
-
     let isMounted = true
     setIsLoadingAppointments(true)
-
     fetch(`/api/citas?patientId=${targetPatientId}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((json) => {
@@ -115,13 +95,9 @@ export function TreatmentSidebar({
       .finally(() => {
         if (isMounted) setIsLoadingAppointments(false)
       })
-
-    return () => {
-      isMounted = false
-    }
+    return () => { isMounted = false }
   }, [targetPatientId, appointmentList, plan?.id])
 
-  // Sincronizar convenio previo
   useEffect(() => {
     if (plan?.agreement) {
       setSelectedAgreement(plan.agreement)
@@ -130,14 +106,11 @@ export function TreatmentSidebar({
     }
   }, [plan?.agreement, plan?.agreementName])
 
-  // Cálculos financieros memoizados
   const effectivePlanItems = planItems.length > 0 ? planItems : plan?.items || []
-
+  
   const baseCost = useMemo(() => {
     if (effectivePlanItems && effectivePlanItems.length > 0) {
-      return effectivePlanItems.reduce((acc: number, item: any) => {
-        return acc + Number(item.cost || item.price || 0)
-      }, 0)
+      return effectivePlanItems.reduce((acc: number, item: any) => acc + Number(item.cost || item.price || 0), 0)
     }
     return Number(plan?.totalCost || 0)
   }, [effectivePlanItems, plan?.totalCost])
@@ -150,9 +123,7 @@ export function TreatmentSidebar({
       if (selectedAgreement.discountType === "FIXED" && baseCost > 0) {
         return Math.min(100, (Number(selectedAgreement.discountValue || 0) / baseCost) * 100)
       }
-      if (selectedAgreement.discount) {
-        return Number(selectedAgreement.discount)
-      }
+      if (selectedAgreement.discount) return Number(selectedAgreement.discount)
     }
     return Number(plan?.discount || 0)
   }, [selectedAgreement, plan?.discount, baseCost])
@@ -188,6 +159,7 @@ export function TreatmentSidebar({
     plan?.totalPaid ??
     effectivePlanItems.reduce((acc: number, item: any) => acc + Number(item.paidAmount || 0), 0)
   )
+
   const saldoPorAbonar = Math.max(0, finalTotalCost - totalAbonado)
 
   const collaboratorsList = useMemo(() => {
@@ -212,13 +184,7 @@ export function TreatmentSidebar({
   }, [plan?.createdAt, settings])
 
   const doctorName = plan?.doctor?.name || currentUser?.name || "Dr. Especialista"
-
-  const currentAgreementName = 
-    selectedAgreement?.name || 
-    plan?.agreementName || 
-    plan?.convenio || 
-    patient?.convenio || 
-    "Particular / Sin convenio"
+  const currentAgreementName = selectedAgreement?.name || plan?.agreementName || plan?.convenio || patient?.convenio || "Particular / Sin convenio"
 
   const handleSelectAgreement = useCallback(
     (agreement: any) => {
@@ -234,7 +200,6 @@ export function TreatmentSidebar({
             : baseCost > 0
             ? ((Number(agreement.discountValue) / baseCost) * 100).toFixed(1)
             : "0"
-
         if (setTempDiscount) setTempDiscount(discountVal)
         if (onApplyAgreement) onApplyAgreement(agreement)
       }
@@ -246,7 +211,7 @@ export function TreatmentSidebar({
   return (
     <div className="space-y-4 font-sans select-none antialiased">
       {/* 1. TARJETA PRINCIPAL DEL PLAN */}
-      <div className="bg-[#121820] border border-[#1e2735] rounded-3xl overflow-hidden shadow-xl">
+      <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-sm transition-colors">
         <div className="bg-[#008bcd] px-6 py-4 text-white">
           <p className="text-[11px] font-extrabold uppercase tracking-widest opacity-90">
             PLAN DE TRATAMIENTO
@@ -255,58 +220,52 @@ export function TreatmentSidebar({
             {plan?.name || "RESTAURACIÓN"}
           </h3>
         </div>
-
-        <div className="p-6 text-center border-b border-[#1c2431]/80">
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+        <div className="p-6 text-center border-b border-border/80 transition-colors">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
             PRESUPUESTO TOTAL
           </p>
-          <div className="text-3xl sm:text-4xl font-black text-[#00a8ff] tracking-tight font-mono mt-1">
+          <div className="text-3xl sm:text-4xl font-black text-[#008bcd] tracking-tight font-mono mt-1">
             {currencySymbol}{finalTotalCost.toFixed(2)}
           </div>
         </div>
-
         <div className="px-6 py-5 space-y-3.5 text-xs">
           <div className="flex justify-between items-center font-bold">
-            <span className="text-slate-300">Descuento Comercial</span>
+            <span className="text-muted-foreground">Descuento Comercial</span>
             <div className="flex items-center gap-1.5">
-              <span className="text-[#00a8ff] font-mono text-sm">{effectiveDiscount}%</span>
+              <span className="text-[#008bcd] font-mono text-sm">{effectiveDiscount}%</span>
               <button
                 type="button"
                 onClick={onOpenDiscountModal}
-                className="text-[#00a8ff] hover:text-[#38bdf8] p-0.5 rounded cursor-pointer transition-colors"
+                className="text-[#008bcd] hover:text-[#007cb8] p-0.5 rounded cursor-pointer transition-colors"
                 title="Editar descuento comercial"
               >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
-
           <div className="flex justify-between items-center font-bold">
-            <span className="text-slate-300">Realizado</span>
-            <span className="text-[#10b981] font-mono text-sm">
+            <span className="text-muted-foreground">Realizado</span>
+            <span className="text-emerald-600 font-mono text-sm">
               {currencySymbol}{completedValue.toFixed(2)}
             </span>
           </div>
-
           <div className="flex justify-between items-center font-bold">
-            <span className="text-slate-300">Abonado</span>
-            <span className="text-[#3b82f6] font-mono text-sm">
+            <span className="text-muted-foreground">Abonado</span>
+            <span className="text-blue-600 font-mono text-sm">
               {currencySymbol}{totalAbonado.toFixed(2)}
             </span>
           </div>
-
           <div className="flex justify-between items-center font-bold pt-1">
-            <span className="text-slate-300 font-extrabold">Saldo por Abonar</span>
-            <span className="text-[#ef4444] font-mono text-sm font-black">
+            <span className="text-foreground font-extrabold">Saldo por Abonar</span>
+            <span className="text-rose-600 font-mono text-sm font-black">
               {currencySymbol}{saldoPorAbonar.toFixed(2)}
             </span>
           </div>
-
           <div className="pt-2">
             <Button
               type="button"
               onClick={() => setIsAgreementModalOpen(true)}
-              className="w-full bg-[#008bcd] hover:bg-[#007cb8] text-white font-extrabold text-xs h-11 rounded-2xl shadow-md transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 border-0"
+              className="w-full bg-[#008bcd] hover:bg-[#007cb8] text-white font-extrabold text-xs h-11 rounded-2xl shadow-sm transition-all active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 border-0"
             >
               <Handshake className="w-4 h-4 stroke-[2.2]" />
               <span>Cotizar con Convenio</span>
@@ -316,46 +275,46 @@ export function TreatmentSidebar({
       </div>
 
       {/* 2. TARJETA VENCIMIENTO DE ARANCELES */}
-      <div className="bg-[#1b160e] border border-[#3d2b15] rounded-2xl p-4 flex items-center gap-3.5 shadow-sm">
-        <div className="w-10 h-10 rounded-xl bg-[#d97706]/15 border border-[#d97706]/30 flex items-center justify-center text-[#d97706] shrink-0">
+      <div className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 flex items-center gap-3.5 shadow-sm transition-colors">
+        <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-500 shrink-0">
           <Clock className="w-5 h-5 stroke-[2.2]" />
         </div>
         <div className="text-xs leading-snug">
-          <p className="text-[10px] font-black uppercase tracking-wider text-[#d97706]">
+          <p className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-500">
             VENCIMIENTO DE ARANCELES
           </p>
-          <p className="text-slate-300 text-xs font-semibold mt-0.5">
-            Válido hasta: <b className="text-white font-bold">{validityDateText}</b>
+          <p className="text-foreground font-semibold mt-0.5">
+            Válido hasta: <b className="font-bold">{validityDateText}</b>
           </p>
         </div>
       </div>
 
       {/* 3. TARJETA EQUIPO A CARGO Y CONVENIO */}
-      <div className="bg-[#121820] border border-[#1e2735] rounded-3xl p-5 space-y-4 shadow-sm text-xs">
+      <div className="bg-card border border-border rounded-3xl p-5 space-y-4 shadow-sm text-xs transition-colors">
         <div className="flex items-start gap-3">
           <User className="w-4 h-4 text-[#008bcd] shrink-0 mt-0.5" />
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">
               PROFESIONAL A CARGO
             </span>
-            <p className="text-white font-bold text-xs mt-0.5">{doctorName}</p>
+            <p className="text-foreground font-bold text-xs mt-0.5">{doctorName}</p>
           </div>
         </div>
 
         <div className="flex items-start gap-3">
           <Users className="w-4 h-4 text-[#008bcd] shrink-0 mt-0.5" />
           <div className="w-full">
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">
               COLABORADORES
             </span>
             <button
               type="button"
               onClick={onOpenCollaboratorsModal}
-              className="text-[#008bcd] hover:text-[#38bdf8] font-bold text-xs hover:underline cursor-pointer block mt-0.5"
+              className="text-[#008bcd] font-bold text-xs hover:underline cursor-pointer block mt-0.5"
             >
               Asignar colaboradores
             </button>
-            <p className="text-slate-400 text-[11px] mt-0.5 italic">
+            <p className="text-muted-foreground text-[11px] mt-0.5 italic">
               {collaboratorsList.length > 0 ? collaboratorsList.join(", ") : "Sin colaboradores"}
             </p>
           </div>
@@ -364,36 +323,36 @@ export function TreatmentSidebar({
         <div className="flex items-start gap-3">
           <ClipboardList className="w-4 h-4 text-[#008bcd] shrink-0 mt-0.5" />
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground block">
               CONVENIO / EPS
             </span>
-            <p className="text-white font-bold text-xs mt-0.5">{currentAgreementName}</p>
+            <p className="text-foreground font-bold text-xs mt-0.5">{currentAgreementName}</p>
           </div>
         </div>
       </div>
 
       {/* 4. TARJETA HISTORIAL DE CITAS */}
-      <div className="bg-[#121820] border border-[#1e2735] rounded-3xl p-5 shadow-sm text-xs space-y-4">
-        <div className="flex items-center justify-between pb-3 border-b border-[#1c2431]">
+      <div className="bg-card border border-border rounded-3xl p-5 shadow-sm text-xs space-y-4 transition-colors">
+        <div className="flex items-center justify-between pb-3 border-b border-border/80">
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-[#008bcd] stroke-[2.2]" />
-            <span className="text-xs font-black text-white tracking-tight">
+            <span className="text-xs font-black text-foreground tracking-tight">
               Historial de Citas
             </span>
           </div>
-          <span className="w-5 h-5 rounded-full bg-[#1c2431] text-slate-300 flex items-center justify-center font-bold text-[10px] border border-border/40">
+          <span className="w-5 h-5 rounded-full bg-muted text-muted-foreground flex items-center justify-center font-bold text-[10px] border border-border/40">
             {fetchedAppointments.length}
           </span>
         </div>
 
         {isLoadingAppointments ? (
-          <div className="flex items-center justify-center py-4 text-slate-400">
+          <div className="flex items-center justify-center py-4 text-muted-foreground">
             <Loader2 className="w-4 h-4 animate-spin mr-2 text-[#008bcd]" />
             <span className="text-[11px] font-medium">Cargando citas...</span>
           </div>
         ) : fetchedAppointments.length === 0 ? (
           <div className="py-4 text-center">
-            <p className="text-slate-400 font-medium text-xs">
+            <p className="text-muted-foreground font-medium text-xs">
               No registra citas asociadas.
             </p>
           </div>
@@ -404,17 +363,17 @@ export function TreatmentSidebar({
               return (
                 <div
                   key={apt.id}
-                  className="p-2.5 rounded-xl bg-[#0a0f16] border border-[#1e2735] flex items-center justify-between"
+                  className="p-2.5 rounded-xl bg-muted/40 border border-border/60 flex items-center justify-between transition-colors"
                 >
                   <div>
-                    <p className="font-bold text-white text-[11px]">
+                    <p className="font-bold text-foreground text-[11px]">
                       {apt.title || apt.reason || "Cita Clínica"}
                     </p>
-                    <span className="text-[10px] text-slate-400 font-mono">
+                    <span className="text-[10px] text-muted-foreground font-mono">
                       {aptDate ? format(new Date(aptDate), "dd/MM/yyyy HH:mm") : "--"}
                     </span>
                   </div>
-                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md uppercase bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md uppercase bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                     {apt.status || "Programada"}
                   </span>
                 </div>
@@ -426,24 +385,23 @@ export function TreatmentSidebar({
 
       {/* MODAL DE CONVENIOS */}
       <Dialog open={isAgreementModalOpen} onOpenChange={setIsAgreementModalOpen}>
-        <DialogContent className="sm:max-w-[420px] bg-[#121820] border-[#1e2735] text-white rounded-3xl p-6 shadow-2xl">
+        <DialogContent className="sm:max-w-[420px] bg-card border-border text-foreground rounded-3xl p-6 shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-black text-white flex items-center gap-2">
+            <DialogTitle className="text-base font-black text-foreground flex items-center gap-2">
               <Handshake className="w-4 h-4 text-[#008bcd]" />
               Convenios y Aranceles Especiales
             </DialogTitle>
-            <DialogDescription className="text-xs text-slate-400">
+            <DialogDescription className="text-xs text-muted-foreground">
               Selecciona el convenio institucional aplicable a este tratamiento.
             </DialogDescription>
           </DialogHeader>
-
           <div className="space-y-2 py-4 max-h-[260px] overflow-y-auto custom-scrollbar">
             {isLoadingAgreements ? (
               <div className="py-8 flex justify-center">
                 <Loader2 className="w-5 h-5 animate-spin text-[#008bcd]" />
               </div>
             ) : agreements.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-6">
+              <p className="text-xs text-muted-foreground text-center py-6">
                 No hay convenios comerciales activos registrados.
               </p>
             ) : (
@@ -455,13 +413,13 @@ export function TreatmentSidebar({
                     onClick={() => handleSelectAgreement(ag)}
                     className={`p-3 rounded-2xl border cursor-pointer flex items-center justify-between transition-colors ${
                       isSelected
-                        ? "border-[#008bcd] bg-[#008bcd]/15"
-                        : "border-[#1e2735] bg-[#0a0f16] hover:bg-[#161f2c]"
+                        ? "border-[#008bcd] bg-[#008bcd]/10"
+                        : "border-border bg-background hover:bg-muted"
                     }`}
                   >
                     <div>
-                      <p className="text-xs font-bold text-white">{ag.name}</p>
-                      <span className="text-[10px] font-semibold text-[#10b981]">
+                      <p className="text-xs font-bold text-foreground">{ag.name}</p>
+                      <span className="text-[10px] font-semibold text-emerald-600">
                         {ag.discountType === "PERCENTAGE"
                           ? `${ag.discountValue}% descuento`
                           : `$${ag.discountValue} descuento fijo`}
@@ -473,14 +431,13 @@ export function TreatmentSidebar({
               })
             )}
           </div>
-
-          <div className="flex justify-end gap-2 pt-2 border-t border-[#1e2735]">
+          <div className="flex justify-end gap-2 pt-2 border-t border-border/80">
             <Button
               type="button"
               variant="outline"
               size="sm"
               onClick={() => setIsAgreementModalOpen(false)}
-              className="rounded-xl text-xs font-bold h-9 px-4 border-[#1e2735] bg-transparent text-slate-300 hover:bg-[#1a2332] hover:text-white cursor-pointer"
+              className="rounded-xl text-xs font-bold h-9 px-4 border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground cursor-pointer"
             >
               Cerrar
             </Button>
@@ -490,5 +447,3 @@ export function TreatmentSidebar({
     </div>
   )
 }
-
-export default TreatmentSidebar
