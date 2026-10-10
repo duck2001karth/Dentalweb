@@ -140,7 +140,7 @@ export function TreatmentPlanDetail({
               sections={state.currentPlan?.sections || []} 
               planDiscountPercent={state.discountPercent}
               setIsSectionModalOpen={setters.setIsSectionModalOpen}
-              onRequestDeleteSection={(sec) => {
+              onRequestDeleteSection={(sec: { id: string; name: string }) => {
                 setSectionToDelete(sec)
                 setters.setDeleteMode("SECTION" as any)
                 setters.setIsDeleteModalOpen(true)
