@@ -4,22 +4,23 @@ import { headers } from "next/headers";
 import { prisma } from "@/lib/db";
 import { authOptions } from "@/lib/auth";
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> } 
-) {
+async function getSafeId(params: any): Promise<string> {
+  const resolvedParams = await Promise.resolve(params)
+  return String(resolvedParams?.id || params?.id).trim()
+}
+
+export async function POST(request: Request, { params }: any) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session || !session.user || !(session.user as any).id) {
       return NextResponse.json(
         { error: "No autorizado. Sesión requerida para registrar auditoría." },
         { status: 401 }
       );
     }
-
+    
     const currentUserId = (session.user as any).id;
-    const { id } = await params; 
+    const id = await getSafeId(params);
 
     if (!id) {
       return NextResponse.json({ error: "Falta el ID del plan de tratamiento" }, { status: 400 });
@@ -37,17 +38,18 @@ export async function POST(
     const rawPrice = body.cost ?? body.price ?? body.basePrice ?? 0;
     const parsedPrice = isNaN(parseFloat(rawPrice)) ? 0 : parseFloat(rawPrice);
     const tooth = body.toothNumber || body.tooth || body.toothNum || null;
-    const sectionId = body.sectionId || null; 
+    const sectionId = body.sectionId || null;
 
     const newItem = await prisma.$transaction(async (tx) => {
       const plan = await tx.treatmentPlan.findUnique({
         where: { id },
         select: { id: true, patientId: true, name: true, totalCost: true }
       });
-
+      
       if (!plan) {
         throw new Error("PLAN_NOT_FOUND");
       }
+
       let sectionName = "";
       if (sectionId) {
         const sec = await tx.treatmentSection.findUnique({
@@ -65,7 +67,7 @@ export async function POST(
           procedureName: String(procedureName),
           cost: parsedPrice,
           tooth: tooth ? String(tooth) : null,
-          sectionId: sectionId ? String(sectionId) : null, 
+          sectionId: sectionId ? String(sectionId) : null,
         }
       });
 
@@ -115,17 +117,14 @@ export async function POST(
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: Request, { params }: any) {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user || !(session.user as any).id) {
       return NextResponse.json({ error: "No autorizado" }, { status: 401 });
     }
 
-    const { id } = await params;
+    const id = await getSafeId(params);
     const body = await request.json();
     const { itemIds, sectionId } = body;
 
@@ -150,23 +149,18 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(request: Request, { params }: any) {
   try {
     const session = await getServerSession(authOptions);
-
     if (!session || !session.user || !(session.user as any).id) {
       return NextResponse.json(
         { error: "No autorizado. Sesión requerida para registrar auditoría." },
         { status: 401 }
       );
     }
-
+    
     const currentUserId = (session.user as any).id;
-    const { id } = await params;
-
+    const id = await getSafeId(params);
     const body = await request.json();
     const { itemIds } = body;
 
@@ -176,6 +170,7 @@ export async function DELETE(
         { status: 400 }
       );
     }
+
     const headersList = await headers();
     const forwardedFor = headersList.get("x-forwarded-for");
     const ipAddress = forwardedFor
@@ -188,10 +183,11 @@ export async function DELETE(
         where: { id },
         select: { id: true, patientId: true, name: true, totalCost: true }
       });
-
+      
       if (!plan) {
         throw new Error("PLAN_NOT_FOUND");
       }
+
       const itemsToDelete = await tx.treatmentItem.findMany({
         where: {
           id: { in: itemIds },
@@ -202,12 +198,14 @@ export async function DELETE(
       if (itemsToDelete.length === 0) {
         throw new Error("ITEMS_NOT_FOUND");
       }
+
       await tx.treatmentItem.deleteMany({
         where: {
           id: { in: itemIds },
           treatmentPlanId: id,
         },
       });
+
       const remainingItems = await tx.treatmentItem.findMany({
         where: { treatmentPlanId: id },
       });
@@ -222,6 +220,7 @@ export async function DELETE(
         where: { id },
         data: { totalCost: newTotalCost },
       });
+
       await tx.auditLog.create({
         data: {
           userId: currentUserId,

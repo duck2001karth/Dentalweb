@@ -5,6 +5,7 @@ import { Search, User, Handshake, Stethoscope, Layers, CheckCircle2 } from "luci
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
+import { useClinicSettings } from "@/config/clinic-settings"
 
 interface PaymentPatientTargetFormProps {
   formData: any
@@ -37,6 +38,9 @@ export function PaymentPatientTargetForm({
   isLoadingPlans,
   patientConvenio,
 }: PaymentPatientTargetFormProps) {
+  const { settings } = useClinicSettings()
+  const currencySymbol = (settings as any)?.currencySymbol || "$"
+
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -51,11 +55,7 @@ export function PaymentPatientTargetForm({
   }, [])
 
   const filteredPatients = (patients || [])
-    .filter((pt: any) =>
-      `${pt.firstName} ${pt.lastName} ${pt.ci || ""}`
-        .toLowerCase()
-        .includes(patientSearchQuery.toLowerCase())
-    )
+    .filter((pt: any) => `${pt.firstName} ${pt.lastName} ${pt.ci || ""}`.toLowerCase().includes(patientSearchQuery.toLowerCase()))
     .slice(0, 5)
 
   const handleTypeChange = (type: "GENERAL" | "PLAN") => {
@@ -69,10 +69,7 @@ export function PaymentPatientTargetForm({
     } else {
       if (patientPlans.length > 0) {
         const defaultPlan = patientPlans[0]
-        const debt = Number(
-          defaultPlan.pendingBalance ??
-            (Number(defaultPlan.totalCost || 0) - Number(defaultPlan.totalPaid || 0))
-        )
+        const debt = Number(defaultPlan.pendingBalance || Math.max(0, Number(defaultPlan.totalCost || 0) - Number(defaultPlan.totalPaid || 0)))
         setFormData((prev: any) => ({
           ...prev,
           treatmentPlanId: defaultPlan.id,
@@ -83,10 +80,7 @@ export function PaymentPatientTargetForm({
   }
 
   const handleSelectPlan = (plan: any) => {
-    const debt = Number(
-      plan.pendingBalance ??
-        (Number(plan.totalCost || 0) - Number(plan.totalPaid || 0))
-    )
+    const debt = Number(plan.pendingBalance || Math.max(0, Number(plan.totalCost || 0) - Number(plan.totalPaid || 0)))
     setFormData((prev: any) => ({
       ...prev,
       treatmentPlanId: plan.id,
@@ -97,13 +91,7 @@ export function PaymentPatientTargetForm({
   return (
     <div className="space-y-4">
       {/* 1. SELECCIÓN DE PACIENTE */}
-      <div
-        ref={dropdownRef}
-        className={cn(
-          "bg-muted/10 border rounded-xl p-3.5 relative transition-colors",
-          showErrors && isPatientMissing ? "border-rose-500/80 bg-rose-500/5" : "border-border/60"
-        )}
-      >
+      <div ref={dropdownRef} className={cn("bg-muted/10 border rounded-xl p-3.5 relative transition-colors", showErrors && isPatientMissing ? "border-rose-500/80 bg-rose-500/5" : "border-border/60")}>
         <div className="flex items-center justify-between mb-2">
           <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
             <User className="w-3.5 h-3.5 text-[#008bcd]" /> Paciente Titular <span className="text-rose-500">*</span>
@@ -127,14 +115,10 @@ export function PaymentPatientTargetForm({
             }}
             onFocus={() => setShowDropdown(true)}
             placeholder="Buscar paciente por nombre o CI..."
-            className={cn(
-              "pl-9 h-10 bg-background text-xs font-semibold focus-visible:ring-[#008bcd]",
-              showErrors && isPatientMissing ? "border-rose-500 focus-visible:ring-rose-500" : "border-border"
-            )}
+            className={cn("pl-9 h-10 bg-background text-xs font-semibold focus-visible:ring-[#008bcd]", showErrors && isPatientMissing ? "border-rose-500 focus-visible:ring-rose-500" : "border-border")}
             disabled={isEditing}
           />
         </div>
-
         {showDropdown && !isEditing && patientSearchQuery.length > 0 && (
           <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-popover border border-border rounded-xl shadow-xl z-50 max-h-44 overflow-y-auto divide-y divide-border/40">
             {filteredPatients.length > 0 ? (
@@ -149,18 +133,12 @@ export function PaymentPatientTargetForm({
                   }}
                   className="w-full text-left px-3 py-2 hover:bg-[#008bcd]/10 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
                 >
-                  <span className="text-foreground">
-                    {pt.firstName} {pt.lastName}
-                  </span>
-                  <span className="text-[9px] text-muted-foreground font-mono bg-background px-1.5 py-0.5 rounded border border-border">
-                    CI: {pt.ci || "S/N"}
-                  </span>
+                  <span className="text-foreground">{pt.firstName} {pt.lastName}</span>
+                  <span className="text-[9px] text-muted-foreground font-mono bg-background px-1.5 py-0.5 rounded border border-border">CI: {pt.ci || "S/N"}</span>
                 </button>
               ))
             ) : (
-              <div className="p-3 text-xs text-muted-foreground text-center">
-                No se encontraron registros.
-              </div>
+              <div className="p-3 text-xs text-muted-foreground text-center">No se encontraron registros.</div>
             )}
           </div>
         )}
@@ -170,79 +148,45 @@ export function PaymentPatientTargetForm({
       {formData.patientId && (
         <div className="bg-muted/10 border border-border/60 rounded-xl p-3.5 space-y-3">
           <div className="flex items-center justify-between">
-            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-              Destino del Ingreso en Caja
-            </Label>
-            {isLoadingPlans && (
-              <span className="text-[10px] text-muted-foreground italic">Buscando planes...</span>
-            )}
+            <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Destino del Ingreso en Caja</Label>
+            {isLoadingPlans && <span className="text-[10px] text-muted-foreground italic">Buscando planes...</span>}
           </div>
-
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => handleTypeChange("GENERAL")}
-              className={cn(
-                "p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
-                paymentType === "GENERAL"
-                  ? "bg-[#008bcd]/15 border-[#008bcd] text-[#008bcd] shadow-2xs"
-                  : "bg-background border-border text-muted-foreground hover:text-foreground"
-              )}
+              className={cn("p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer", paymentType === "GENERAL" ? "bg-[#008bcd]/15 border-[#008bcd] text-[#008bcd] shadow-2xs" : "bg-background border-border text-muted-foreground hover:text-foreground")}
             >
               <Stethoscope className="w-3.5 h-3.5" /> Consulta / Mostrador
             </button>
-
             <button
               type="button"
               onClick={() => handleTypeChange("PLAN")}
               disabled={patientPlans.length === 0}
-              className={cn(
-                "p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
-                paymentType === "PLAN"
-                  ? "bg-[#008bcd]/15 border-[#008bcd] text-[#008bcd] shadow-2xs"
-                  : patientPlans.length === 0
-                  ? "opacity-40 cursor-not-allowed bg-background border-border text-muted-foreground"
-                  : "bg-background border-border text-muted-foreground hover:text-foreground"
-              )}
+              className={cn("p-2.5 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer", paymentType === "PLAN" ? "bg-[#008bcd]/15 border-[#008bcd] text-[#008bcd] shadow-2xs" : patientPlans.length === 0 ? "opacity-40 cursor-not-allowed bg-background border-border text-muted-foreground" : "bg-background border-border text-muted-foreground hover:text-foreground")}
             >
               <Layers className="w-3.5 h-3.5" /> Abono a Tratamiento ({patientPlans.length})
             </button>
           </div>
-
           {paymentType === "PLAN" && (
             <div className="space-y-2 pt-1">
-              <span className="text-[10px] font-semibold text-muted-foreground">
-                Seleccione el plan a imputar:
-              </span>
+              <span className="text-[10px] font-semibold text-muted-foreground">Seleccione el plan a imputar:</span>
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                 {patientPlans.map((plan: any) => {
-                  const debt = Number(
-                    plan.pendingBalance ??
-                      (Number(plan.totalCost || 0) - Number(plan.totalPaid || 0))
-                  )
+                  const debt = Number(plan.pendingBalance || Math.max(0, Number(plan.totalCost || 0) - Number(plan.totalPaid || 0)))
                   const isSelected = formData.treatmentPlanId === plan.id
-
                   return (
                     <div
                       key={plan.id}
                       onClick={() => handleSelectPlan(plan)}
-                      className={cn(
-                        "p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between gap-2",
-                        isSelected
-                          ? "bg-[#008bcd]/15 border-[#008bcd] shadow-2xs ring-1 ring-[#008bcd]/40"
-                          : "bg-background border-border hover:border-[#008bcd]/40 hover:bg-muted/30"
-                      )}
+                      className={cn("p-3 rounded-xl border text-xs cursor-pointer transition-all flex items-center justify-between gap-2", isSelected ? "bg-[#008bcd]/15 border-[#008bcd] shadow-2xs ring-1 ring-[#008bcd]/40" : "bg-background border-border hover:border-[#008bcd]/40 hover:bg-muted/30")}
                     >
                       <div className="truncate">
-                        <p className={cn("font-bold text-xs truncate", isSelected ? "text-[#008bcd]" : "text-foreground")}>
-                          {plan.name || "Plan Odontológico"}
-                        </p>
+                        <p className={cn("font-bold text-xs truncate", isSelected ? "text-[#008bcd]" : "text-foreground")}>{plan.name || "Plan Odontológico"}</p>
                         <div className="flex items-center gap-2 text-[10px] text-muted-foreground font-mono mt-0.5">
-                          <span>P: ${Number(plan.totalCost || 0).toFixed(2)}</span>
-                          <span>•</span>
-                          <span className="font-bold text-amber-600 dark:text-amber-400">
-                            Saldo: ${debt.toFixed(2)}
-                          </span>
+                          <span>P: {currencySymbol}{Number(plan.totalCost || 0).toFixed(2)}</span>
+                          <span>|</span>
+                          <span className="font-bold text-amber-600 dark:text-amber-400">Saldo: {currencySymbol}{debt.toFixed(2)}</span>
                         </div>
                       </div>
                       {isSelected && <CheckCircle2 className="w-4 h-4 text-[#008bcd] shrink-0" />}
@@ -252,13 +196,12 @@ export function PaymentPatientTargetForm({
               </div>
             </div>
           )}
-
           {paymentType === "GENERAL" && (
             <div className="space-y-1 pt-1">
               <Input
                 value={formData.notes || ""}
                 onChange={(e) => setFormData((prev: any) => ({ ...prev, notes: e.target.value }))}
-                placeholder="Concepto: Consulta general, radiografía, profilaxis..."
+                placeholder="Concepto: Consulta general, radiografía..."
                 className="h-10 bg-background text-xs font-medium"
               />
             </div>

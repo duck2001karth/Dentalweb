@@ -1,56 +1,59 @@
 "use client"
 
 import React, { useEffect, useState, useMemo } from "react"
-import { Plus, RefreshCw, ArrowUpRight, Lock } from "lucide-react"
+import { Plus, RefreshCw, ArrowUpRight, Lock, Receipt, Users } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { isToday, isYesterday, startOfWeek, startOfMonth } from "date-fns"
 import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePayments } from "@/hooks/use-payments"
 import { useGetPatients } from "@/hooks/patients"
 import type { PaymentRecord } from "@/types/billing"
 import { useToast } from "@/hooks/use-toast"
-import { BillingStats } from "./billing-stats"
-import { PaymentModal } from "./payment-modal"
-import { ExpenseModal } from "./expense-modal"
-import { CashCloseModal } from "./cash-close-modal"
-import { DeletePaymentAlert } from "./delete-payment-alert"
-import { PrintArqueoTemplate } from "./print-arqueo-template"
-import { CashCloseSuccessDialog } from "./cash-close-success"
-import { BillingTable } from "./billing-table"
+import { BillingStats } from "./tables/billing-stats"
+import { PaymentModal } from "./modals/payment-modal"
+import { ExpenseModal } from "./modals/expense-modal"
+import { CashCloseModal } from "./modals/cash-close-modal"
+import { DeletePaymentAlert } from "./modals/delete-payment-alert"
+import { PrintArqueoTemplate } from "./print/print-arqueo-template"
+import { CashCloseSuccessDialog } from "./modals/cash-close-success"
+import { BillingTable } from "@/components/clinic-management/billing/tables/billing-table"
+import { DebtsTable } from "./tables/debts-table"
 
 export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string }) {
-  // 1. TODOS LOS HOOKS ARRIBA (Sin returns condicionales en medio)
   const { data: session } = useSession()
   const { toast } = useToast()
   const currentUserId = (session?.user as any)?.id
-
+  
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false)
   const [isCloseSuccessOpen, setIsCloseSuccessOpen] = useState(false)
   const [lastCloseSummary, setLastCloseSummary] = useState<any>(null)
-
-  const { 
-    payments = [], 
-    lastClose, 
-    setLastClose, 
-    isLoading, 
-    isSaving, 
-    fetchPayments, 
-    createPayment, 
-    updatePayment, 
-    deletePayment 
+  
+  const {
+    payments = [],
+    lastClose,
+    setLastClose,
+    isLoading,
+    isSaving,
+    fetchPayments,
+    createPayment,
+    updatePayment,
+    deletePayment
   } = usePayments()
-
+  
   const { patients: apiPatients = [] } = useGetPatients({})
+  
   const [localSearch, setLocalSearch] = useState("")
   const [dateFilter, setDateFilter] = useState("TODAY")
   const [methodFilter, setMethodFilter] = useState("ALL")
   const [statusFilter, setStatusFilter] = useState("ACTIVE")
   const [currentPage, setCurrentPage] = useState(1)
   const itemsPerPage = 10
-
+  
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isExpenseOpen, setIsExpenseOpen] = useState(false)
   const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null)
+  const [prefilledPayment, setPrefilledPayment] = useState<{patientId: string, planId: string, amount: number} | null>(null)
   const [itemToDelete, setItemToDelete] = useState<string | null>(null)
 
   useEffect(() => {
@@ -79,11 +82,28 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
 
   const searchEffective = externalSearch !== undefined ? externalSearch : localSearch
 
-  const filteredTablePayments = useMemo(() => {
-    return safePaymentsList.filter((p: any) => {
+  const processedPayments = useMemo(() => {
+    const table: any[] = []
+    const kpi: any[] = []
+
+    safePaymentsList.forEach((p: any) => {
       const isVoided = typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO")
-      if (statusFilter === "ACTIVE" && isVoided) return false
-      if (statusFilter === "VOIDED" && !isVoided) return false
+      const pDate = p.createdAt ? new Date(p.createdAt) : null
+      
+      let passDate = true
+      if (pDate) {
+        if (dateFilter === "TODAY" && !isToday(pDate)) passDate = false
+        if (dateFilter === "YESTERDAY" && !isYesterday(pDate)) passDate = false
+        if (dateFilter === "THIS_WEEK" && pDate < startOfWeek(new Date(), { weekStartsOn: 1 })) passDate = false
+        if (dateFilter === "THIS_MONTH" && pDate < startOfMonth(new Date())) passDate = false
+      }
+
+      let passMethod = true
+      if (methodFilter !== "ALL" && p.method !== methodFilter) passMethod = false
+
+      let passStatusTable = true
+      if (statusFilter === "ACTIVE" && isVoided) passStatusTable = false
+      if (statusFilter === "VOIDED" && !isVoided) passStatusTable = false
 
       const q = (searchEffective || "").toLowerCase()
       const patientName = `${p.patient?.firstName || ""} ${p.patient?.lastName || ""}`.toLowerCase()
@@ -92,76 +112,59 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
         patientName.includes(q) ||
         (p.patient?.ci && p.patient.ci.includes(q))
 
-      if (!matchesSearch) return false
-      if (methodFilter !== "ALL" && p.method !== methodFilter) return false
-      if (!p.createdAt) return true
+      if (passDate && passMethod && passStatusTable && matchesSearch) {
+        table.push(p)
+      }
 
-      const pDate = new Date(p.createdAt)
-      if (dateFilter === "TODAY" && !isToday(pDate)) return false
-      if (dateFilter === "YESTERDAY" && !isYesterday(pDate)) return false
-      if (dateFilter === "THIS_WEEK" && pDate < startOfWeek(new Date(), { weekStartsOn: 1 })) return false
-      if (dateFilter === "THIS_MONTH" && pDate < startOfMonth(new Date())) return false
-
-      return true
+      if (passDate && passMethod && !isVoided) {
+        kpi.push(p)
+      }
     })
+
+    return { table, kpi }
   }, [safePaymentsList, searchEffective, dateFilter, methodFilter, statusFilter])
 
-  const activePaymentsForKPIs = useMemo(() => {
-    return safePaymentsList.filter((p: any) => {
-      const isVoided = typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO")
-      if (isVoided) return false
-      if (methodFilter !== "ALL" && p.method !== methodFilter) return false
-      if (!p.createdAt) return true
-
-      const pDate = new Date(p.createdAt)
-      if (dateFilter === "TODAY" && !isToday(pDate)) return false
-      if (dateFilter === "YESTERDAY" && !isYesterday(pDate)) return false
-      if (dateFilter === "THIS_WEEK" && pDate < startOfWeek(new Date(), { weekStartsOn: 1 })) return false
-      if (dateFilter === "THIS_MONTH" && pDate < startOfMonth(new Date())) return false
-
-      return true
-    })
-  }, [safePaymentsList, dateFilter, methodFilter])
-
-  const totalItems = filteredTablePayments.length
+  const totalItems = processedPayments.table.length
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1
   const startIndex = (currentPage - 1) * itemsPerPage
-  const currentPayments = filteredTablePayments.slice(startIndex, startIndex + itemsPerPage)
+  const currentPayments = processedPayments.table.slice(startIndex, startIndex + itemsPerPage)
 
-  // 2. VALIDACIÓN DE AUTORIZACIÓN (DESPUÉS DE TODOS LOS HOOKS)
   const rawRole = String((session?.user as any)?.role || "").toUpperCase().trim()
-  const isAuthorized = 
-    rawRole === "ADMIN" || 
-    rawRole === "ADMINISTRADOR" || 
-    rawRole === "RECEPTIONIST" || 
-    rawRole === "RECEPCION" ||
-    rawRole === "RECEPCIONISTA"
+  const isAuthorized = ["ADMIN", "ADMINISTRADOR", "RECEPTIONIST", "RECEPCION", "RECEPCIONISTA"].includes(rawRole)
 
   if (!isAuthorized) {
     return (
       <div className="p-12 text-center border border-dashed rounded-2xl bg-card">
         <Lock className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
         <h3 className="font-bold text-base text-foreground">Acceso Restringido a Caja</h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          Este módulo es de uso exclusivo para Recepción, Caja y Administración.
-        </p>
+        <p className="text-xs text-muted-foreground mt-1">Este módulo es de uso exclusivo para Recepción y Administración.</p>
       </div>
     )
   }
 
-  // 3. RENDERIZADO PRINCIPAL
+  const handleOpenNewPayment = () => {
+    setEditingPayment(null)
+    setPrefilledPayment(null)
+    setIsModalOpen(true)
+  }
+
+  const handlePayDebt = (patientId: string, planId: string, amount: number) => {
+    setEditingPayment(null)
+    setPrefilledPayment({ patientId, planId, amount })
+    setIsModalOpen(true)
+  }
+
   return (
     <>
       <div className="space-y-6 font-sans antialiased animate-in fade-in duration-300 print:hidden">
-        {/* ENCABEZADO Y BOTONES DE ACCIÓN */}
+        {/* ENCABEZADO Y BOTONES */}
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-black text-foreground tracking-tight">Arqueo y Facturación</h2>
             <p className="text-xs text-muted-foreground mt-0.5 font-medium">
-              Control continuo de ingresos, egresos de caja chica y arqueo de turnos.
+              Control de ingresos, arqueo de turnos y seguimiento de cartera vencida.
             </p>
           </div>
-
           <div className="flex flex-wrap items-center gap-2.5">
             <Button
               type="button"
@@ -169,20 +172,17 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
               size="icon"
               onClick={() => fetchPayments()}
               className="h-10 w-10 rounded-xl border-border hover:bg-muted bg-card shadow-none transition-colors cursor-pointer"
-              title="Refrescar transacciones"
             >
               <RefreshCw className={`w-4 h-4 text-muted-foreground ${isLoading ? "animate-spin" : ""}`} />
             </Button>
-
             <Button
               type="button"
               onClick={() => setIsExpenseOpen(true)}
               variant="outline"
-              className="h-10 px-4 rounded-xl text-rose-600 border-rose-200/60 hover:bg-rose-500/10 hover:border-rose-500/30 bg-card font-bold text-xs shadow-none transition-all cursor-pointer"
+              className="h-10 px-4 rounded-xl text-rose-600 dark:text-rose-500 border-border hover:bg-rose-500/10 hover:border-rose-500/30 bg-card font-bold text-xs shadow-none transition-all cursor-pointer"
             >
               <ArrowUpRight className="w-4 h-4 mr-1.5 stroke-[2.5]" /> Registrar Egreso
             </Button>
-
             <Button
               type="button"
               onClick={() => setIsCloseModalOpen(true)}
@@ -191,14 +191,10 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
             >
               <Lock className="w-4 h-4 mr-1.5 text-[#008bcd]" /> Corte / Arqueo
             </Button>
-
             <Button
               type="button"
-              onClick={() => {
-                setEditingPayment(null)
-                setIsModalOpen(true)
-              }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-5 rounded-xl shadow-xs text-xs transition-all border-none flex items-center cursor-pointer active:scale-95"
+              onClick={handleOpenNewPayment}
+              className="bg-[#008bcd] hover:bg-[#0073ab] text-white font-bold h-10 px-5 rounded-xl shadow-xs text-xs transition-all active:scale-95 cursor-pointer"
             >
               <Plus className="w-4 h-4 mr-1.5 stroke-[2.5]" /> Nuevo Cobro
             </Button>
@@ -206,51 +202,71 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
         </div>
 
         {/* MÉTRICAS */}
-        <BillingStats payments={activePaymentsForKPIs} />
+        <BillingStats payments={processedPayments.kpi} />
 
-        {/* TABLA EXTRAÍDA */}
-        <BillingTable
-          isLoading={isLoading}
-          payments={filteredTablePayments}
-          currentPayments={currentPayments}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
-          dateFilter={dateFilter}
-          setDateFilter={setDateFilter}
-          methodFilter={methodFilter}
-          setMethodFilter={setMethodFilter}
-          localSearch={localSearch}
-          setLocalSearch={setLocalSearch}
-          externalSearch={externalSearch}
-          currentPage={currentPage}
-          setCurrentPage={setCurrentPage}
-          totalPages={totalPages}
-          totalItems={totalItems}
-          startIndex={startIndex}
-          itemsPerPage={itemsPerPage}
-          onEdit={(payment) => {
-            setEditingPayment(payment)
-            setIsModalOpen(true)
-          }}
-          onDelete={(id) => setItemToDelete(id)}
-        />
+        {/* TABS DE NAVEGACIÓN */}
+        <Tabs defaultValue="movimientos" className="w-full">
+          <div className="flex items-center justify-between mb-4">
+            <TabsList className="bg-muted/50 border border-border/80 h-11 p-1 rounded-xl">
+              <TabsTrigger value="movimientos" className="text-xs font-bold px-5 py-2 rounded-lg data-[state=active]:bg-background data-[state=active]:text-[#008bcd] data-[state=active]:shadow-sm transition-all cursor-pointer">
+                <Receipt className="w-3.5 h-3.5 mr-2" /> Movimientos y Arqueo
+              </TabsTrigger>
+              <TabsTrigger value="deudas" className="text-xs font-bold px-5 py-2 rounded-lg data-[state=active]:bg-background data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-500 data-[state=active]:shadow-sm transition-all cursor-pointer">
+                <Users className="w-3.5 h-3.5 mr-2" /> Cuentas por Cobrar
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="movimientos" className="mt-0 outline-none">
+            <BillingTable
+              isLoading={isLoading}
+              payments={processedPayments.table}
+              currentPayments={currentPayments}
+              statusFilter={statusFilter}
+              setStatusFilter={setStatusFilter}
+              dateFilter={dateFilter}
+              setDateFilter={setDateFilter}
+              methodFilter={methodFilter}
+              setMethodFilter={setMethodFilter}
+              localSearch={localSearch}
+              setLocalSearch={setLocalSearch}
+              externalSearch={externalSearch}
+              currentPage={currentPage}
+              setCurrentPage={setCurrentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              startIndex={startIndex}
+              itemsPerPage={itemsPerPage}
+              onEdit={(payment) => {
+                setPrefilledPayment(null)
+                setEditingPayment(payment)
+                setIsModalOpen(true)
+              }}
+              onDelete={(id) => setItemToDelete(id)}
+            />
+          </TabsContent>
+
+          <TabsContent value="deudas" className="mt-0 outline-none">
+            <DebtsTable onPayDebt={handlePayDebt} />
+          </TabsContent>
+        </Tabs>
       </div>
 
-      {/* PLANTILLA DE IMPRESIÓN */}
       <PrintArqueoTemplate
         payments={safePaymentsList}
         dateFilter={dateFilter}
         cashierName={session?.user?.name || "Cajero de Turno"}
       />
 
-      {/* MODAL NUEVO COBRO / EDITAR */}
       <PaymentModal
         isOpen={isModalOpen}
         onClose={() => {
           setIsModalOpen(false)
           setEditingPayment(null)
+          setPrefilledPayment(null)
         }}
         editingPayment={editingPayment}
+        prefilledData={prefilledPayment}
         patients={apiPatients}
         isSaving={isSaving}
         onSave={async (data) => {
@@ -265,21 +281,15 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
         }}
       />
 
-      {/* MODAL EGRESO */}
       <ExpenseModal
         isOpen={isExpenseOpen}
         onClose={() => setIsExpenseOpen(false)}
         onSave={async (data) => {
-          toast({ 
-            title: "Egreso Registrado", 
-            description: `Salida de caja por $${data.amount} completada.`, 
-            variant: "success" 
-          })
+          toast({ title: "Egreso Registrado", description: `Salida por $${data.amount} completada.`, variant: "success" })
           return true
         }}
       />
 
-      {/* MODAL CORTE Y ARQUEO */}
       <CashCloseModal
         isOpen={isCloseModalOpen}
         onClose={() => setIsCloseModalOpen(false)}
@@ -293,19 +303,12 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
             })
             if (res.ok) {
               const json = await res.json()
-              if (json?.data) {
-                setLastClose(json.data)
-              }
+              if (json?.data) setLastClose(json.data)
               setLastCloseSummary({
                 expectedCash: closeData.expectedCash,
                 countedCash: closeData.countedCash,
                 difference: closeData.difference,
-                status:
-                  Math.abs(closeData.difference) < 0.01
-                    ? "BALANCED"
-                    : closeData.difference > 0
-                    ? "SURPLUS"
-                    : "DEFICIT",
+                status: Math.abs(closeData.difference) < 0.01 ? "BALANCED" : closeData.difference > 0 ? "SURPLUS" : "DEFICIT",
               })
               await fetchPayments()
               setIsCloseModalOpen(false)
@@ -314,35 +317,25 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
             }
             return false
           } catch (error) {
-            console.error("Error al procesar arqueo:", error)
             return false
           }
         }}
       />
 
-      {/* MODAL CONFIRMACIÓN ARQUEO */}
       <CashCloseSuccessDialog
         isOpen={isCloseSuccessOpen}
-        onClose={() => {
-          setIsCloseSuccessOpen(false)
-          fetchPayments()
-        }}
+        onClose={() => { setIsCloseSuccessOpen(false); fetchPayments() }}
         summaryData={lastCloseSummary}
         onPrintArqueo={() => window.print()}
       />
 
-      {/* MODAL ANULAR PAGO */}
       <DeletePaymentAlert
         isOpen={!!itemToDelete}
         onClose={() => setItemToDelete(null)}
         onConfirm={async (reason) => {
           if (itemToDelete) {
             await deletePayment(itemToDelete, reason)
-            toast({ 
-              title: "Cobro Anulado", 
-              description: "El dinero ha sido descontado del arqueo de caja.", 
-              variant: "destructive" 
-            })
+            toast({ title: "Cobro Anulado", variant: "destructive" })
             fetchPayments()
           }
         }}

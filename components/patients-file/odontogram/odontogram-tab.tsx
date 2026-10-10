@@ -1,248 +1,166 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
-import { Loader2, Maximize2, Minimize2, Grid3X3, Printer } from "lucide-react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
-import { useRouter } from "next/navigation"
+import { 
+  Sparkles, Save, Trash2, RotateCcw, 
+  HelpCircle, Eye, Loader2, Stethoscope, AlertTriangle 
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
-import { useGetPatient } from "@/hooks/patients"
-import { useClinicSettings } from "@/config/clinic-settings"
+import { OdontogramGrid } from "./odontogram-grid"
+import { OdontogramHistory } from "./odontogram-history"
+import { OdontogramActionMenu } from "./odontogram-action-menu"
+import { OdontogramLegendModal } from "./odontogram-legend-modal"
 import { odontogramStatuses } from "@/constants/status"
 
-import { OdontogramGrid } from "./odontogram-grid"
-import { OdontogramActionMenu } from "./odontogram-action-menu"
-import { OdontogramHistory } from "./odontogram-history"
-import { OdontogramLegendModal } from "./odontogram-legend-modal"
-import { OdontogramPrint } from "./odontogram-print"
-import { ToothPiece } from "./odontooth-piece" 
+interface OdontogramTabProps {
+  patientId: string
+  planId?: string
+  isPlanView?: boolean
+  onToothClickCallback?: (tooth: number) => void
+  onPlanUpdate?: () => void
+}
 
 export function OdontogramaTab({
   patientId,
   planId,
-  onToothClickCallback,
   isPlanView = false,
-  onPlanUpdate
-}: any) {
+  onToothClickCallback,
+  onPlanUpdate,
+}: OdontogramTabProps) {
   const { data: session } = useSession()
   const { toast } = useToast()
-  const router = useRouter()
-
   const currentUser = session?.user as any
-  const canEditClinicalData = currentUser?.role === "DOCTOR" || currentUser?.role === "ADMIN"
-
-  const { patient } = useGetPatient(patientId)
-  const [isFocusMode, setIsFocusMode] = useState(false)
-  const [dentition, setDentition] = useState<"permanente" | "temporal">("permanente")
-  const [view, setView] = useState("diagnostico")
+  const userRole = String(currentUser?.role || "DOCTOR").toUpperCase()
+  const canEdit = userRole === "ADMIN" || userRole === "DOCTOR"
 
   const [records, setRecords] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
+  const [dentition, setDentition] = useState<"permanente" | "temporal">("permanente")
+  const [view, setView] = useState<"inicial" | "evolucion">("evolucion")
 
+  const [menuStep, setMenuStep] = useState<"NONE" | "OPTIONS" | "LESIONS" | "PREEXISTENCES" | "SAVE_FORM">("NONE")
   const [selectedTooth, setSelectedTooth] = useState<number | null>(null)
   const [currentSurfaces, setCurrentSurfaces] = useState<string[]>([])
-  const [menuStep, setMenuStep] = useState<"NONE" | "OPTIONS" | "LESIONS" | "PREEXISTENCES" | "SAVE_FORM">("NONE")
   const [selectedStatus, setSelectedStatus] = useState<any>(null)
   const [recordComment, setRecordComment] = useState("")
-  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const isFetchingRef = useRef(false)
 
   const fetchRecords = useCallback(async () => {
+    if (!patientId || isFetchingRef.current) return
+    isFetchingRef.current = true
     try {
-      const res = await fetch(`/api/odontogram?patientId=${patientId}`)
+      const url = planId 
+        ? `/api/odontogram?patientId=${patientId}&planId=${planId}`
+        : `/api/odontogram?patientId=${patientId}`
+      const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
-        setRecords(Array.isArray(data) ? data : [])
+        setRecords(Array.isArray(data) ? data : data.records || [])
       }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los registros del odontograma.",
-        variant: "destructive"
-      })
+    } catch (e) {
+      console.error("Error al cargar odontograma:", e)
     } finally {
       setIsLoading(false)
+      isFetchingRef.current = false
     }
-  }, [patientId, toast])
+  }, [patientId, planId])
 
   useEffect(() => {
     fetchRecords()
   }, [fetchRecords])
 
   const handleSurfaceClick = (tooth: number, surface: string) => {
-    if (!canEditClinicalData) return
+    if (!canEdit) return
+    setSelectedTooth(tooth)
+    setCurrentSurfaces([surface])
+    setMenuStep("OPTIONS")
 
-    if (selectedTooth !== tooth) {
-      setSelectedTooth(tooth)
-      setCurrentSurfaces(surface === "TODA_LA_PIEZA" ? [] : [surface])
-      setMenuStep("OPTIONS")
-      if (onToothClickCallback) onToothClickCallback(tooth)
-    } else {
-      if (surface === "TODA_LA_PIEZA") {
-        setCurrentSurfaces([])
-      } else {
-        setCurrentSurfaces((prev) =>
-          prev.includes(surface) ? prev.filter((s) => s !== surface) : [...prev, surface]
-        )
-      }
+    if (onToothClickCallback) {
+      onToothClickCallback(tooth)
     }
   }
 
-  const handlePrintOdontogram = () => {
-    window.print()
-  }
-
-  const handleCloseMenu = () => {
-    setMenuStep("NONE")
-    setSelectedTooth(null)
-    setCurrentSurfaces([])
-    setSelectedStatus(null)
-    setRecordComment("")
-    if (onToothClickCallback) onToothClickCallback(0)
-  }
-
   const handleSaveRecord = async () => {
-    if (!canEditClinicalData) return
+    if (!selectedTooth || !selectedStatus || isSaving) return
     setIsSaving(true)
     try {
-      if (selectedStatus?.value === "DIENTE_SANO") {
-        await fetch(`/api/odontogram?patientId=${patientId}&toothNumber=${selectedTooth}`, {
-          method: "DELETE"
-        })
+      const payload = {
+        patientId,
+        planId: planId || null,
+        toothNumber: selectedTooth,
+        surfaces: currentSurfaces,
+        status: selectedStatus.value,
+        notes: recordComment.trim() || null,
+        authorId: currentUser?.id,
       }
 
-      let finalSurfaces = currentSurfaces
-      if (selectedStatus?.type === "tooth" || finalSurfaces.length === 0) {
-        finalSurfaces = ["TODA_LA_PIEZA"]
-      }
-
-      const res = await fetch(`/api/odontogram`, {
+      const res = await fetch("/api/odontogram", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          patientId,
-          planId,
-          toothNumber: selectedTooth,
-          surfaces: finalSurfaces,
-          status: selectedStatus.value,
-          isEvolution: view === "evolucion",
-          authorId: currentUser?.id,
-          notes: recordComment
-        })
+        body: JSON.stringify(payload),
       })
 
       if (!res.ok) throw new Error()
 
-      toast({
-        title: "Simbología registrada",
-        description: `Se actualizó la pieza #${selectedTooth} correctamente.`,
-        variant: "success"
-      })
+      toast({ title: "Hallazgo guardado", variant: "success" })
+      setMenuStep("NONE")
+      setSelectedTooth(null)
+      setCurrentSurfaces([])
+      setRecordComment("")
+      setSelectedStatus(null)
+      
+     await fetchRecords()
 
-      handleCloseMenu()
-      await fetchRecords()
-      if (onPlanUpdate) onPlanUpdate()
-      router.refresh()
-
-    } catch (error) {
-      toast({
-        title: "Error al guardar",
-        description: "No se pudo registrar la condición en la pieza.",
-        variant: "destructive"
-      })
+      if (onPlanUpdate) {
+        onPlanUpdate()
+      }
+    } catch {
+      toast({ title: "Error al guardar hallazgo", variant: "destructive" })
     } finally {
       setIsSaving(false)
     }
   }
 
-  const confirmDeleteRecord = async (recordToDelete: any) => {
+  const confirmDeleteRecord = async (record: any) => {
+    if (!canEdit || !record?.id) return
     try {
-      const response = await fetch(`/api/odontogram?id=${recordToDelete.id}`, { method: "DELETE" })
-      if (!response.ok) throw new Error()
-      toast({ title: "Registro anulado", description: "Se eliminó el hallazgo clínico del diente." })
+      const res = await fetch(`/api/odontogram/${record.id}`, { method: "DELETE" })
+      if (!res.ok) throw new Error()
+      toast({ title: "Hallazgo eliminado", variant: "success" })
       await fetchRecords()
       if (onPlanUpdate) onPlanUpdate()
-      router.refresh()
-    } catch (error) {
-      toast({ title: "Error al anular", variant: "destructive" })
+    } catch {
+      toast({ title: "Error al eliminar registro", variant: "destructive" })
     }
   }
 
-  const getStatusLabel = (val: string) => {
-    if (!val) return "Sin estado"
-    if (odontogramStatuses && (odontogramStatuses as any)[val]) {
-      return (odontogramStatuses as any)[val].label
-    }
-    return val.replace(/_/g, " ")
-  }
+  const getRecordsForTooth = useCallback((toothNum: number) => {
+    return records.filter((r) => Number(r.toothNumber) === toothNum)
+  }, [records])
 
-  const getRecordsForTooth = (toothNum: number) =>
-    records.filter((r) => r.toothNumber === toothNum && r.isEvolution === (view === "evolucion"))
-
-  const currentViewRecords = records.filter((r) => r.isEvolution === (view === "evolucion"))
-
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-24 text-[#008bcd]">
-        <Loader2 className="w-10 h-10 animate-spin mb-4" />
-        <p className="font-semibold text-xs text-muted-foreground">Cargando odontograma...</p>
-      </div>
-    )
+  const getStatusLabel = (statusKey: string) => {
+    return (odontogramStatuses as any)?.[statusKey]?.label || statusKey
   }
 
   return (
-    <div className={cn(
-      "transition-all duration-300 ease-in-out bg-background text-foreground",
-      isFocusMode
-        ? "fixed inset-0 z-[100] w-screen h-screen overflow-y-auto p-4 md:p-8"
-        : "relative w-full h-full animate-in fade-in space-y-6"
-    )}>
-
-      {/* HEADER ADAPTATIVO */}
-      <div className={cn(
-        "flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 bg-card rounded-2xl border border-border/80 shadow-xs sticky top-0 z-20 print:hidden transition-all",
-        isPlanView ? "p-3 bg-muted/20 border-transparent shadow-none" : "p-5"
-      )}>
-        {!isPlanView ? (
-          <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-                <Grid3X3 className="w-5 h-5 text-[#008bcd]" /> Odontograma Clínico
-              </h2>
-              {!canEditClinicalData && (
-                <span className="text-[10px] bg-muted text-muted-foreground font-bold px-2 py-0.5 rounded-md border border-border/80 tracking-wider">
-                  SÓLO LECTURA
-                </span>
-              )}
-            </div>
-            <p className="text-sm font-medium text-muted-foreground mt-0.5">
-              Registro visual anatómico y diagnóstico por superficies dentales.
-            </p>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-black uppercase text-[#008bcd] tracking-wider flex items-center gap-1.5">
-              <Grid3X3 className="w-4 h-4" /> Odontograma
-            </span>
-            {!canEditClinicalData && (
-              <span className="text-[9px] bg-muted text-muted-foreground font-bold px-1.5 py-0.5 rounded border border-border/70">
-                LECTURA
-              </span>
-            )}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
-          <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/80">
+    <div className="w-full space-y-6 font-sans antialiased">
+      {/* Selector de Dentición */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-muted/20 p-4 rounded-2xl border border-border/80">
+        <div className="flex items-center gap-2">
+          <div className="flex bg-background border border-border/80 rounded-xl p-1 shadow-xs">
             <button
               type="button"
               onClick={() => setDentition("permanente")}
               className={cn(
-                "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 dentition === "permanente"
-                  ? "bg-background text-[#008bcd] shadow-2xs"
+                  ? "bg-[#008bcd] text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
@@ -252,122 +170,75 @@ export function OdontogramaTab({
               type="button"
               onClick={() => setDentition("temporal")}
               className={cn(
-                "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer",
                 dentition === "temporal"
-                  ? "bg-background text-[#008bcd] shadow-2xs"
+                  ? "bg-[#008bcd] text-white shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
               )}
             >
-              Temporal
+              Temporal (Niños)
             </button>
           </div>
+        </div>
 
-          <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border border-border/80">
-            <button
-              type="button"
-              onClick={() => setView("diagnostico")}
-              className={cn(
-                "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
-                view === "diagnostico"
-                  ? "bg-[#008bcd] text-white shadow-2xs"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Diagnóstico
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("evolucion")}
-              className={cn(
-                "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
-                view === "evolucion"
-                  ? "bg-[#008bcd] text-white shadow-2xs"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Evolución
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <OdontogramLegendModal />
-            {!isPlanView && (
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={handlePrintOdontogram}
-                title="Imprimir Odontograma"
-                className="h-10 w-10 shrink-0 rounded-xl bg-background border-border/80 text-muted-foreground hover:text-foreground cursor-pointer shadow-xs transition-all"
-              >
-                <Printer className="w-4 h-4" />
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              onClick={() => setIsFocusMode(!isFocusMode)}
-              className="h-10 w-10 shrink-0 rounded-xl bg-background border-border/80 text-muted-foreground hover:text-foreground cursor-pointer shadow-xs transition-all"
-              title={isFocusMode ? "Salir de pantalla completa" : "Modo enfoque"}
-            >
-              {isFocusMode ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
-          </div>
+        <div className="flex items-center gap-2">
+          <OdontogramLegendModal />
         </div>
       </div>
 
-      {/* COMPONENTES DE LA GRILLA INTERACTIVA */}
-      <div className="print:hidden space-y-6">
+      {/* Grid del Odontograma */}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-card rounded-2xl border border-border/80 border-dashed gap-3">
+          <Loader2 className="w-8 h-8 animate-spin text-[#008bcd]" />
+          <p className="text-xs font-bold text-muted-foreground">Cargando odontograma clínico...</p>
+        </div>
+      ) : (
         <OdontogramGrid
           dentition={dentition}
           getRecordsForTooth={getRecordsForTooth}
           selectedTooth={selectedTooth}
           currentSurfaces={currentSurfaces}
           handleSurfaceClick={handleSurfaceClick}
-          canEdit={canEditClinicalData}
+          canEdit={canEdit}
         />
-        
-        <OdontogramActionMenu
-          menuStep={menuStep}
-          setMenuStep={setMenuStep}
-          selectedTooth={selectedTooth}
-          currentSurfaces={currentSurfaces}
-          handleCloseMenu={handleCloseMenu}
-          planId={planId}
-          setIsCatalogModalOpen={setIsCatalogModalOpen}
-          selectedStatus={selectedStatus}
-          setSelectedStatus={setSelectedStatus}
-          recordComment={recordComment}
-          setRecordComment={setRecordComment}
-          handleSaveRecord={handleSaveRecord}
-          isSaving={isSaving}
-        />
+      )}
 
-        {!planId && (
-          <OdontogramHistory
-            records={currentViewRecords}
-            view={view}
-            canEdit={canEditClinicalData}
-            currentUser={currentUser}
-            confirmDeleteRecord={confirmDeleteRecord}
-            getStatusLabel={getStatusLabel}
-            onRecordUpdated={fetchRecords}
-          />
-        )}
-      </div>
-
-      <OdontogramPrint
-        records={currentViewRecords}
-        view={view}
-        dentition={dentition}
-        patientFullName={`${patient?.firstName || ""} ${patient?.lastName || ""}`.trim()}
-        patientDocId={patient?.ci}
-        doctorName={currentUser?.name}
-        doctorSpecialty={currentUser?.specialty}
-        getStatusLabel={getStatusLabel}
-        ToothPieceComponent={ToothPiece}
+      {/* Menú Flotante de Acciones */}
+      <OdontogramActionMenu
+        menuStep={menuStep}
+        setMenuStep={setMenuStep}
+        selectedTooth={selectedTooth}
+        currentSurfaces={currentSurfaces}
+        handleCloseMenu={() => {
+          setMenuStep("NONE")
+          setSelectedTooth(null)
+          setCurrentSurfaces([])
+        }}
+        planId={planId}
+        setIsCatalogModalOpen={() => {}}
+        selectedStatus={selectedStatus}
+        setSelectedStatus={setSelectedStatus}
+        recordComment={recordComment}
+        setRecordComment={setRecordComment}
+        handleSaveRecord={handleSaveRecord}
+        isSaving={isSaving}
       />
+
+      {/* Historial Clínico de Hallazgos */}
+      {!isPlanView && (
+        <OdontogramHistory
+          records={records}
+          view={view}
+          canEdit={canEdit}
+          currentUser={currentUser}
+          confirmDeleteRecord={confirmDeleteRecord}
+          getStatusLabel={getStatusLabel}
+          onRecordUpdated={fetchRecords}
+        />
+      )}
     </div>
   )
 }
+
+export const OdontogramTab = OdontogramaTab
+export default OdontogramaTab

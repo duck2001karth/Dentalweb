@@ -4,12 +4,15 @@ import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
 import { logAuditEvent } from "@/lib/audit"
 
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+// Resolución segura de parámetros para App Router (Soporta Next 14 y 15)
+async function getSafeId(params: any): Promise<string> {
+  const resolvedParams = await Promise.resolve(params)
+  return String(resolvedParams?.id || params?.id).trim()
+}
+
+export async function GET(request: Request, { params }: any) {
   try {
-    const { id } = await params
+    const id = await getSafeId(params)
     const plan = await prisma.treatmentPlan.findUnique({
       where: { id },
       include: {
@@ -35,7 +38,6 @@ export async function GET(
     const agreementDisc = plan.agreement ? Number(plan.agreement.discountValue || 0) : 0
     const commercialDisc = Number(plan.commercialDiscount || 0)
     const effectiveDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
-
     const agreementName = plan.agreement?.name || plan.patient?.convenio || null
 
     return NextResponse.json({
@@ -52,12 +54,9 @@ export async function GET(
 }
 
 // 2. ACTUALIZAR PLAN, FASES O COLABORADORES
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: Request, { params }: any) {
   try {
-    const { id } = await params
+    const id = await getSafeId(params)
     const session = await getServerSession(authOptions)
     const currentUserId = (session?.user as any)?.id
 
@@ -80,8 +79,6 @@ export async function PATCH(
       if (!previousPlan) {
         throw new Error("NOT_FOUND")
       }
-
-      // ACCIÓN: RESTAURAR DESDE PAPELERA
       if (action === "RESTORE") {
         const restoredPlan = await tx.treatmentPlan.update({
           where: { id },
@@ -94,7 +91,6 @@ export async function PATCH(
             agreement: true
           }
         })
-
         await logAuditEvent({
           userId: currentUserId,
           action: "RESTORE_PLAN",
@@ -105,7 +101,6 @@ export async function PATCH(
           oldData: { status: previousPlan.status },
           newData: { status: "DRAFT" }
         })
-
         return { plan: restoredPlan }
       }
 
@@ -116,19 +111,19 @@ export async function PATCH(
           const rawValues = collaborators
             .map((c: any) => (typeof c === "string" ? c : c.id || c.name))
             .filter(Boolean)
-
+            
           const matchedUsers = await tx.user.findMany({
             where: { id: { in: rawValues } },
             select: { name: true }
           })
-
+          
           if (matchedUsers.length > 0) {
             finalCollaboratorNames = matchedUsers.map((u) => u.name || "Dr. Colaborador")
           } else {
             finalCollaboratorNames = rawValues
           }
         }
-
+        
         const updatedPlan = await tx.treatmentPlan.update({
           where: { id },
           data: { collaborators: finalCollaboratorNames },
@@ -140,7 +135,7 @@ export async function PATCH(
             agreement: true
           }
         })
-
+        
         await logAuditEvent({
           userId: currentUserId,
           action: "UPDATE_COLLABORATORS",
@@ -151,11 +146,11 @@ export async function PATCH(
           oldData: { collaborators: previousPlan.collaborators },
           newData: { collaborators: finalCollaboratorNames }
         })
-
+        
         const agreementDisc = updatedPlan.agreement ? Number(updatedPlan.agreement.discountValue || 0) : 0
         const commercialDisc = Number(updatedPlan.commercialDiscount || 0)
         const effectiveDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
-
+        
         return {
           plan: {
             ...updatedPlan,
@@ -166,7 +161,6 @@ export async function PATCH(
         }
       }
 
-      // ACCIÓN: ACTUALIZACIÓN GENERAL DE DATOS DEL PLAN
       const rawData = input ? { ...input } : { ...restBody }
       const targetConvenio = rawData.convenio || agreementName
 
@@ -282,12 +276,9 @@ export async function PATCH(
 }
 
 // 3. ANULAR O PURGAR PLAN
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(request: Request, { params }: any) {
   try {
-    const { id } = await params
+    const id = await getSafeId(params)
     const session = await getServerSession(authOptions)
     const currentUserId = (session?.user as any)?.id
 
@@ -316,7 +307,7 @@ export async function DELETE(
         await tx.treatmentSection.deleteMany({ where: { treatmentPlanId: id } })
         await tx.odontogramRecord.deleteMany({ where: { planId: id } })
         await tx.treatmentPlan.delete({ where: { id } })
-
+        
         await logAuditEvent({
           userId: currentUserId,
           action: "PERMANENT_DELETE_PLAN",
@@ -333,7 +324,6 @@ export async function DELETE(
             sectionsCount: planToDelete.sections.length
           }
         })
-
         return { success: true, message: "Plan destruido permanentemente de la base de datos" }
       }
 

@@ -14,9 +14,8 @@ import { Input } from "@/components/ui/input"
 import { 
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue 
 } from "@/components/ui/select"
-import { PaymentStatusBadge, PaymentMethodBadge } from "./payment-badge"
-import { ExportBillingMenu } from "./export-billing-menu"
-
+import { PaymentStatusBadge, PaymentMethodBadge } from "@/components/clinic-management/billing/modals/payment-badge"
+import { ExportBillingMenu } from "@/components/clinic-management/billing/print/export-billing-menu"
 import { useSession } from "next-auth/react"
 
 
