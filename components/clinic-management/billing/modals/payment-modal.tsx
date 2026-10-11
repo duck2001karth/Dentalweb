@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import type { PaymentFormData, PaymentMethod, PaymentRecord } from "@/types/billing"
 import { PaymentAuditForm } from "../tables/payment-audit-form"
 import { PaymentPatientTargetForm } from "../tables/payment-patient-form"
+import type { PaymentFormData, PaymentMethod, PaymentRecord, PaymentState } from "@/types/billing"
 import { cn } from "@/lib/utils"
 import { useClinicSettings } from "@/config/clinic-settings"
 
@@ -24,9 +24,9 @@ interface PaymentModalProps {
 
 const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: any }[] = [
   { id: "CASH", label: "Efectivo", icon: Banknote },
-  { id: "TRANSFER", label: "Transferencia / QR", icon: ArrowLeftRight },
-  { id: "CREDIT_CARD", label: "Tarjeta de Crédito", icon: CreditCard },
-  { id: "DEBIT_CARD", label: "Tarjeta de Débito", icon: CreditCard },
+  { id: "TRANSFER", label: "Transferencia", icon: ArrowLeftRight },
+  { id: "CREDIT_CARD", label: "T. Crédito", icon: CreditCard },
+  { id: "DEBIT_CARD", label: "T. Débito", icon: CreditCard },
 ]
 
 export function PaymentModal({
@@ -40,23 +40,24 @@ export function PaymentModal({
 }: PaymentModalProps) {
   const { settings } = useClinicSettings()
   const currencySymbol = (settings as any)?.currencySymbol || "$"
-  
   const isEditing = Boolean(editingPayment)
+  
   const [patientSearchQuery, setPatientSearchQuery] = useState("")
   const [isLoadingReceipt, setIsLoadingReceipt] = useState(false)
   const [isManualReceipt, setIsManualReceipt] = useState(false)
   const [autoReceiptNumber, setAutoReceiptNumber] = useState("")
+  
   const [reference, setReference] = useState("")
   const [cardType, setCardType] = useState<"CORRIENTE" | "DIFERIDO">("CORRIENTE")
   const [installments, setInstallments] = useState("3")
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
+  
   const [showErrors, setShowErrors] = useState(false)
-
   const [paymentType, setPaymentType] = useState<"GENERAL" | "PLAN">("PLAN")
   const [patientPlans, setPatientPlans] = useState<any[]>([])
   const [selectedPatientObj, setSelectedPatientObj] = useState<any>(null)
   const [isLoadingPlans, setIsLoadingPlans] = useState(false)
-
+  
   const [formData, setFormData] = useState<PaymentFormData & { treatmentPlanId?: string }>({
     patientId: "",
     treatmentPlanId: undefined,
@@ -90,7 +91,6 @@ export function PaymentModal({
       setReceiptImage(editingPayment.receiptImage || null)
       setPatientSearchQuery(`${editingPayment.patient?.firstName || ""} ${editingPayment.patient?.lastName || ""} - CI: ${editingPayment.patient?.ci || ""}`)
       setIsManualReceipt(true)
-
     } else if (prefilledData && isOpen) {
       const pt = patients.find(p => p.id === prefilledData.patientId)
       setFormData({
@@ -163,9 +163,9 @@ export function PaymentModal({
     }
     const foundPatient = patients.find((p) => p.id === formData.patientId)
     setSelectedPatientObj(foundPatient || null)
-
     let isMounted = true
     setIsLoadingPlans(true)
+    
     fetch(`/api/treatments?patientId=${formData.patientId}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
@@ -192,7 +192,6 @@ export function PaymentModal({
       .finally(() => {
         if (isMounted) setIsLoadingPlans(false)
       })
-
     return () => { isMounted = false }
   }, [formData.patientId, patients, editingPayment, prefilledData])
 
@@ -202,7 +201,6 @@ export function PaymentModal({
   const isCard = formData.method === "CREDIT_CARD" || formData.method === "DEBIT_CARD"
   const isTransfer = formData.method === "TRANSFER"
   const needsReference = isCard || isTransfer
-
   const isPatientMissing = !formData.patientId
   const isAmountMissing = !formData.amount || Number(formData.amount) <= 0
   const isReferenceMissing = needsReference && !reference.trim()
@@ -235,121 +233,146 @@ export function PaymentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[960px] w-[96vw] bg-card text-foreground border border-border/70 rounded-[24px] p-0 shadow-2xl overflow-visible">
+      {/* 
+        PREMIUM UX: Limitamos la altura máxima y agregamos scroll interno
+        para evitar que el modal se desborde fuera de la pantalla.
+      */}
+      <DialogContent className="sm:max-w-[900px] w-[96vw] max-h-[95vh] flex flex-col bg-card text-foreground border border-border/70 rounded-[24px] p-0 shadow-2xl overflow-hidden font-sans">
         
-        <DialogHeader className="px-6 py-4 border-b border-border/60 bg-muted/20 flex flex-row items-center justify-between rounded-t-[24px]">
+        <DialogHeader className="px-6 py-4 border-b border-border/60 bg-muted/20 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#008bcd]/15 text-[#008bcd] flex items-center justify-center border border-[#008bcd]/20 shadow-xs">
               <DollarSign className="w-5 h-5 stroke-[2.5]" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-bold tracking-tight text-foreground">
+              <DialogTitle className="text-lg font-bold tracking-tight text-foreground leading-none">
                 {editingPayment ? "Modificar Registro de Cobro" : "Registrar Cobro en Caja"}
               </DialogTitle>
-              <p className="text-xs text-muted-foreground font-medium">Gestión de ingresos y arqueo de turnos.</p>
+              <p className="text-[11px] text-muted-foreground font-medium mt-1">Gestión de ingresos y arqueo de turnos.</p>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="p-6 grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-          
-          <div className="md:col-span-6">
-            <PaymentPatientTargetForm
-              formData={formData}
-              setFormData={setFormData}
-              patients={patients}
-              patientSearchQuery={patientSearchQuery}
-              setPatientSearchQuery={setPatientSearchQuery}
-              isEditing={isEditing}
-              showErrors={showErrors}
-              isPatientMissing={isPatientMissing}
-              paymentType={paymentType}
-              setPaymentType={setPaymentType}
-              patientPlans={patientPlans}
-              isLoadingPlans={isLoadingPlans}
-              patientConvenio={patientConvenio}
-            />
-          </div>
+        {/* CONTENEDOR CON SCROLL PARA PANTALLAS PEQUEÑAS */}
+        <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+            
+            {/* COLUMNA IZQUIERDA: PACIENTE Y DESTINO */}
+            <div className="md:col-span-6 space-y-4">
+              <PaymentPatientTargetForm
+                formData={formData}
+                setFormData={setFormData}
+                patients={patients}
+                patientSearchQuery={patientSearchQuery}
+                setPatientSearchQuery={setPatientSearchQuery}
+                isEditing={isEditing}
+                showErrors={showErrors}
+                isPatientMissing={isPatientMissing}
+                paymentType={paymentType}
+                setPaymentType={setPaymentType}
+                patientPlans={patientPlans}
+                isLoadingPlans={isLoadingPlans}
+                patientConvenio={patientConvenio}
+              />
+            </div>
 
-          <div className="md:col-span-6 space-y-4">
-            <div className={cn("bg-muted/10 border rounded-xl p-3.5 transition-colors", showErrors && isAmountMissing ? "border-rose-500/80 bg-rose-500/5" : "border-border/60")}>
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                  <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> Monto a Cobrar <span className="text-rose-500">*</span>
+            {/* COLUMNA DERECHA: PAGOS Y AUDITORÍA */}
+            <div className="md:col-span-6 space-y-4">
+              
+              {/* MONTO A COBRAR Y MÉTODO COMPACTOS */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className={cn("bg-muted/10 border rounded-xl p-3 transition-colors", showErrors && isAmountMissing ? "border-rose-500/80 bg-rose-500/5" : "border-border/60")}>
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1 mb-2">
+                    <DollarSign className="w-3.5 h-3.5 text-emerald-500" /> Monto a Cobrar <span className="text-rose-500">*</span>
+                  </Label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm font-black text-muted-foreground">{currencySymbol}</span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={formData.amount}
+                      onChange={(e) => setFormData((prev: any) => ({ ...prev, amount: e.target.value }))}
+                      placeholder="0.00"
+                      className="pl-7 h-10 bg-background font-mono text-lg font-black text-foreground rounded-lg focus-visible:ring-[#008bcd]"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-muted/10 border border-border/60 rounded-xl p-3 flex flex-col justify-center">
+                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                    Estado del Cobro
+                  </Label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as PaymentState }))}
+                    className="w-full h-10 px-2 rounded-lg border border-border bg-background text-foreground text-xs font-bold outline-none cursor-pointer"
+                  >
+                    <option value="COMPLETED">Completado / Caja</option>
+                    <option value="PENDING">Pendiente / Chequeo</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* MÉTODOS DE PAGO EN GRID COMPACTO */}
+              <div className="bg-muted/10 border border-border/60 rounded-xl p-3.5">
+                <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-2.5">
+                  <CreditCard className="w-3.5 h-3.5 text-[#008bcd]" /> Método de Cobro <span className="text-rose-500">*</span>
                 </Label>
-                {showErrors && isAmountMissing && (
-                  <span className="text-[10px] text-rose-500 font-bold">Requerido</span>
-                )}
+                <div className="grid grid-cols-2 gap-2">
+                  {PAYMENT_METHODS.map((m) => {
+                    const Icon = m.icon
+                    const isSelected = formData.method === m.id
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setFormData((prev: any) => ({ ...prev, method: m.id }))}
+                        className={cn(
+                          "flex items-center gap-1.5 p-2 rounded-lg border text-left text-xs font-bold transition-all cursor-pointer",
+                          isSelected ? "bg-[#008bcd]/15 border-[#008bcd] text-[#008bcd] shadow-2xs" : "bg-background border-border hover:bg-muted/40 text-foreground"
+                        )}
+                      >
+                        <Icon className={cn("w-3.5 h-3.5 shrink-0", isSelected ? "text-[#008bcd]" : "text-muted-foreground")} />
+                        <span className="truncate leading-none text-[11px]">{m.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-muted-foreground">{currencySymbol}</span>
-                <Input
-                  type="number"
-                  step="0.01"
-                  value={formData.amount}
-                  onChange={(e) => setFormData((prev: any) => ({ ...prev, amount: e.target.value }))}
-                  placeholder="0.00"
-                  className="pl-8 h-11 bg-background font-mono text-xl font-black text-foreground rounded-xl focus-visible:ring-[#008bcd]"
-                />
-              </div>
-            </div>
 
-            <div className="bg-muted/10 border border-border/60 rounded-xl p-3.5">
-              <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-2.5">
-                <CreditCard className="w-3.5 h-3.5 text-[#008bcd]" /> Método de Cobro <span className="text-rose-500">*</span>
-              </Label>
-              <div className="grid grid-cols-2 gap-2">
-                {PAYMENT_METHODS.map((m) => {
-                  const Icon = m.icon
-                  const isSelected = formData.method === m.id
-                  return (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => setFormData((prev: any) => ({ ...prev, method: m.id }))}
-                      className={cn(
-                        "flex items-center gap-2 p-2.5 rounded-lg border text-left text-xs font-bold transition-all cursor-pointer",
-                        isSelected ? "bg-[#008bcd]/15 border-[#008bcd] text-[#008bcd] shadow-2xs" : "bg-background border-border hover:bg-muted/40 text-foreground"
-                      )}
-                    >
-                      <Icon className={cn("w-4 h-4 shrink-0", isSelected ? "text-[#008bcd]" : "text-muted-foreground")} />
-                      <span className="truncate leading-none text-xs">{m.label}</span>
-                    </button>
-                  )
-                })}
-              </div>
+              {/* AUDITORÍA (REFERENCIAS Y FOTOS) */}
+              <PaymentAuditForm
+                formData={formData}
+                setFormData={setFormData}
+                reference={reference}
+                setReference={setReference}
+                cardType={cardType}
+                setCardType={setCardType}
+                installments={installments}
+                setInstallments={setInstallments}
+                receiptImage={receiptImage}
+                setReceiptImage={setReceiptImage}
+                isManualReceipt={isManualReceipt}
+                setIsManualReceipt={setIsManualReceipt}
+                isLoadingReceipt={isLoadingReceipt}
+                isEditing={isEditing}
+                showErrors={showErrors}
+                isReferenceMissing={isReferenceMissing}
+              />
             </div>
-
-            <PaymentAuditForm
-              formData={formData}
-              setFormData={setFormData}
-              reference={reference}
-              setReference={setReference}
-              cardType={cardType}
-              setCardType={setCardType}
-              installments={installments}
-              setInstallments={setInstallments}
-              receiptImage={receiptImage}
-              setReceiptImage={setReceiptImage}
-              isManualReceipt={isManualReceipt}
-              setIsManualReceipt={setIsManualReceipt}
-              isLoadingReceipt={isLoadingReceipt}
-              isEditing={isEditing}
-              showErrors={showErrors}
-              isReferenceMissing={isReferenceMissing}
-            />
           </div>
         </div>
 
-        <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20 flex flex-col sm:flex-row gap-3 sm:justify-between items-center rounded-b-[24px]">
-          <div className="text-[11px] font-medium">
+        {/* PIE DEL MODAL */}
+        <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20 flex flex-row items-center justify-between shrink-0">
+          <div className="text-[11px] font-medium hidden sm:block">
             {showErrors && (isPatientMissing || isAmountMissing || isReferenceMissing) ? (
               <span className="text-rose-500 font-bold flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                {isReferenceMissing ? "Debe ingresar autorización o referencia del voucher." : isAmountMissing ? "Ingrese un monto válido para el cobro." : "Seleccione el paciente titular."}
+                Complete los campos obligatorios en rojo.
               </span>
             ) : (
-              <p className="text-muted-foreground hidden sm:block">Verifique voucher y datos antes de confirmar el ingreso a caja.</p>
+              <p className="text-muted-foreground">Verifique la información antes de procesar.</p>
             )}
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
@@ -366,5 +389,3 @@ export function PaymentModal({
     </Dialog>
   )
 }
-
-export default PaymentModal
