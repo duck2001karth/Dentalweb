@@ -1,37 +1,17 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import { 
-  FileText, Loader2, Check, ShieldCheck, 
-  BookOpen, ArrowRight, Sparkles, 
-  UserCheck,
-  Stethoscope
-} from "lucide-react"
-
+import { FileText, Loader2, Check, ShieldCheck, BookOpen, ArrowRight, Sparkles, UserCheck, Stethoscope, User, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
-} from "@/components/ui/dialog"
-import { 
-  ClinicalDocType, 
-  DocumentTemplate, 
-  DocumentTemplateFormData 
-} from "@/types/clinical-templates"
-import { 
-  PREDEFINED_TEMPLATES, 
-  PredefinedTemplate 
-} from "@/config/default-clinical-templates"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { ClinicalDocType, DocumentTemplate, DocumentTemplateFormData } from "@/types/clinical-templates"
+import { PREDEFINED_TEMPLATES, PredefinedTemplate } from "@/config/default-clinical-templates"
 import { TemplateRichEditor } from "./template-rich-editor"
 import { cn } from "@/lib/utils"
-import { User, Building2 } from "lucide-react"
-
-// ============================================================================
-// 1. MODAL DE CREACIÓN Y EDICIÓN: DocumentTemplateModal
-// ============================================================================
 
 interface DocumentTemplateModalProps {
   isOpen: boolean
@@ -62,19 +42,11 @@ const CLINIC_VARIABLES = [
   { label: "Dr(a). Tratante", tag: "{{doctor_nombre}}", desc: "Nombre del profesional" },
   { label: "Especialidad", tag: "{{doctor_especialidad}}", desc: "Especialidad" },
   { label: "Clínica", tag: "{{clinica_nombre}}", desc: "Nombre de la clínica" },
-  { label: "Ciudad", tag: "{{clinica_ciudad}}", desc: "Ciudad" },
-  { label: "Teléfono", tag: "{{clinica_telefono}}", desc: "Teléfono institucional" },
   { label: "RUC", tag: "{{clinica_ruc}}", desc: "RUC" },
-  { label: "Fecha", tag: "{{fecha_actual}}", desc: "Fecha de emisión" },
+  { label: "Fecha Actual", tag: "{{fecha_actual}}", desc: "Fecha de emisión" },
 ]
 
-export function DocumentTemplateModal({
-  isOpen,
-  onClose,
-  editingTemplate,
-  isSaving,
-  onSave,
-}: DocumentTemplateModalProps) {
+export function DocumentTemplateModal({ isOpen, onClose, editingTemplate, isSaving, onSave }: DocumentTemplateModalProps) {
   const [formData, setFormData] = useState<DocumentTemplateFormData>({
     title: "",
     type: "CONSENT",
@@ -85,9 +57,9 @@ export function DocumentTemplateModal({
     isActive: true,
     isDefault: false,
   })
-
-  // Estado para compartir la acción de insertar tag con el componente hijo
+  
   const [tagToInsert, setTagToInsert] = useState<string | null>(null)
+  const [showErrors, setShowErrors] = useState(false)
 
   useEffect(() => {
     if (editingTemplate) {
@@ -106,18 +78,30 @@ export function DocumentTemplateModal({
         title: "",
         type: "CONSENT",
         category: "Cirugía Oral",
-        content: `Por medio de la presente, yo, {{paciente_nombre}}, identificado con C.I. {{paciente_ci}}, autorizo de forma libre y voluntaria al Dr(a). {{doctor_nombre}} de {{clinica_nombre}} a realizar el procedimiento diagnóstico y terapéutico correspondiente...`,
+        content: `Por medio de la presente, yo, {{paciente_nombre}}, identificado con C.I. {{paciente_ci}}, autorizo de forma libre y voluntaria al Dr(a). {{doctor_nombre}} de {{clinica_nombre}} a realizar el procedimiento...`,
         requiresPatientSignature: true,
         requiresDoctorSignature: true,
         isActive: true,
         isDefault: false,
       })
     }
+    setShowErrors(false)
   }, [editingTemplate, isOpen])
 
   const handleSubmit = async () => {
+    setShowErrors(true)
+    // OWASP A04: Prevención de guardado de datos vacíos o con solo espacios (Insecure Design)
     if (!formData.title.trim() || !formData.content.trim()) return
-    const ok = await onSave(formData)
+    
+    // OWASP A03: Sanitización básica de título antes de enviar al backend
+    const sanitizedData = {
+      ...formData,
+      title: formData.title.trim(),
+      category: formData.category?.trim(),
+      content: formData.content.trim()
+    }
+    
+    const ok = await onSave(sanitizedData)
     if (ok) onClose()
   }
 
@@ -127,99 +111,104 @@ export function DocumentTemplateModal({
   }
 
   const handleInsertTagClick = (tag: string) => {
-      setTagToInsert(tag)
-      // Limpiamos el tagToInsert un momento después para permitir clics repetidos del mismo tag
-      setTimeout(() => setTagToInsert(null), 50) 
+    setTagToInsert(tag)
+    setTimeout(() => setTagToInsert(null), 50)
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[1100px] w-[95vw] max-h-[92vh] bg-card text-foreground border border-border/60 rounded-[24px] p-0 shadow-2xl overflow-hidden flex flex-col">
+      <DialogContent className="sm:max-w-[1100px] w-[96vw] max-h-[95vh] bg-background text-foreground border border-border/80 rounded-[24px] p-0 shadow-2xl overflow-hidden flex flex-col">
         
         {/* ENCABEZADO */}
-        <DialogHeader className="px-6 py-4 border-b border-border/40 bg-background flex flex-row items-center justify-between shrink-0">
+        <DialogHeader className="px-6 py-4 border-b border-border/60 bg-muted/10 flex flex-row items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-[#008bcd]/10 text-[#008bcd] flex items-center justify-center border border-[#008bcd]/20">
-              <FileText className="w-4.5 h-4.5 stroke-[2.5]" />
+            <div className="w-10 h-10 rounded-2xl bg-[#008bcd]/10 text-[#008bcd] flex items-center justify-center border border-[#008bcd]/20 shadow-xs">
+              <FileText className="w-5 h-5 stroke-[2.5]" />
             </div>
             <div>
-              <DialogTitle className="text-lg font-bold tracking-tight text-foreground leading-none">
-                {editingTemplate ? "Modificar Formato" : "Nuevo Formato"}
+              <DialogTitle className="text-lg font-black tracking-tight text-foreground leading-none">
+                {editingTemplate ? "Modificar Plantilla Clínica" : "Nueva Plantilla de Documento"}
               </DialogTitle>
-              <p className="text-xs text-muted-foreground mt-1">
-                Configura el documento base con sustitución inteligente.
+              <p className="text-[11px] font-medium text-muted-foreground mt-1">
+                Configura el documento base utilizando variables de sustitución inteligente.
               </p>
             </div>
           </div>
         </DialogHeader>
 
         {/* CUERPO A DOS COLUMNAS */}
-        <div className="p-6 overflow-y-auto flex-1 [scrollbar-width:none]">
+        <div className="p-6 overflow-y-auto flex-1 custom-scrollbar bg-card">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
             
-            {/* COLUMNA IZQUIERDA: CONFIGURACIÓN Y VARIABLES (4 COLS) */}
-            <div className="lg:col-span-4 flex flex-col space-y-5">
+            {/* COLUMNA IZQUIERDA */}
+            <div className="lg:col-span-4 flex flex-col space-y-6">
               
               {/* Inputs de Configuración */}
-              <div className="space-y-4">
+              <div className="space-y-4 bg-muted/15 p-4 rounded-2xl border border-border/60">
                 <div className="space-y-1.5">
                   <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
                     Título del Documento <span className="text-rose-500">*</span>
                   </Label>
                   <Input
                     value={formData.title}
+                    maxLength={150} // OWASP Limit
                     onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Ej: Consentimiento Informado Exodoncia"
-                    className="h-10 text-sm font-semibold bg-background border-border focus-visible:ring-[#008bcd]/50"
+                    placeholder="Ej: Consentimiento Exodoncia"
+                    className={cn(
+                      "h-10 text-xs font-bold bg-background",
+                      showErrors && !formData.title.trim() ? "border-rose-500 focus-visible:ring-rose-500" : "border-border focus-visible:ring-[#008bcd]/50"
+                    )}
                   />
                 </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Tipo <span className="text-rose-500">*</span>
-                  </Label>
-                  <select
-                    value={formData.type}
-                    onChange={(e) => setFormData({ ...formData, type: e.target.value as ClinicalDocType })}
-                    className="w-full h-10 px-3 rounded-lg border border-border bg-background text-foreground text-sm font-medium outline-none cursor-pointer focus:ring-2 focus:ring-[#008bcd]/30"
-                  >
-                    {DOC_TYPES.map((t) => (
-                      <option key={t.id} value={t.id}>{t.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                    Especialidad
-                  </Label>
-                  <Input
-                    value={formData.category || ""}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                    placeholder="Ej: Cirugía Oral"
-                    className="h-10 text-sm bg-background border-border focus-visible:ring-[#008bcd]/50"
-                  />
+                
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Tipo <span className="text-rose-500">*</span>
+                    </Label>
+                    <select
+                      value={formData.type}
+                      onChange={(e) => setFormData({ ...formData, type: e.target.value as ClinicalDocType })}
+                      className="w-full h-10 px-3 rounded-xl border border-border bg-background text-foreground text-xs font-bold outline-none cursor-pointer focus:ring-2 focus:ring-[#008bcd]/30"
+                    >
+                      {DOC_TYPES.map((t) => (
+                        <option key={t.id} value={t.id}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Especialidad
+                    </Label>
+                    <Input
+                      value={formData.category || ""}
+                      maxLength={50} // OWASP Limit
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      placeholder="Ej: Cirugía"
+                      className="h-10 text-xs font-bold bg-background border-border focus-visible:ring-[#008bcd]/50"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Bloque de Variables Inteligentes */}
-              <div className="border border-border/50 rounded-xl p-3.5 space-y-3 bg-muted/10 shadow-xs flex-1 flex flex-col">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-foreground/70 uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-[#008bcd]" /> Campos Inteligentes
+              {/* Bloque de Variables Inteligentes (Rediseño Premium) */}
+              <div className="border border-border/60 rounded-2xl p-4 space-y-4 bg-muted/10 shadow-xs flex-1">
+                <div>
+                  <span className="text-xs font-black text-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-[#008bcd]" /> Variables Inteligentes
                   </span>
+                  <p className="text-[10px] text-muted-foreground leading-tight mt-1 font-medium">
+                    Haz clic o arrastra las etiquetas al editor para automatizar el llenado del documento.
+                  </p>
                 </div>
-                <p className="text-[9px] text-muted-foreground leading-tight">
-                    Haz clic o arrastra los campos al editor de la derecha para insertarlos en el texto.
-                </p>
-
-                <div className="space-y-3 pt-2">
+                
+                <div className="space-y-4">
                   {/* PACIENTE */}
-                  <div className="space-y-1.5">
-                    <span className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
-                      <User className="w-3 h-3 text-[#008bcd]" /> Paciente
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-1">
+                      <User className="w-3 h-3 text-[#008bcd]" /> Datos del Paciente
                     </span>
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="flex flex-wrap gap-1.5">
                       {PATIENT_VARIABLES.map((p) => (
                         <button
                           key={p.tag}
@@ -228,20 +217,20 @@ export function DocumentTemplateModal({
                           onDragStart={(e) => handleDragStart(e, p.tag)}
                           onClick={() => handleInsertTagClick(p.tag)}
                           title={p.desc}
-                          className="cursor-grab active:cursor-grabbing inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background hover:bg-[#008bcd]/10 hover:text-[#008bcd] text-foreground border border-border/60 hover:border-[#008bcd]/30 text-[11px] font-medium transition-all select-none"
+                          className="cursor-grab active:cursor-grabbing inline-flex items-center px-2.5 py-1 rounded-lg bg-background text-foreground border border-border/80 text-[10px] font-bold transition-all hover:border-[#008bcd]/50 hover:bg-[#008bcd]/5 hover:text-[#008bcd] shadow-2xs select-none"
                         >
-                          <span className="text-[#008bcd]">+</span> {p.label}
+                          <span className="text-[#008bcd] font-black mr-1">+</span> {p.label}
                         </button>
                       ))}
                     </div>
                   </div>
-
+                  
                   {/* CLÍNICA */}
-                  <div className="space-y-1.5 pt-2 border-t border-border/40">
-                    <span className="text-[10px] font-semibold text-muted-foreground flex items-center gap-1">
-                      <Building2 className="w-3 h-3 text-emerald-500" /> Clínica
+                  <div className="space-y-2 pt-3 border-t border-border/50">
+                    <span className="text-[10px] font-black uppercase text-muted-foreground flex items-center gap-1">
+                      <Building2 className="w-3 h-3 text-emerald-500" /> Entidad y Médico
                     </span>
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="flex flex-wrap gap-1.5">
                       {CLINIC_VARIABLES.map((p) => (
                         <button
                           key={p.tag}
@@ -250,75 +239,71 @@ export function DocumentTemplateModal({
                           onDragStart={(e) => handleDragStart(e, p.tag)}
                           onClick={() => handleInsertTagClick(p.tag)}
                           title={p.desc}
-                          className="cursor-grab active:cursor-grabbing inline-flex items-center gap-1 px-2 py-1 rounded-md bg-background hover:bg-emerald-500/10 hover:text-emerald-600 dark:hover:text-emerald-400 text-foreground border border-border/60 hover:border-emerald-500/30 text-[11px] font-medium transition-all select-none"
+                          className="cursor-grab active:cursor-grabbing inline-flex items-center px-2.5 py-1 rounded-lg bg-background text-foreground border border-border/80 text-[10px] font-bold transition-all hover:border-emerald-500/50 hover:bg-emerald-500/5 hover:text-emerald-600 dark:hover:text-emerald-400 shadow-2xs select-none"
                         >
-                          <span className="text-emerald-500">+</span> {p.label}
+                          <span className="text-emerald-500 font-black mr-1">+</span> {p.label}
                         </button>
                       ))}
                     </div>
                   </div>
                 </div>
               </div>
-
             </div>
 
-            {/* COLUMNA DERECHA: EDITOR (8 COLS) */}
+            {/* COLUMNA DERECHA: EDITOR */}
             <div className="lg:col-span-8 h-full">
               <TemplateRichEditor
                 content={formData.content}
-                onChange={(newContent) => setFormData((prev) => ({ ...prev, content: newContent }))}
+                onChange={(newContent) => {
+                  setFormData((prev) => ({ ...prev, content: newContent }))
+                  if (showErrors) setShowErrors(false)
+                }}
                 insertTagTrigger={tagToInsert}
               />
+              {showErrors && !formData.content.trim() && (
+                <p className="text-[10px] text-rose-500 font-bold mt-2 text-right">El cuerpo del documento no puede estar vacío.</p>
+              )}
             </div>
-
           </div>
         </div>
 
         {/* PIE DE PÁGINA */}
-        <DialogFooter className="px-6 py-4 border-t border-border/40 bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0">
+        <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/10 flex flex-col sm:flex-row items-center justify-between gap-4 shrink-0 rounded-b-[24px]">
           
-          <div className="flex flex-wrap items-center gap-5 text-sm">
+          <div className="flex flex-wrap items-center gap-5 bg-background px-4 py-2 rounded-xl border border-border/60 shadow-xs">
             <div className="flex items-center gap-1.5 text-muted-foreground">
               <ShieldCheck className="w-4 h-4 text-[#008bcd]" />
-              <span className="text-xs font-bold uppercase tracking-wider">Firmas Requeridas:</span>
+              <span className="text-[10px] font-black uppercase tracking-wider">Requerir Firmas:</span>
             </div>
-
             <label className="flex items-center gap-2 cursor-pointer select-none group">
               <Switch
                 checked={formData.requiresPatientSignature}
                 onCheckedChange={(c) => setFormData({ ...formData, requiresPatientSignature: c })}
-                className="data-[state=checked]:bg-[#008bcd]"
+                className="data-[state=checked]:bg-[#008bcd] scale-75 m-[-4px]"
               />
-              <span className="text-xs font-medium text-foreground group-hover:text-[#008bcd] transition-colors">Paciente</span>
+              <span className="text-xs font-bold text-foreground group-hover:text-[#008bcd] transition-colors">Paciente</span>
             </label>
-
             <label className="flex items-center gap-2 cursor-pointer select-none group">
               <Switch
                 checked={formData.requiresDoctorSignature}
                 onCheckedChange={(c) => setFormData({ ...formData, requiresDoctorSignature: c })}
-                className="data-[state=checked]:bg-[#008bcd]"
+                className="data-[state=checked]:bg-[#008bcd] scale-75 m-[-4px]"
               />
-              <span className="text-xs font-medium text-foreground group-hover:text-[#008bcd] transition-colors">Doctor</span>
+              <span className="text-xs font-bold text-foreground group-hover:text-[#008bcd] transition-colors">Doctor</span>
             </label>
-
-            <div className="h-5 w-px bg-border hidden sm:block" />
-
+            <div className="h-4 w-px bg-border hidden sm:block" />
             <label className="flex items-center gap-2 cursor-pointer select-none group">
               <Switch
                 checked={formData.isDefault}
                 onCheckedChange={(c) => setFormData({ ...formData, isDefault: c })}
-                className="data-[state=checked]:bg-emerald-500"
+                className="data-[state=checked]:bg-emerald-500 scale-75 m-[-4px]"
               />
-              <span className="text-xs font-medium text-foreground group-hover:text-emerald-500 transition-colors">Predeterminada</span>
+              <span className="text-xs font-bold text-foreground group-hover:text-emerald-500 transition-colors">Predeterminada</span>
             </label>
           </div>
 
-          <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
-            <Button 
-              variant="outline" 
-              onClick={onClose} 
-              className="rounded-xl text-xs font-bold h-10 px-5 border-border hover:bg-muted"
-            >
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <Button variant="outline" onClick={onClose} className="rounded-xl text-xs font-bold h-10 px-5 border-border hover:bg-muted">
               Cancelar
             </Button>
             <Button
@@ -327,12 +312,10 @@ export function DocumentTemplateModal({
               className="bg-[#008bcd] hover:bg-[#0073ab] text-white rounded-xl text-xs font-bold h-10 px-6 shadow-sm flex items-center gap-2 active:scale-95 transition-all"
             >
               {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4 stroke-[2.5]" />}
-              {editingTemplate ? "Guardar Cambios" : "Guardar Formato"}
+              {editingTemplate ? "Guardar Cambios" : "Guardar Plantilla"}
             </Button>
           </div>
-
         </DialogFooter>
-
       </DialogContent>
     </Dialog>
   )
