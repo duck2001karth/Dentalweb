@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useEffect, useState, useMemo } from "react"
-import { Plus, RefreshCw, ArrowUpRight, Lock, Receipt, Users } from "lucide-react"
+import { Plus, RefreshCw, ArrowUpRight, Lock, Receipt, Users, CreditCard } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { isToday, isYesterday, startOfWeek, startOfMonth } from "date-fns"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ import { PrintArqueoTemplate } from "./print/print-arqueo-template"
 import { CashCloseSuccessDialog } from "./modals/cash-close-success"
 import { BillingTable } from "@/components/clinic-management/billing/tables/billing-table"
 import { DebtsTable } from "./tables/debts-table"
+import { PosVouchersTable } from "./tables/pos-vouchers-table"
 
 export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string }) {
   const { data: session } = useSession()
@@ -207,11 +208,14 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
         {/* TABS DE NAVEGACIÓN */}
         <Tabs defaultValue="movimientos" className="w-full">
           <div className="flex items-center justify-between mb-4">
-            <TabsList className="bg-muted/50 border border-border/80 h-11 p-1 rounded-xl">
-              <TabsTrigger value="movimientos" className="text-xs font-bold px-5 py-2 rounded-lg data-[state=active]:bg-background data-[state=active]:text-[#008bcd] data-[state=active]:shadow-sm transition-all cursor-pointer">
+            <TabsList className="bg-muted/50 border border-border/80 h-11 p-1 rounded-xl w-full justify-start overflow-x-auto custom-scrollbar flex-nowrap shrink-0">
+              <TabsTrigger value="movimientos" className="text-xs font-bold px-5 py-2 rounded-lg data-[state=active]:bg-background data-[state=active]:text-[#008bcd] data-[state=active]:shadow-sm transition-all cursor-pointer shrink-0">
                 <Receipt className="w-3.5 h-3.5 mr-2" /> Movimientos y Arqueo
               </TabsTrigger>
-              <TabsTrigger value="deudas" className="text-xs font-bold px-5 py-2 rounded-lg data-[state=active]:bg-background data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-500 data-[state=active]:shadow-sm transition-all cursor-pointer">
+              <TabsTrigger value="vouchers" className="text-xs font-bold px-5 py-2 rounded-lg data-[state=active]:bg-background data-[state=active]:text-indigo-600 dark:data-[state=active]:text-indigo-400 data-[state=active]:shadow-sm transition-all cursor-pointer shrink-0">
+                <CreditCard className="w-3.5 h-3.5 mr-2" /> Auditoría POS / Tarjetas
+              </TabsTrigger>
+              <TabsTrigger value="deudas" className="text-xs font-bold px-5 py-2 rounded-lg data-[state=active]:bg-background data-[state=active]:text-amber-700 dark:data-[state=active]:text-amber-500 data-[state=active]:shadow-sm transition-all cursor-pointer shrink-0">
                 <Users className="w-3.5 h-3.5 mr-2" /> Cuentas por Cobrar
               </TabsTrigger>
             </TabsList>
@@ -243,6 +247,12 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
                 setIsModalOpen(true)
               }}
               onDelete={(id) => setItemToDelete(id)}
+            />
+          </TabsContent>
+
+          <TabsContent value="vouchers" className="mt-0 outline-none">
+            <PosVouchersTable 
+              payments={safePaymentsList.filter((p: any) => p.method === "CREDIT_CARD" || p.method === "DEBIT_CARD")} 
             />
           </TabsContent>
 
