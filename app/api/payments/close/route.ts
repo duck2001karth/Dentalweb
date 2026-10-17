@@ -1,21 +1,11 @@
 import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
 import { prisma } from "@/lib/db"
+import { withProtection, ProtectedRouteContext } from "@/lib/api-wrapper"
 
-export async function POST(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    const user = session?.user as any
-    const userId = user?.id
-    const userName = user?.name || "Usuario del Sistema"
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: "No autorizado. Debe iniciar sesión." },
-        { status: 401 }
-      )
-    }
+export const POST = withProtection(
+  ["ADMIN", "RECEPTIONIST"], 
+  async (req: Request, ctx: ProtectedRouteContext) => {
+    const { user } = ctx 
 
     const body = await req.json()
     const { expectedCash, countedCash, difference, notes, breakdown } = body
@@ -39,7 +29,7 @@ export async function POST(req: Request) {
     const result = await prisma.$transaction(async (tx) => {
       const cashClose = await tx.cashRegisterClose.create({
         data: {
-          userId,
+          userId: user.id,
           expectedCash: numExpected,
           countedCash: numCounted,
           difference: numDifference,
@@ -48,14 +38,13 @@ export async function POST(req: Request) {
           breakdown: breakdown || null,
         },
       })
-
       await tx.auditLog.create({
         data: {
-          userId,
+          userId: user.id,
           action: "CASH_REGISTER_CLOSE",
           entity: "CashRegisterClose",
           entityId: cashClose.id,
-          details: `Arqueo de caja ejecutado por ${userName}. Estado: ${closeStatus}. Diferencia: $${numDifference.toFixed(2)}`,
+          details: `Arqueo de caja ejecutado por ${user.name}. Estado: ${closeStatus}. Diferencia: $${numDifference.toFixed(2)}`,
           newData: {
             expectedCash: numExpected,
             countedCash: numCounted,
@@ -74,11 +63,5 @@ export async function POST(req: Request) {
       message: "Cierre de caja y auditoría guardados correctamente.",
       data: result,
     })
-  } catch (error: any) {
-    console.error("Error en POST /api/payments/close:", error)
-    return NextResponse.json(
-      { error: "Error interno al procesar el cierre de caja." },
-      { status: 500 }
-    )
   }
-}
+)

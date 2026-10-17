@@ -10,6 +10,7 @@ export async function getSessionUser(): Promise<User> {
   if (!session || !session.user?.email) {
     throw new Error("No se encontró una sesión activa")
   }
+  
   const instance = await prisma.user.findUnique({ 
     where: {
       email: session.user.email,

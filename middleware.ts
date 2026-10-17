@@ -5,71 +5,72 @@ export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
     const pathname = req.nextUrl.pathname;
+    const isApiRoute = pathname.startsWith("/api");
 
-    // ==========================================
-    // 1. EXPULSIÓN INMEDIATA (USUARIOS INACTIVOS)
-    // ==========================================
-    if (token && token.isActive === false) {
+    if (!token || token.isActive === false) {
+      if (isApiRoute) {
+        return NextResponse.json(
+          { error: "No autorizado o cuenta deshabilitada." },
+          { status: 401 }
+        );
+      }
       const url = new URL("/auth", req.url);
-      url.searchParams.set("error", "AccountDisabled");
+      if (token?.isActive === false) {
+        url.searchParams.set("error", "AccountDisabled");
+      }
       return NextResponse.redirect(url);
     }
 
-    if (!token) {
-      return NextResponse.redirect(new URL("/auth", req.url));
+    const role = String(token.role || "").toUpperCase().trim();
+
+    if (pathname.startsWith("/api/admin")) {
+      const isCatalogGet = pathname.startsWith("/api/admin/catalog") && req.method === "GET";
+      const isSearchGet = pathname.startsWith("/api/admin/search") && req.method === "GET";
+
+      if (!isCatalogGet && !isSearchGet && role !== "ADMIN") {
+        return NextResponse.json(
+          { error: "Acceso denegado. Se requiere rol de Administrador." },
+          { status: 403 }
+        );
+      }
     }
 
-    const role = token.role as string;
-
-    // ==========================================
-    // 2. RUTAS EXCLUSIVAS DE ADMINISTRADOR (Admin y Ajustes)
-    // ==========================================
-    const adminOnlyRoutes = [
-      "/admin",
-      "/ajustes",
-      "/convenios"
-    ];
-
-    if (adminOnlyRoutes.some(route => pathname.startsWith(route))) {
+    const adminOnlyRoutes = ["/admin", "/ajustes", "/convenios"];
+    if (adminOnlyRoutes.some((route) => pathname.startsWith(route))) {
       if (role !== "ADMIN") {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
 
-    // ==========================================
-    // 3. RUTAS CLÍNICAS ESTRICTAS (Solo Doctores y Admin)
-    // ==========================================
     const strictMedicalRoutes = [
       "/historia-clinica",
       "/odontograma",
       "/evoluciones",
-      "/tratamientos", 
+      "/tratamientos",
       "/tratamiento",
-      "/laboratorio" // Añadido: gestión de trabajos de laboratorio dental
+      "/plans-treatment",
+      "/laboratorio",
     ];
 
-    if (strictMedicalRoutes.some(route => pathname.startsWith(route))) {
+    if (strictMedicalRoutes.some((route) => pathname.startsWith(route))) {
       if (role !== "ADMIN" && role !== "DOCTOR") {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
     }
 
-    // ==========================================
-    // 4. RUTAS GENERALES Y OPERATIVAS (Admin, Doctores y Recepción)
-    // ==========================================
     const generalOperationalRoutes = [
       "/pacientes",
       "/paciente",
       "/agenda",
       "/agenda-global",
       "/dashboard",
-      "/cajas",         // Añadido: módulo de caja y arqueos
-      "/inventario",    // Añadido: control de insumos y stock
+      "/cajas",
+      "/inventario",
+      "/comprobantes",
     ];
 
-    if (generalOperationalRoutes.some(route => pathname.startsWith(route))) {
-      const allowedRoles = ["ADMIN", "DOCTOR", "RECEPTIONIST"];
-      
+    if (generalOperationalRoutes.some((route) => pathname.startsWith(route))) {
+      const allowedRoles = ["ADMIN", "DOCTOR", "RECEPTIONIST", "RECEPCIONISTA"];
       if (!allowedRoles.includes(role)) {
         return NextResponse.redirect(new URL("/unauthorized", req.url));
       }
@@ -89,30 +90,24 @@ export default withAuth(
 
 export const config = {
   matcher: [
-    // Admin & Configuración
     "/admin/:path*",
     "/ajustes/:path*",
     "/convenios/:path*",
-
-    // Dashboard
     "/dashboard/:path*",
-
-    // Gestión de Pacientes y Agenda
     "/pacientes/:path*",
     "/paciente/:path*",
     "/agenda/:path*",
     "/agenda-global/:path*",
-
-    // Módulos Financieros, Inventario y Laboratorio
     "/cajas/:path*",
     "/inventario/:path*",
     "/laboratorio/:path*",
-
-    // Clínica Estricta
     "/historia-clinica/:path*",
     "/odontograma/:path*",
     "/evoluciones/:path*",
     "/tratamientos/:path*",
     "/tratamiento/:path*",
+    "/plans-treatment/:path*",
+    "/comprobantes/:path*",
+    "/api/((?!auth).*)",
   ],
 };
