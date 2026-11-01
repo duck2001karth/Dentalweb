@@ -32,28 +32,26 @@ export function PrescriptionPrint({
   const clinicAddress = settings?.address?.trim() || "No registrado"
   const clinicPhone = settings?.phone?.trim() || settings?.whatsappNumber?.trim() || "No registrado"
   const clinicEmail = settings?.email?.trim() || "No registrado"
-  const clinicCity = (settings as any)?.city?.trim() || "No registrado"
-  const clinicCountry = (settings as any)?.country?.trim() || "No registrado"
-  const clinicLocation = `${clinicCity} - ${clinicCountry}`
+  
+  // SOLUCIÓN AL ERROR DE VS CODE: Se evita el salto de línea literal en el template string
+  const clinicCity = (settings as any)?.city?.trim() || ""
+  const clinicCountry = (settings as any)?.country?.trim() || ""
+  const clinicLocation = [clinicCity, clinicCountry].filter(Boolean).join(" - ") || "No registrado"
 
   const logoUrl = settings?.logoUrl || ""
   const watermarkUrl = settings?.watermarkUrl || ""
   const watermarkOpacity = ((settings as any)?.watermarkOpacity ?? 12) / 100
   const watermarkScale = ((settings as any)?.watermarkScale || 100) / 100
+  
+  // Respeta el color original a menos que esté forzado el modo B/N
   const isMonochrome = settings?.defaultPrintMode === "bw"
   const filterStyle = isMonochrome ? "grayscale(100%)" : "none"
 
   // Datos del facultativo normalizados
-  const rawDoctorName =
-    printingDoc.doctorName ||
-    printingDoc.author?.name ||
-    "Dr. Especialista"
+  const rawDoctorName = printingDoc.doctorName || printingDoc.author?.name || "Dr. Especialista"
   const doctorDisplayName = rawDoctorName.startsWith("Dr") ? rawDoctorName : `Dr. ${rawDoctorName}`
 
-  const doctorSpecialty =
-    printingDoc.doctorSpecialty ||
-    printingDoc.author?.specialty ||
-    "Ortodoncia"
+  const doctorSpecialty = printingDoc.doctorSpecialty || printingDoc.author?.specialty || "Odontología General"
 
   const doctorLicense =
     printingDoc.doctorLicense ||
@@ -177,29 +175,33 @@ export function PrescriptionPrint({
         
         {/* LADO 1: MEDICAMENTOS (R.P.) */}
         <div className="print-pane relative">
-          <div
-            className="hidden print:flex watermark-container"
-            style={{ opacity: watermarkOpacity }}
-          >
-            <img
-              src={watermarkUrl}
-              alt="Marca de Agua"
-              className="watermark-img"
-              style={{
-                transform: `scale(${watermarkScale})`,
-                filter: filterStyle,
-              }}
-            />
-          </div>
+          {watermarkUrl && (
+            <div
+              className="hidden print:flex watermark-container"
+              style={{ opacity: watermarkOpacity }}
+            >
+              <img
+                src={watermarkUrl}
+                alt="Marca de Agua"
+                className="watermark-img"
+                style={{
+                  transform: `scale(${watermarkScale})`,
+                  filter: filterStyle,
+                }}
+              />
+            </div>
+          )}
 
           <div className="flex justify-between items-start mb-3 border-b-2 border-[#008bcd] pb-2 relative z-10">
             <div className="flex items-center gap-3">
-              <img
-                src={logoUrl}
-                alt={`Logo ${clinicName}`}
-                className="h-10 w-auto object-contain"
-                style={{ filter: filterStyle }}
-              />
+              {logoUrl && (
+                <img
+                  src={logoUrl}
+                  alt={`Logo ${clinicName}`}
+                  className="h-10 w-auto object-contain"
+                  style={{ filter: filterStyle }}
+                />
+              )}
               <div>
                 <h1 className="text-2xl font-black text-[#008bcd] tracking-tight uppercase leading-none">
                   {clinicName}
@@ -260,29 +262,33 @@ export function PrescriptionPrint({
 
         {/* LADO 2: INDICACIONES Y OBSERVACIONES */}
         <div className="print-pane relative">
-          <div
-            className="hidden print:flex watermark-container"
-            style={{ opacity: watermarkOpacity }}
-          >
-            <img
-              src={watermarkUrl}
-              alt="Marca de Agua"
-              className="watermark-img"
-              style={{
-                transform: `scale(${watermarkScale})`,
-                filter: filterStyle,
-              }}
-            />
-          </div>
+          {watermarkUrl && (
+            <div
+              className="hidden print:flex watermark-container"
+              style={{ opacity: watermarkOpacity }}
+            >
+              <img
+                src={watermarkUrl}
+                alt="Marca de Agua"
+                className="watermark-img"
+                style={{
+                  transform: `scale(${watermarkScale})`,
+                  filter: filterStyle,
+                }}
+              />
+            </div>
+          )}
 
           <div className="flex justify-between items-start mb-3 border-b-2 border-[#008bcd] pb-2 relative z-10">
             <div className="flex items-center gap-3">
-              <img
-                src={logoUrl}
-                alt={`Logo ${clinicName}`}
-                className="h-10 w-auto object-contain"
-                style={{ filter: filterStyle }}
-              />
+              {logoUrl && (
+                <img
+                  src={logoUrl}
+                  alt={`Logo ${clinicName}`}
+                  className="h-10 w-auto object-contain"
+                  style={{ filter: filterStyle }}
+                />
+              )}
               <div>
                 <h1 className="text-2xl font-black text-[#008bcd] tracking-tight uppercase leading-none">
                   {clinicName}

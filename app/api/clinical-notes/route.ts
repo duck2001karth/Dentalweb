@@ -1,58 +1,15 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { headers } from "next/headers";
+import { createApiHandler } from "@/lib/server/api-handler"
+import { prisma } from "@/lib/db"
+import { z } from "zod"
+import { headers } from "next/headers"
 
-async function createAuditEntry(
-  tx: any,
-  data: {
-    userId: string;
-    action: "CREATE" | "UPDATE" | "DELETE";
-    entityId: string;
-    patientId?: string | null;
-    details?: string;
-    oldData?: any;
-    newData?: any;
-  }
-) {
-  try {
-    const headersList = await headers();
-    const forwardedFor = headersList.get("x-forwarded-for");
-    const ipAddress = forwardedFor
-      ? forwardedFor.split(",")[0].trim()
-      : headersList.get("x-real-ip") || "127.0.0.1";
-    const userAgent = headersList.get("user-agent") || "Desconocido";
+export const GET = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async (req, { searchParams }) => {
+    const patientId = searchParams.get("patientId")
+    if (!patientId) throw new Error("patientId requerido")
 
-    await tx.auditLog.create({
-      data: {
-        userId: data.userId,
-        action: data.action,
-        entity: "CLINICAL_NOTE",
-        entityId: data.entityId,
-        patientId: data.patientId || null,
-        details: data.details || null,
-        oldData: data.oldData || null,
-        newData: data.newData || null,
-        ipAddress,
-        userAgent,
-      },
-    });
-  } catch (err) {
-    console.error("Error al registrar auditoría en ClinicalNote:", err);
-  }
-}
-
-export async function GET(req: Request) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const patientId = searchParams.get("patientId");
-
-    if (!patientId) {
-      return NextResponse.json({ error: "patientId requerido" }, { status: 400 });
-    }
-
-    const notes = await prisma.clinicalNote.findMany({
+    const clinicalNotes = await prisma.clinicalNote.findMany({
       where: { patientId },
       include: {
         author: {
@@ -66,24 +23,19 @@ export async function GET(req: Request) {
         },
       },
       orderBy: { createdAt: "desc" },
-    });
+    })
 
-    return NextResponse.json({ clinicalNotes: notes });
-  } catch (error) {
-    console.error("Error al obtener notas clínicas:", error);
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+    return { clinicalNotes }
   }
-}
+)
 
-export async function POST(req: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const input = body.input || body;
+export const POST = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR"],
+    schema: z.any(), 
+  },
+  async (req, { user, data }) => {
+    const input = data.input || data
     const {
       type,
       content,
@@ -95,27 +47,30 @@ export async function POST(req: Request) {
       status,
       createdAt,
       date,
-    } = input;
+    } = input
 
-    const currentAuthorId = authorId || (session.user as any)?.id;
-
+    const currentAuthorId = authorId || user.id
     if (!content || !currentAuthorId || !patientId) {
-      return NextResponse.json(
-        { error: "Faltan datos requeridos (content, authorId o patientId)" },
-        { status: 400 }
-      );
+      throw new Error("Faltan datos requeridos (content, authorId o patientId)")
     }
 
-    const noteType = type || "EVOLUTION";
-    const noteStatus = status || "IN_PROGRESS";
-    const noteDate = date || createdAt ? new Date(date || createdAt) : new Date();
+    const noteType = type || "EVOLUTION"
+    const noteStatus = status || "IN_PROGRESS"
+    const noteDate = date || createdAt ? new Date(date || createdAt) : new Date()
+
+    const headersList = await headers()
+    const ipAddress =
+      headersList.get("x-forwarded-for")?.split(",")[0].trim() ||
+      headersList.get("x-real-ip") ||
+      "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const note = await prisma.$transaction(async (tx) => {
       const created = await tx.clinicalNote.create({
         data: {
-          type: noteType,
+          type: noteType as any,
           content,
-          status: noteStatus,
+          status: noteStatus as any,
           authorId: currentAuthorId,
           patientId,
           fileUrl: fileUrl || null,
@@ -134,51 +89,48 @@ export async function POST(req: Request) {
             },
           },
         },
-      });
+      })
 
-      const isFileDoc = noteType === "GENERAL" && Boolean(fileUrl);
+      const isFileDoc = noteType === "GENERAL" && Boolean(fileUrl)
       const detailMsg = isFileDoc
         ? `Carga de archivo/radiografía: "${content}"`
-        : `Registro de nota clínica (${noteType})`;
+        : `Registro de nota clínica (${noteType})`
 
-      await createAuditEntry(tx, {
-        userId: currentAuthorId,
-        action: "CREATE",
-        entityId: created.id,
-        patientId,
-        details: detailMsg,
-        newData: {
-          type: created.type,
-          content: created.content,
-          status: created.status,
-          hasFile: Boolean(created.fileUrl),
-          hasProfessionalSignature: Boolean(created.professionalSignature),
-          hasPatientSignature: Boolean(created.patientSignature),
+      await tx.auditLog.create({
+        data: {
+          userId: currentAuthorId,
+          action: "CREATE_CLINICAL_NOTE",
+          entity: "CLINICAL_NOTE",
+          entityId: created.id,
+          patientId,
+          details: detailMsg,
+          newData: {
+            type: created.type,
+            content: created.content,
+            status: created.status,
+            hasFile: Boolean(created.fileUrl),
+            hasProfessionalSignature: Boolean(created.professionalSignature),
+            hasPatientSignature: Boolean(created.patientSignature),
+          },
+          ipAddress,
+          userAgent,
         },
-      });
+      })
 
-      return created;
-    });
+      return created
+    })
 
-    return NextResponse.json(note, { status: 201 });
-  } catch (error) {
-    console.error("Error creating clinical note:", error);
-    return NextResponse.json(
-      { error: "Error interno del servidor al crear la nota" },
-      { status: 500 }
-    );
+    return note
   }
-}
+)
 
-export async function PATCH(req: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const input = body.input || body;
+export const PATCH = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR"],
+    schema: z.any(),
+  },
+  async (req, { user, data }) => {
+    const input = data.input || data
     const {
       id,
       content,
@@ -189,31 +141,32 @@ export async function PATCH(req: Request) {
       isSigned,
       date,
       createdAt,
-    } = input;
+    } = input
 
-    if (!id) {
-      return NextResponse.json({ error: "ID de la nota requerido" }, { status: 400 });
-    }
+    if (!id) throw new Error("ID de la nota requerido")
 
-    const currentUserId = (session.user as any)?.id;
-    const updateDate = date || createdAt ? new Date(date || createdAt) : undefined;
+    const updateDate = date || createdAt ? new Date(date || createdAt) : undefined
+
+    const headersList = await headers()
+    const ipAddress =
+      headersList.get("x-forwarded-for")?.split(",")[0].trim() ||
+      headersList.get("x-real-ip") ||
+      "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const updatedNote = await prisma.$transaction(async (tx) => {
-      const previous = await tx.clinicalNote.findUnique({
-        where: { id },
-      });
-
-      if (!previous) throw new Error("NOT_FOUND");
+      const previous = await tx.clinicalNote.findUnique({ where: { id } })
+      if (!previous) throw new Error("NOT_FOUND")
 
       const updated = await tx.clinicalNote.update({
         where: { id },
         data: {
           ...(content !== undefined && { content }),
-          ...(status !== undefined && { status }),
+          ...(status !== undefined && { status: status as any }),
           ...(fileUrl !== undefined && { fileUrl }),
           ...(professionalSignature !== undefined && { professionalSignature }),
           ...(patientSignature !== undefined && { patientSignature }),
-          ...(isSigned !== undefined && { isSigned }),
+          ...(isSigned !== undefined && { isSigned: Boolean(isSigned) }),
           ...(updateDate !== undefined && { createdAt: updateDate }),
         },
         include: {
@@ -227,37 +180,36 @@ export async function PATCH(req: Request) {
             },
           },
         },
-      });
+      })
 
-      await createAuditEntry(tx, {
-        userId: currentUserId,
-        action: "UPDATE",
-        entityId: id,
-        patientId: previous.patientId,
-        details: `Actualización de nota clínica (${updated.type})`,
-        oldData: {
-          content: previous.content,
-          status: previous.status,
-          isSigned: previous.isSigned,
-          hasProfessionalSignature: Boolean(previous.professionalSignature),
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE_CLINICAL_NOTE",
+          entity: "CLINICAL_NOTE",
+          entityId: id,
+          patientId: previous.patientId,
+          details: `Actualización de nota clínica (${updated.type})`,
+          oldData: {
+            content: previous.content,
+            status: previous.status,
+            isSigned: previous.isSigned,
+            hasProfessionalSignature: Boolean(previous.professionalSignature),
+          },
+          newData: {
+            content: updated.content,
+            status: updated.status,
+            isSigned: updated.isSigned,
+            hasProfessionalSignature: Boolean(updated.professionalSignature),
+          },
+          ipAddress,
+          userAgent,
         },
-        newData: {
-          content: updated.content,
-          status: updated.status,
-          isSigned: updated.isSigned,
-          hasProfessionalSignature: Boolean(updated.professionalSignature),
-        },
-      });
+      })
 
-      return updated;
-    });
+      return updated
+    })
 
-    return NextResponse.json(updatedNote);
-  } catch (error: any) {
-    if (error?.message === "NOT_FOUND") {
-      return NextResponse.json({ error: "Nota clínica no encontrada" }, { status: 404 });
-    }
-    console.error("Error updating clinical note:", error);
-    return NextResponse.json({ error: "Error al actualizar la nota" }, { status: 500 });
+    return updatedNote
   }
-}
+)

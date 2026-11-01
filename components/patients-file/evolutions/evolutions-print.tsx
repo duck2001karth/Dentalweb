@@ -1,5 +1,4 @@
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
+import { format, differenceInYears } from "date-fns"
 import { escapeHTML } from "@/lib/sanitize"
 import { executePrintEngine } from "@/lib/print-engine"
 
@@ -21,7 +20,17 @@ interface PrintEvolutionsOptions {
   evolutions: EvolutionItem[]
   doctorName?: string
   specialty?: string
+  doctorLicense?: string
   settings?: any
+}
+
+const calculateAge = (birthDate: string | Date | undefined | null) => {
+  if (!birthDate) return "--"
+  try {
+    return differenceInYears(new Date(), new Date(birthDate))
+  } catch {
+    return "--"
+  }
 }
 
 export function printEvolutionsSheet({
@@ -29,16 +38,52 @@ export function printEvolutionsSheet({
   evolutions = [],
   doctorName = "Especialista Tratante",
   specialty = "Odontología General",
+  doctorLicense = "",
   settings,
 }: PrintEvolutionsOptions) {
-  
+  if (!patient) return
+
+  const patientFullName = escapeHTML(`${patient.firstName || ""} ${patient.lastName || ""}`.trim())
+  const patientDocId = escapeHTML(patient.ci || "No registrado")
+  const patientAge = calculateAge(patient.birthDate)
+  const activeDoctorName = escapeHTML(doctorName.startsWith("Dr") ? doctorName : `Dr. ${doctorName}`)
+
+  const customPatientCard = `
+    <style>
+      .custom-patient-card { display: grid; grid-template-columns: 1.2fr 1fr; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 16px; background: #f8fafc; page-break-inside: avoid; break-inside: avoid; }
+      .custom-patient-col { padding: 10px 14px; }
+      .custom-patient-col:first-child { border-right: 1px solid #e2e8f0; }
+      .c-label { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; }
+      .c-title { font-size: 13.5px; font-weight: 800; color: #0f172a; margin-top: 2px; }
+      .c-sub { font-size: 10.5px; color: #334155; margin-top: 3px; }
+      .c-alert { display: inline-block; color: #e11d48; font-weight: 700; font-size: 9.5px; margin-top: 5px; background: #ffe4e6; padding: 2px 7px; border-radius: 6px; }
+    </style>
+    <div class="custom-patient-card">
+      <div class="custom-patient-col">
+        <div class="c-label">Datos del Paciente</div>
+        <div class="c-title">${patientFullName}</div>
+        <div class="c-sub">
+          <b>Identificación:</b> ${patientDocId} &nbsp; &nbsp; 
+          <b>Edad:</b> ${patientAge !== "--" ? `${patientAge} Años` : "--"}
+        </div>
+        ${patient.medicalAlerts ? `<div class="c-alert">Alerta Médica: ${escapeHTML(patient.medicalAlerts)}</div>` : ""}
+      </div>
+      <div class="custom-patient-col">
+        <div class="c-label">Profesional Responsable</div>
+        <div class="c-title">${activeDoctorName}</div>
+        <div class="c-sub"><b>Especialidad:</b> ${escapeHTML(specialty)}</div>
+        ${doctorLicense ? `<div class="c-sub"><b>Matrícula / Reg. MSP:</b> ${escapeHTML(doctorLicense)}</div>` : ""}
+      </div>
+    </div>
+  `
+
   const evolutionsHtml = evolutions.length > 0
     ? evolutions.map((evo) => {
         const evoDate = evo.date ? format(new Date(evo.date), "dd/MM/yyyy") : "--"
         const evoTime = escapeHTML(evo.time || "")
         const evoDoctor = escapeHTML(evo.doctor || doctorName)
         const evoProc = escapeHTML(evo.procedure || "Atención Odontológica")
-        const evoTooth = evo.tooth ? `Pieza ${escapeHTML(evo.tooth)}` : "General"
+        const evoTooth = evo.tooth ? `Pieza ${escapeHTML(evo.tooth.toString())}` : "General"
         const evoNotes = escapeHTML(evo.notes || evo.observations || "Sin notas registradas.")
         const evoNext = evo.nextAppointment ? escapeHTML(evo.nextAppointment) : null
 
@@ -68,6 +113,7 @@ export function printEvolutionsSheet({
     : `<div style="text-align: center; padding: 30px; color: #94a3b8; font-style: italic; font-size: 11px;">No se registran notas de evolución clínica en este expediente.</div>`
 
   const bodyHtml = `
+    ${customPatientCard}
     <div style="font-size: 11px; font-weight: 900; color: #008bcd; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px;">
       Evolución y Notas de Tratamiento
     </div>
@@ -79,10 +125,11 @@ export function printEvolutionsSheet({
   executePrintEngine({
     title: "Evoluciones Clínicas",
     documentTypeBadge: "HISTORIA CLÍNICA",
-    patient,
+    patient: undefined, 
     settings,
     bodyHtml,
     doctorName,
-    specialty
+    specialty,
+    showSignature: false 
   })
 }

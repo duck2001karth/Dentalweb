@@ -1,52 +1,43 @@
-import { NextResponse } from "next/server"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { z } from "zod"
 import { headers } from "next/headers"
 
-export const dynamic = "force-dynamic"
 const SETTINGS_ID = "default-clinic-settings"
 
-async function createAuditEntry(
-  tx: any,
-  data: {
-    userId: string
-    action: "UPDATE"
-    entityId: string
-    details?: string
-    oldData?: any
-    newData?: any
-  }
-) {
-  try {
-    const headersList = await headers()
-    const forwardedFor = headersList.get("x-forwarded-for")
-    const ipAddress = forwardedFor
-      ? forwardedFor.split(",")[0].trim()
-      : headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
+// Validación flexible porque es un PATCH parcial (upsert)
+const updateSettingsSchema = z.object({
+  clinicName: z.string().optional(),
+  slogan: z.string().nullable().optional(),
+  ruc: z.string().nullable().optional(),
+  razonSocial: z.string().nullable().optional(),
+  estabCode: z.string().optional(),
+  ptoEmiCode: z.string().optional(),
+  obligadoContab: z.boolean().optional(),
+  taxRate: z.number().optional(),
+  currency: z.string().optional(),
+  address: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  country: z.string().nullable().optional(),
+  timezone: z.string().optional(),
+  timeFormat: z.string().optional(),
+  phone: z.string().nullable().optional(),
+  whatsappNumber: z.string().nullable().optional(),
+  email: z.string().nullable().optional(),
+  website: z.string().nullable().optional(),
+  availableBoxes: z.array(z.string()).optional(),
+  footerText: z.string().nullable().optional(),
+  defaultPrintMode: z.string().optional(),
+  logoUrl: z.string().nullable().optional(),
+  watermarkUrl: z.string().nullable().optional(),
+  logoScale: z.number().optional(),
+  watermarkOpacity: z.number().optional(),
+  watermarkScale: z.number().optional(),
+})
 
-    await tx.auditLog.create({
-      data: {
-        userId: data.userId,
-        action: data.action,
-        entity: "CLINIC_SETTINGS",
-        entityId: data.entityId,
-        details: data.details || null,
-        oldData: data.oldData || null,
-        newData: data.newData || null,
-        ipAddress,
-        userAgent,
-      },
-    })
-  } catch (err) {
-    console.error("Error al registrar auditoría en ClinicSettings:", err)
-  }
-}
-
-// 1. Obtener ajustes institucionales
-export async function GET() {
-  try {
+export const GET = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async () => {
     let settings = await prisma.clinicSettings.findUnique({
       where: { id: SETTINGS_ID },
     })
@@ -55,16 +46,16 @@ export async function GET() {
       settings = await prisma.clinicSettings.create({
         data: {
           id: SETTINGS_ID,
-          clinicName: "Carmo Dental",
-          slogan: "CLÍNICA DE ESPECIALIDADES ODONTOLÓGICAS",
+          clinicName: "Clinica... ",
+          slogan: "Clinica ...",
           city: "Quito",
           country: "Ecuador",
           currency: "USD",
           taxRate: 0,
           estabCode: "001",
           ptoEmiCode: "001",
-          timezone: "America/Guayaquil", // Inicialización por defecto
-          timeFormat: "24h",            // Inicialización por defecto
+          timezone: "America/Guayaquil",
+          timeFormat: "24h",
           availableBoxes: ["Box 1 (Principal)", "Box 2 (Ortodoncia)", "Box 3 (Cirugía)"],
           footerText: "Documento emitido por Carmo Dental. Información médica confidencial.",
           defaultPrintMode: "color",
@@ -72,75 +63,48 @@ export async function GET() {
       })
     }
 
-    return NextResponse.json(settings)
-  } catch (error) {
-    console.error("Error al obtener ClinicSettings:", error)
-    return NextResponse.json({ error: "Error interno al obtener configuración" }, { status: 500 })
+    return settings
   }
-}
+)
 
-// 2. Modificar ajustes (Exclusivo Administradores con Auditoría)
-export async function PATCH(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-    }
-
-    const currentUser = session.user as any
-    const userRole = String(currentUser?.role || "").toUpperCase().trim()
-
-    const isAuthorized =
-      userRole === "ADMIN" ||
-      userRole === "ADMINISTRADOR" ||
-      userRole === "ADMINISTRATION"
-
-    if (!isAuthorized) {
-      return NextResponse.json(
-        { error: "Solo administradores pueden modificar los ajustes de la clínica" },
-        { status: 403 }
-      )
-    }
-
-    const body = await req.json()
-
+export const PATCH = createApiHandler(
+  {
+    roles: ["ADMIN"],
+    schema: updateSettingsSchema,
+  },
+  async (req, { user, data }) => {
     const updateData: any = {
-      clinicName: body.clinicName || "Carmo Dental",
-      slogan: body.slogan ?? null,
-      ruc: body.ruc ?? null,
-      razonSocial: body.razonSocial ?? null,
-      estabCode: body.estabCode || "001",
-      ptoEmiCode: body.ptoEmiCode || "001",
-      obligadoContab: Boolean(body.obligadoContab),
-      taxRate: parseFloat(body.taxRate) || 0,
-      currency: body.currency || "USD",
-      address: body.address ?? null,
-      city: body.city ?? null,
-      country: body.country ?? null,
-      timezone: body.timezone || "America/Guayaquil", // Persistencia de Zona Horaria
-      timeFormat: body.timeFormat || "24h",           // Persistencia de Formato de Reloj
-      phone: body.phone ?? null,
-      whatsappNumber: body.whatsappNumber ?? null,
-      email: body.email ?? null,
-      website: body.website ?? null,
-      availableBoxes: Array.isArray(body.availableBoxes) ? body.availableBoxes : ["Box 1"],
-      footerText: body.footerText ?? null,
-      defaultPrintMode: body.defaultPrintMode || "color",
-      logoUrl: body.logoUrl ?? null,
-      watermarkUrl: body.watermarkUrl ?? null,
+      clinicName: data.clinicName || "Carmo Dental",
+      slogan: data.slogan ?? null,
+      ruc: data.ruc ?? null,
+      razonSocial: data.razonSocial ?? null,
+      estabCode: data.estabCode || "001",
+      ptoEmiCode: data.ptoEmiCode || "001",
+      obligadoContab: Boolean(data.obligadoContab),
+      taxRate: data.taxRate || 0,
+      currency: data.currency || "USD",
+      address: data.address ?? null,
+      city: data.city ?? null,
+      country: data.country ?? null,
+      timezone: data.timezone || "America/Guayaquil",
+      timeFormat: data.timeFormat || "24h",
+      phone: data.phone ?? null,
+      whatsappNumber: data.whatsappNumber ?? null,
+      email: data.email ?? null,
+      website: data.website ?? null,
+      availableBoxes: Array.isArray(data.availableBoxes) ? data.availableBoxes : ["Box 1"],
+      footerText: data.footerText ?? null,
+      defaultPrintMode: data.defaultPrintMode || "color",
+      logoUrl: data.logoUrl ?? null,
+      watermarkUrl: data.watermarkUrl ?? null,
+      ...(data.logoScale !== undefined && { logoScale: data.logoScale }),
+      ...(data.watermarkOpacity !== undefined && { watermarkOpacity: data.watermarkOpacity }),
+      ...(data.watermarkScale !== undefined && { watermarkScale: data.watermarkScale }),
     }
 
-    if (body.logoScale !== undefined) {
-      updateData.logoScale = Number(body.logoScale) || 100
-    }
-
-    if (body.watermarkOpacity !== undefined) {
-      updateData.watermarkOpacity = Number(body.watermarkOpacity) || 14
-    }
-
-    if (body.watermarkScale !== undefined) {
-      updateData.watermarkScale = Number(body.watermarkScale) || 100
-    }
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const updated = await prisma.$transaction(async (tx) => {
       const previous = await tx.clinicSettings.findUnique({
@@ -156,46 +120,39 @@ export async function PATCH(req: Request) {
         },
       })
 
-      await createAuditEntry(tx, {
-        userId: currentUser.id,
-        action: "UPDATE",
-        entityId: SETTINGS_ID,
-        details: `Actualización de configuración general de la clínica (${res.clinicName})`,
-        oldData: previous
-          ? {
-              clinicName: previous.clinicName,
-              ruc: previous.ruc,
-              timezone: previous.timezone,
-              timeFormat: previous.timeFormat,
-              phone: previous.phone,
-              whatsappNumber: previous.whatsappNumber,
-              address: previous.address,
-              email: previous.email,
-              hasLogo: Boolean(previous.logoUrl),
-            }
-          : null,
-        newData: {
-          clinicName: res.clinicName,
-          ruc: res.ruc,
-          timezone: res.timezone,
-          timeFormat: res.timeFormat,
-          phone: res.phone,
-          whatsappNumber: res.whatsappNumber,
-          address: res.address,
-          email: res.email,
-          hasLogo: Boolean(res.logoUrl),
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE_CLINIC_SETTINGS",
+          entity: "CLINIC_SETTINGS",
+          entityId: SETTINGS_ID,
+          details: `Actualización de configuración general de la clínica (${res.clinicName})`,
+          oldData: previous
+            ? {
+                clinicName: previous.clinicName,
+                ruc: previous.ruc,
+                timezone: previous.timezone,
+                timeFormat: previous.timeFormat,
+                phone: previous.phone,
+                hasLogo: Boolean(previous.logoUrl),
+              }
+            : undefined,
+          newData: {
+            clinicName: res.clinicName,
+            ruc: res.ruc,
+            timezone: res.timezone,
+            timeFormat: res.timeFormat,
+            phone: res.phone,
+            hasLogo: Boolean(res.logoUrl),
+          },
+          ipAddress,
+          userAgent
         },
       })
 
       return res
     })
 
-    return NextResponse.json(updated)
-  } catch (error: any) {
-    console.error("Error al actualizar ClinicSettings:", error?.message || error)
-    return NextResponse.json(
-      { error: error?.message || "Error al guardar los ajustes de la clínica" },
-      { status: 500 }
-    )
+    return updated
   }
-}
+)

@@ -1,85 +1,50 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
+import { z } from "zod"
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions)
-    const email = session?.user?.email
+export const GET = createApiHandler(
+  {}, 
+  async (req, { user }) => {
+    const dbUser = await prisma.user.findUnique({ where: { email: user.email! } })
+    if (!dbUser) throw new Error("NOT_FOUND")
 
-    if (!email) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+    const userData = dbUser as Record<string, any>
+    const professionalCard = userData.professionalCard ?? userData.licenseNumber ?? ""
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: "Usuario no encontrado" }, { status: 404 })
-    }
-
-    const userData = user as Record<string, any>
-    const professionalCard =
-      userData.professionalCard ?? userData.licenseNumber ?? ""
-
-    return NextResponse.json({
+    return {
       signatureBase64: userData.signatureBase64 || null,
       professionalCard,
       specialty: userData.specialty || "Ortodoncia",
-    })
-  } catch (error) {
-    console.error("Error al obtener firma/credenciales:", error)
-    return NextResponse.json(
-      { error: "Error al recuperar datos" },
-      { status: 500 }
-    )
+    }
   }
-}
+)
 
-export async function PATCH(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    const email = session?.user?.email
-
-    if (!email) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
-
-    const body = await req.json()
-    const { signatureBase64, professionalCard, specialty } = body
+export const PATCH = createApiHandler(
+  {
+    schema: z.object({
+      signatureBase64: z.string().nullable().optional(),
+      professionalCard: z.string().optional(),
+      specialty: z.string().optional(),
+    }).passthrough(),
+  },
+  async (req, { user, data }) => {
     const updateData: Record<string, any> = {}
-
-    if (signatureBase64 !== undefined) {
-      updateData.signatureBase64 = signatureBase64
-    }
-
-    if (specialty !== undefined) {
-      updateData.specialty = specialty
-    }
-
-    if (professionalCard !== undefined) {
-      updateData.professionalCard = professionalCard
-    }
+    if (data.signatureBase64 !== undefined) updateData.signatureBase64 = data.signatureBase64
+    if (data.specialty !== undefined) updateData.specialty = data.specialty
+    if (data.professionalCard !== undefined) updateData.professionalCard = data.professionalCard
 
     let updatedUser: any
-
     try {
       updatedUser = await prisma.user.update({
-        where: { email },
+        where: { email: user.email! },
         data: updateData,
       })
     } catch (dbErr: any) {
-      if (
-        professionalCard !== undefined &&
-        dbErr?.message?.includes("professionalCard")
-      ) {
+      if (data.professionalCard !== undefined && dbErr?.message?.includes("professionalCard")) {
         delete updateData.professionalCard
-        updateData.licenseNumber = professionalCard
-
+        updateData.licenseNumber = data.professionalCard
         updatedUser = await prisma.user.update({
-          where: { email },
+          where: { email: user.email! },
           data: updateData,
         })
       } else {
@@ -88,20 +53,13 @@ export async function PATCH(req: Request) {
     }
 
     const resData = updatedUser as Record<string, any>
-    const resolvedCard =
-      resData.professionalCard ?? resData.licenseNumber ?? professionalCard ?? ""
+    const resolvedCard = resData.professionalCard ?? resData.licenseNumber ?? data.professionalCard ?? ""
 
-    return NextResponse.json({
+    return {
       success: true,
       signatureBase64: resData.signatureBase64,
       professionalCard: resolvedCard,
       specialty: resData.specialty,
-    })
-  } catch (error) {
-    console.error("Error al actualizar firma/especialidad:", error)
-    return NextResponse.json(
-      { error: "Error al actualizar las credenciales" },
-      { status: 500 }
-    )
+    }
   }
-}
+)

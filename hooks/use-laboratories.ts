@@ -1,123 +1,63 @@
-import { useState, useCallback, useEffect } from "react";
-import { LaboratoryRecord, LaboratoryFormData, UpdateLaboratoryData } from "@/types/laboratory";
-import { useToast } from "@/hooks/use-toast";
+"use client"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useToast } from "@/hooks/use-toast"
+import { LaboratoryRecord, LaboratoryFormData, UpdateLaboratoryData } from "@/types/laboratory"
 
 export function useLaboratories() {
-  const { toast } = useToast();
-  const [laboratories, setLaboratories] = useState<LaboratoryRecord[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
 
-  // Obtener la lista de laboratorios
-  const fetchLaboratories = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch("/api/laboratories");
-      if (!res.ok) throw new Error("Error al obtener los laboratorios");
-      const data: LaboratoryRecord[] = await res.json();
-      setLaboratories(data || []);
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los laboratorios.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+  const { data: laboratories = [], isLoading, refetch } = useQuery<LaboratoryRecord[]>({
+    queryKey: ["laboratories"],
+    queryFn: async () => {
+      const res = await fetch("/api/laboratories")
+      if (!res.ok) throw new Error("Error al obtener los laboratorios")
+      return res.json()
     }
-  }, [toast]);
+  })
 
-  useEffect(() => {
-    fetchLaboratories();
-  }, [fetchLaboratories]);
-
-  // Crear laboratorio
-  const createLaboratory = async (input: LaboratoryFormData) => {
-    setIsSaving(true);
-    try {
-      const payload = {
-        ...input,
-        balance: Number(input.balance) || 0,
-      };
-
+  const createMutation = useMutation({
+    mutationFn: async (input: LaboratoryFormData) => {
       const res = await fetch("/api/laboratories", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...input, balance: Number(input.balance) || 0 })
+      })
+      if (!res.ok) throw new Error()
+      return res.json()
+    },
+    onSuccess: (newLab) => {
+      toast({ title: "Laboratorio creado", description: `Se registró correctamente el laboratorio ${newLab.name}.`, variant: "success" })
+      queryClient.invalidateQueries({ queryKey: ["laboratories"] })
+    },
+    onError: () => toast({ title: "Error", description: "No se pudo registrar el laboratorio.", variant: "destructive" })
+  })
 
-      if (!res.ok) throw new Error("Error al crear laboratorio");
-
-      const newLab: LaboratoryRecord = await res.json();
-      setLaboratories((prev) => [...prev, newLab]);
-
-      toast({
-        title: "Laboratorio creado",
-        description: `Se registró correctamente el laboratorio ${newLab.name}.`,
-        variant: "success",
-      });
-      return newLab;
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: "Error",
-        description: "No se pudo registrar el laboratorio.",
-        variant: "destructive",
-      });
-      return null;
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Actualizar laboratorio
-  const updateLaboratory = async (input: UpdateLaboratoryData) => {
-    setIsSaving(true);
-    try {
-      const payload = {
-        ...input,
-        ...(input.balance !== undefined && { balance: Number(input.balance) || 0 }),
-      };
-
+  const updateMutation = useMutation({
+    mutationFn: async (input: UpdateLaboratoryData) => {
       const res = await fetch("/api/laboratories", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error("Error al actualizar laboratorio");
-
-      const updatedLab: LaboratoryRecord = await res.json();
-      setLaboratories((prev) =>
-        prev.map((lab) => (lab.id === updatedLab.id ? updatedLab : lab))
-      );
-
-      toast({
-        title: "Laboratorio actualizado",
-        description: `Se guardaron los cambios de ${updatedLab.name}.`,
-        variant: "success",
-      });
-      return updatedLab;
-    } catch (error) {
-      console.error(error);
-      toast({
-        title: "Error",
-        description: "No se pudieron guardar los cambios.",
-        variant: "destructive",
-      });
-      return null;
-    } finally {
-      setIsSaving(false);
-    }
-  };
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...input, ...(input.balance !== undefined && { balance: Number(input.balance) || 0 }) })
+      })
+      if (!res.ok) throw new Error()
+      return res.json()
+    },
+    onSuccess: (updatedLab) => {
+      toast({ title: "Laboratorio actualizado", description: `Se guardaron los cambios de ${updatedLab.name}.`, variant: "success" })
+      queryClient.invalidateQueries({ queryKey: ["laboratories"] })
+    },
+    onError: () => toast({ title: "Error", description: "No se pudieron guardar los cambios.", variant: "destructive" })
+  })
 
   return {
     laboratories,
     isLoading,
-    isSaving,
-    fetchLaboratories,
-    createLaboratory,
-    updateLaboratory,
-  };
+    isSaving: createMutation.isPending || updateMutation.isPending,
+    fetchLaboratories: refetch,
+    createLaboratory: async (input: LaboratoryFormData) => {
+      try { return await createMutation.mutateAsync(input) } catch { return null }
+    },
+    updateLaboratory: async (input: UpdateLaboratoryData) => {
+      try { return await updateMutation.mutateAsync(input) } catch { return null }
+    }
+  }
 }

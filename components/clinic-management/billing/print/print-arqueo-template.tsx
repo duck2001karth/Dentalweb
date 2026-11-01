@@ -1,9 +1,10 @@
 "use client"
 
-import React from "react"
+import React, { useEffect } from "react"
 import { format } from "date-fns"
-import { es } from "date-fns/locale"
 import { useClinicSettings } from "@/config/clinic-settings"
+import { executePrintEngine } from "@/lib/print-engine"
+import { escapeHTML } from "@/lib/sanitize"
 
 interface PrintArqueoTemplateProps {
   payments: any[]
@@ -11,219 +12,161 @@ interface PrintArqueoTemplateProps {
   cashierName?: string
 }
 
-export function PrintArqueoTemplate({ 
-  payments = [], 
-  dateFilter, 
+export function PrintArqueoTemplate({
+  payments = [],
+  dateFilter,
   cashierName = "Cajero de Turno"
 }: PrintArqueoTemplateProps) {
   const { settings } = useClinicSettings()
-  
-  const clinicName = settings?.clinicName?.trim() || "Clinica Salud"
-  const clinicRuc = settings?.ruc?.trim() || "1xxxxx01"
-  const rawAddress = [settings?.address, settings?.city, settings?.country].filter(Boolean).join(", ")
-  const clinicAddress = rawAddress || "Dirección no registrada"
-  const clinicPhone = settings?.phone || settings?.whatsappNumber || "099999991"
-  const logoUrl = settings?.logoUrl || "logo.png"
+
   const currencySymbol = settings?.currency === "USD" ? "$" : (settings?.currency || "$")
-  const totalEfectivo = payments.filter(p => p.method === "CASH").reduce((a, b) => a + Number(b.amount || 0), 0)
-  const totalTransferencias = payments.filter(p => p.method === "TRANSFER").reduce((a, b) => a + Number(b.amount || 0), 0)
-  const totalCredito = payments.filter(p => p.method === "CREDIT_CARD").reduce((a, b) => a + Number(b.amount || 0), 0)
-  const totalDebito = payments.filter(p => p.method === "DEBIT_CARD").reduce((a, b) => a + Number(b.amount || 0), 0)
-  const totalTarjetas = totalCredito + totalDebito
-  const totalGeneral = totalEfectivo + totalTransferencias + totalTarjetas
 
-  const getFiltroLabel = () => {
-    switch (dateFilter) {
-      case "TODAY": return "Solo Hoy"
-      case "YESTERDAY": return "Ayer"
-      case "THIS_WEEK": return "Esta Semana"
-      case "THIS_MONTH": return "Este Mes"
-      default: return "Historial Completo"
+  useEffect(() => {
+    const totalEfectivo = payments.filter(p => p.method === "CASH").reduce((a, b) => a + Number(b.amount || 0), 0)
+    const totalTransferencias = payments.filter(p => p.method === "TRANSFER").reduce((a, b) => a + Number(b.amount || 0), 0)
+    const totalCredito = payments.filter(p => p.method === "CREDIT_CARD").reduce((a, b) => a + Number(b.amount || 0), 0)
+    const totalDebito = payments.filter(p => p.method === "DEBIT_CARD").reduce((a, b) => a + Number(b.amount || 0), 0)
+    const totalTarjetas = totalCredito + totalDebito
+    const totalGeneral = totalEfectivo + totalTransferencias + totalTarjetas
+
+    const getFiltroLabel = () => {
+      switch (dateFilter) {
+        case "TODAY": return "Solo Hoy"
+        case "YESTERDAY": return "Ayer"
+        case "THIS_WEEK": return "Esta Semana"
+        case "THIS_MONTH": return "Este Mes"
+        default: return "Historial Completo"
+      }
     }
-  }
 
-  const getMethodBadge = (method: string) => {
-    switch (method) {
-      case "CASH": return "Efectivo"
-      case "TRANSFER": return "Transferencia"
-      case "CREDIT_CARD": return "T. Crédito"
-      case "DEBIT_CARD": return "T. Débito"
-      default: return method
+    const getMethodBadge = (method: string) => {
+      switch (method) {
+        case "CASH": return "Efectivo"
+        case "TRANSFER": return "Transferencia"
+        case "CREDIT_CARD": return "T. Crédito"
+        case "DEBIT_CARD": return "T. Débito"
+        default: return method
+      }
     }
-  }
 
-  return (
-    <div className="hidden print:block absolute inset-0 bg-white text-slate-900 z-[99999] px-8 py-8 font-sans antialiased text-[11px] leading-tight">
-      <div className="flex justify-between items-center border-b-2 border-slate-800 pb-4 mb-6">
-        <div className="flex items-center gap-3">
-          {logoUrl ? (
-            <img 
-              src={logoUrl} 
-              alt={`Logo ${clinicName}`} 
-              className="w-14 h-14 object-contain" 
-              onError={(e: any) => { e.currentTarget.style.display = 'none' }}
-            />
-          ) : (
-            <div className="w-12 h-12 rounded-xl bg-slate-100 border border-slate-300 flex items-center justify-center font-black text-lg text-slate-800">
-              {clinicName.substring(0, 2).toUpperCase()}
-            </div>
-          )}
-          <div>
-            <h1 className="text-xl font-black uppercase tracking-wider text-slate-900 leading-none">
-              {clinicName}
-            </h1>
-            <p className="text-[10px] text-slate-600 mt-1 font-semibold">
-              RUC: {clinicRuc} • Telf: {clinicPhone}
-            </p>
-            <p className="text-[9px] text-slate-500">
-              {clinicAddress}
-            </p>
-          </div>
+    const kpiHtml = `
+      <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 24px;">
+        <div style="border: 2px solid #0f172a; border-radius: 8px; padding: 10px; background: #f8fafc;">
+          <p style="font-size: 9px; font-weight: 800; color: #475569; text-transform: uppercase;">Total Recaudado</p>
+          <p style="font-size: 18px; font-weight: 900; color: #0f172a;">${currencySymbol}${totalGeneral.toFixed(2)}</p>
+          <p style="font-size: 8px; color: #64748b;">${payments.length} transacción(es)</p>
         </div>
-
-        <div className="text-right">
-          <span className="inline-block bg-slate-100 text-slate-800 text-[10px] font-black uppercase px-2 py-0.5 rounded border border-slate-300">
-            Arqueo de Turno / Caja
-          </span>
-          <p className="text-xs font-bold text-slate-700 mt-1.5">
-            Período: <strong className="text-[#008bcd]">{getFiltroLabel()}</strong>
-          </p>
-          <p className="text-[9px] text-slate-500 mt-0.5">
-            Emisión: {format(new Date(), "dd/MM/yyyy HH:mm", { locale: es })}
-          </p>
+        <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #ffffff;">
+          <p style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase;">Efectivo Físico</p>
+          <p style="font-size: 16px; font-weight: 900; color: #1e293b;">${currencySymbol}${totalEfectivo.toFixed(2)}</p>
+          <p style="font-size: 8px; color: #64748b;">Gaveta monetaria</p>
+        </div>
+        <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #ffffff;">
+          <p style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase;">Transferencias</p>
+          <p style="font-size: 16px; font-weight: 900; color: #1e293b;">${currencySymbol}${totalTransferencias.toFixed(2)}</p>
+          <p style="font-size: 8px; color: #64748b;">Bancos / QR</p>
+        </div>
+        <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #ffffff;">
+          <p style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase;">T. Débito</p>
+          <p style="font-size: 16px; font-weight: 900; color: #1e293b;">${currencySymbol}${totalDebito.toFixed(2)}</p>
+          <p style="font-size: 8px; color: #64748b;">Vouchers POS</p>
+        </div>
+        <div style="border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; background: #ffffff;">
+          <p style="font-size: 9px; font-weight: 800; color: #64748b; text-transform: uppercase;">T. Crédito</p>
+          <p style="font-size: 16px; font-weight: 900; color: #1e293b;">${currencySymbol}${totalCredito.toFixed(2)}</p>
+          <p style="font-size: 8px; color: #64748b;">Corriente / Diferido</p>
         </div>
       </div>
+    `
 
-      {/* TARJETAS RESUMEN DE GAVETA */}
-      <div className="grid grid-cols-5 gap-2.5 mb-6">
-        <div className="border-2 border-slate-800 rounded-lg p-2.5 bg-slate-50">
-          <p className="text-[9px] font-bold text-slate-600 uppercase">Total Recaudado</p>
-          <p className="text-lg font-black text-slate-900">{currencySymbol}{totalGeneral.toFixed(2)}</p>
-          <p className="text-[8px] text-slate-500">{payments.length} transacción(es)</p>
-        </div>
-
-        <div className="border border-slate-300 rounded-lg p-2.5 bg-white">
-          <p className="text-[9px] font-bold text-slate-500 uppercase">Efectivo Físico</p>
-          <p className="text-base font-black text-slate-800">{currencySymbol}{totalEfectivo.toFixed(2)}</p>
-          <p className="text-[8px] text-slate-500">Gaveta monetaria</p>
-        </div>
-
-        <div className="border border-slate-300 rounded-lg p-2.5 bg-white">
-          <p className="text-[9px] font-bold text-slate-500 uppercase">Transferencias</p>
-          <p className="text-base font-black text-slate-800">{currencySymbol}{totalTransferencias.toFixed(2)}</p>
-          <p className="text-[8px] text-slate-500">Bancos / QR</p>
-        </div>
-
-        <div className="border border-slate-300 rounded-lg p-2.5 bg-white">
-          <p className="text-[9px] font-bold text-slate-500 uppercase">T. Débito</p>
-          <p className="text-base font-black text-slate-800">{currencySymbol}{totalDebito.toFixed(2)}</p>
-          <p className="text-[8px] text-slate-500">Vouchers POS</p>
-        </div>
-
-        <div className="border border-slate-300 rounded-lg p-2.5 bg-white">
-          <p className="text-[9px] font-bold text-slate-500 uppercase">T. Crédito</p>
-          <p className="text-base font-black text-slate-800">{currencySymbol}{totalCredito.toFixed(2)}</p>
-          <p className="text-[8px] text-slate-500">Corriente / Diferido</p>
-        </div>
-      </div>
-
-      {/* TABLA DE MOVIMIENTOS CON REFERENCIAS PARA AUDITORÍA */}
-      <div className="mb-8">
-        <div className="flex justify-between items-center border-b border-slate-400 pb-1.5 mb-2">
-          <h3 className="text-xs font-black uppercase tracking-wider text-slate-800">
-            Registro Detallado de Transacciones
-          </h3>
-          <span className="text-[9px] text-slate-500">Valores expresados en moneda local</span>
-        </div>
-
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b-2 border-slate-300 bg-slate-100 text-[9px] font-black uppercase text-slate-700">
-              <th className="py-2 px-2 w-16">Fecha/Hora</th>
-              <th className="py-2 px-2 w-24">N° Recibo</th>
-              <th className="py-2 px-2">Paciente Titular</th>
-              <th className="py-2 px-2 w-24">Método</th>
-              <th className="py-2 px-2">Referencia / Lote POS</th>
-              <th className="py-2 px-2 text-right w-20">Monto</th>
+    const tableRows = payments.length === 0
+      ? `<tr><td colspan="6" style="padding: 32px; text-align: center; color: #94a3b8; font-size: 12px; font-style: italic;">No existen cobros registrados en este período.</td></tr>`
+      : payments.map(p => {
+          const dateStr = (dateFilter === "TODAY" || dateFilter === "YESTERDAY") ? format(new Date(p.createdAt), "HH:mm") : format(new Date(p.createdAt), "dd/MM HH:mm")
+          const receiptStr = p.receiptNumber || `REC-${String(p.id).slice(-5).toUpperCase()}`
+          const patientStr = `${p.patient?.firstName || ''} ${p.patient?.lastName || ''}`.trim()
+          return `
+            <tr style="border-bottom: 1px solid #e2e8f0; page-break-inside: avoid; break-inside: avoid;">
+              <td style="padding: 8px; font-size: 10px; color: #475569; font-family: monospace;">${dateStr}</td>
+              <td style="padding: 8px; font-size: 10px; font-weight: 700; color: #0f172a; font-family: monospace;">${receiptStr}</td>
+              <td style="padding: 8px; font-size: 11px;">
+                <div style="font-weight: 700; color: #0f172a;">${escapeHTML(patientStr)}</div>
+                <div style="font-size: 9px; color: #64748b; font-family: monospace;">CI: ${p.patient?.ci || "S/N"}</div>
+              </td>
+              <td style="padding: 8px; font-size: 10px; font-weight: 700; color: #334155;">${getMethodBadge(p.method)}</td>
+              <td style="padding: 8px; font-size: 10px; color: #64748b; font-family: monospace;">${p.reference ? escapeHTML(p.reference) : '<i>N/A</i>'}</td>
+              <td style="padding: 8px; text-align: right; font-size: 11px; font-weight: 900; color: #0f172a; font-family: monospace;">${currencySymbol}${Number(p.amount).toFixed(2)}</td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-200">
-            {payments.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="py-8 text-center italic text-slate-400 text-xs">
-                  No existen cobros registrados en este período.
-                </td>
-              </tr>
-            ) : (
-              payments.map((p, idx) => (
-                <tr key={idx} className="break-inside-avoid">
-                  <td className="py-2 px-2 text-[10px] text-slate-600 font-mono">
-                    {dateFilter === "TODAY" || dateFilter === "YESTERDAY" 
-                      ? format(new Date(p.createdAt), "HH:mm")
-                      : format(new Date(p.createdAt), "dd/MM HH:mm")}
-                  </td>
-                  <td className="py-2 px-2 font-mono font-bold text-slate-800">
-                    {p.receiptNumber || `REC-${String(p.id).slice(-5).toUpperCase()}`}
-                  </td>
-                  <td className="py-2 px-2">
-                    <span className="font-bold text-slate-900 block leading-none">
-                      {p.patient?.firstName} {p.patient?.lastName}
-                    </span>
-                    <span className="text-[9px] text-slate-500 font-mono">
-                      CI: {p.patient?.ci || "S/N"}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2">
-                    <span className="font-bold text-slate-700 text-[10px]">
-                      {getMethodBadge(p.method)}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2 font-mono text-[10px] text-slate-600">
-                    {p.reference ? (
-                      <span className="font-semibold">{p.reference}</span>
-                    ) : (
-                      <span className="text-slate-400 italic">N/A</span>
-                    )}
-                  </td>
-                  <td className="py-2 px-2 text-right font-black text-slate-900 font-mono">
-                    {currencySymbol}{Number(p.amount).toFixed(2)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-          {payments.length > 0 && (
-            <tfoot>
-              <tr className="border-t-2 border-slate-800 bg-slate-50 font-black text-xs">
-                <td colSpan={5} className="py-2.5 px-2 text-right uppercase tracking-wider text-slate-700">
-                  Total Liquidado:
-                </td>
-                <td className="py-2.5 px-2 text-right font-mono text-sm text-slate-900">
-                  {currencySymbol}{totalGeneral.toFixed(2)}
-                </td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
+          `
+        }).join("")
+
+    const bodyHtml = `
+      <div style="margin-bottom: 20px; padding: 10px 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+        <span style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase;">Período Auditado:</span>
+        <span style="font-size: 13px; font-weight: 900; color: #008bcd; margin-left: 8px;">${getFiltroLabel()}</span>
       </div>
+      
+      ${kpiHtml}
+      
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #cbd5e1; padding-bottom: 6px; margin-bottom: 12px;">
+        <h3 style="font-size: 11px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 0.5px;">Registro Detallado de Transacciones</h3>
+        <span style="font-size: 9px; color: #64748b;">Valores en moneda local</span>
+      </div>
+      
+      <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+          <tr style="background: #f1f5f9; border-bottom: 2px solid #cbd5e1; font-size: 9px; font-weight: 900; color: #334155; text-transform: uppercase;">
+            <th style="padding: 8px; width: 60px;">Fecha/Hora</th>
+            <th style="padding: 8px; width: 90px;">Nº Recibo</th>
+            <th style="padding: 8px;">Paciente Titular</th>
+            <th style="padding: 8px; width: 90px;">Método</th>
+            <th style="padding: 8px;">Referencia / POS</th>
+            <th style="padding: 8px; text-align: right; width: 80px;">Monto</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tableRows}
+        </tbody>
+        ${payments.length > 0 ? `
+          <tfoot>
+            <tr style="border-top: 2px solid #0f172a; background: #f8fafc;">
+              <td colspan="5" style="padding: 10px 8px; text-align: right; font-size: 11px; font-weight: 900; color: #334155; text-transform: uppercase;">Total Liquidado:</td>
+              <td style="padding: 10px 8px; text-align: right; font-size: 14px; font-weight: 900; color: #0f172a; font-family: monospace;">${currencySymbol}${totalGeneral.toFixed(2)}</td>
+            </tr>
+          </tfoot>
+        ` : ""}
+      </table>
+    `
 
-      {/* FIRMAS DE RESPONSABILIDAD (Evita cortes de página) */}
-      <div className="grid grid-cols-2 gap-24 pt-12 mt-auto break-inside-avoid">
-        <div className="text-center">
-          <div className="border-t border-slate-400 pt-2 w-3/4 mx-auto">
-            <p className="font-bold text-xs text-slate-800">{cashierName}</p>
-            <p className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Entregué Conforme (Cajero/a)</p>
+    const footerHtml = `
+      <div style="margin-top: 40px; padding-top: 20px; page-break-inside: avoid; break-inside: avoid;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; text-align: center; margin-bottom: 15px;">
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+            <div style="width: 80%; border-top: 1.5px solid #0f172a; padding-top: 5px;">
+              <div style="font-size: 11px; font-weight: 800; color: #0f172a;">${escapeHTML(cashierName)}</div>
+              <div style="font-size: 8.5px; color: #64748b; margin-top: 1px; text-transform: uppercase;">Entregué Conforme (Cajero/a)</div>
+            </div>
           </div>
-        </div>
-
-        <div className="text-center">
-          <div className="border-t border-slate-400 pt-2 w-3/4 mx-auto">
-            <p className="font-bold text-xs text-slate-800">Administración / Auditoría</p>
-            <p className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">Recibí Conforme (Caja Central)</p>
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end;">
+            <div style="width: 80%; border-top: 1.5px solid #0f172a; padding-top: 5px;">
+              <div style="font-size: 11px; font-weight: 800; color: #0f172a;">Administración / Auditoría</div>
+              <div style="font-size: 8.5px; color: #64748b; margin-top: 1px; text-transform: uppercase;">Recibí Conforme (Caja Central)</div>
+            </div>
           </div>
         </div>
       </div>
+    `
 
-    </div>
-  )
+    executePrintEngine({
+      title: "Arqueo de Turno / Caja",
+      documentTypeBadge: "CONTROL FINANCIERO",
+      patient: undefined,
+      settings,
+      bodyHtml,
+      footerHtml,
+      showSignature: false,
+    })
+  }, [payments, dateFilter, cashierName, settings, currencySymbol])
+
+  return null
 }

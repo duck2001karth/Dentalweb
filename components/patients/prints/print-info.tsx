@@ -2,7 +2,8 @@
 
 import React, { useState } from "react"
 import { format, differenceInYears } from "date-fns"
-import { Eye, Printer, ShieldAlert, User } from "lucide-react"
+import { Eye, Printer, User } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
 import { useClinicSettings } from "@/config/clinic-settings"
@@ -22,12 +23,14 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
   const clinicSlogan = settings?.slogan?.trim() || "CLÍNICA DE ESPECIALIDADES ODONTOLÓGICAS"
   const doctorHolder = settings?.razonSocial?.trim() || "Dr. Especialista Asignado"
   const clinicRuc = settings?.ruc?.trim() || ""
-  const clinicAddress = settings?.address?.trim() || "Solanda, Av Jose Argudo, Quito, Ecuador"
+  const clinicAddress = settings?.address?.trim() || "Quito, Ecuador"
   const clinicPhone = settings?.phone?.trim() || settings?.whatsappNumber?.trim() || "(+593) 99 999 9999"
   const clinicEmail = settings?.email?.trim() || "contacto@clinicadental.com"
-
+  
   const edad = patient?.birthDate ? differenceInYears(new Date(), new Date(patient.birthDate)) : "-"
   const formattedBirthDate = patient?.birthDate ? format(new Date(patient.birthDate), "dd/MM/yyyy") : "-"
+  
+  const ciudadProvincia = [patient?.ciudad, patient?.departamento].filter(Boolean).join(" / ")
 
   const buildInfoBodyHtml = () => {
     const row = (label: string, value: any) => `
@@ -37,13 +40,8 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
       </div>
     `
 
+    // Se elimina el bloque de alerta duplicado, ya que print-engine.ts ya lo inyecta en la cabecera.
     return `
-      ${patient?.medicalAlerts ? `
-        <div style="margin-bottom: 14px; padding: 8px 12px; border: 1px solid #fecdd3; background: #fff1f2; border-radius: 8px; color: #e11d48; font-size: 11px; font-weight: 700;">
-          ⚠️ ALERTA MÉDICA: ${escapeHTML(patient.medicalAlerts)}
-        </div>
-      ` : ""}
-
       <div style="display: grid; grid-template-columns: 1fr 1fr; column-gap: 24px; row-gap: 16px; margin-bottom: 16px;">
         <div>
           <div style="font-size: 10px; font-weight: 900; color: #008bcd; text-transform: uppercase; border-bottom: 1px solid #008bcd; padding-bottom: 3px; margin-bottom: 6px;">
@@ -54,17 +52,16 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
           ${row("Estado Civil", patient?.estadoCivil)}
           ${row("Profesión", patient?.profesion)}
           ${row("Nivel Educativo", patient?.nivelEducativo)}
-
+          
           <div style="font-size: 10px; font-weight: 900; color: #008bcd; text-transform: uppercase; border-bottom: 1px solid #008bcd; padding-bottom: 3px; margin-top: 14px; margin-bottom: 6px;">
             2. Contacto y Ubicación
           </div>
           ${row("Celular", patient?.phone)}
           ${row("Teléfono Fijo", patient?.telefonoFijo)}
           ${row("Email", patient?.email)}
-          ${row("Ciudad / Prov.", `${patient?.ciudad || ""} ${patient?.departamento ? `/ ${patient.departamento}` : ""}`)}
+          ${row("Ciudad / Prov.", ciudadProvincia)}
           ${row("Dirección", patient?.address)}
         </div>
-
         <div>
           <div style="font-size: 10px; font-weight: 900; color: #008bcd; text-transform: uppercase; border-bottom: 1px solid #008bcd; padding-bottom: 3px; margin-bottom: 6px;">
             3. Datos de Salud y Seguro
@@ -73,14 +70,14 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
           ${row("Tipo Paciente", patient?.tipoPaciente)}
           ${row("Convenio", patient?.convenio)}
           ${row("Grupo Sanguíneo", patient?.grupoSanguineo)}
-
+          
           <div style="font-size: 10px; font-weight: 900; color: #008bcd; text-transform: uppercase; border-bottom: 1px solid #008bcd; padding-bottom: 3px; margin-top: 14px; margin-bottom: 6px;">
             4. Acompañante / Emergencia
           </div>
           ${row("Nombre Acudiente", patient?.nombreAcompanante)}
           ${row("Cédula Acudiente", patient?.cedulaAcudiente)}
           ${row("Teléfono Acudiente", patient?.telefonoAcompanante)}
-
+          
           <div style="font-size: 10px; font-weight: 900; color: #008bcd; text-transform: uppercase; border-bottom: 1px solid #008bcd; padding-bottom: 3px; margin-top: 14px; margin-bottom: 6px;">
             5. Observaciones
           </div>
@@ -100,7 +97,7 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
       settings,
       bodyHtml: buildInfoBodyHtml(),
       doctorName: doctorHolder,
-      showSignature: false, 
+      showSignature: false,
     })
   }
 
@@ -126,6 +123,7 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
           </Button>
         </DialogTrigger>
       )}
+
       <DialogContent className="sm:max-w-[850px] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden bg-background border-border/80">
         <div className="px-6 py-4 border-b border-border/70 flex items-center justify-between bg-card shrink-0">
           <div className="flex items-center gap-2.5">
@@ -148,11 +146,13 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
             style={{ WebkitPrintColorAdjust: "exact", printColorAdjust: "exact" }}
             className="w-full max-w-[750px] min-h-[960px] bg-white text-black p-8 sm:p-10 rounded-lg shadow-sm border border-neutral-200 relative flex flex-col justify-between"
           >
+            {/* CORRECCIÓN: Se elimina 'grayscale' para que la marca de agua respete su color */}
             {settings?.watermarkUrl && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-0 overflow-hidden" style={{ opacity: ((settings as any)?.watermarkOpacity ?? 14) / 100 }}>
                 <img src={settings.watermarkUrl} alt="Watermark" style={{ transform: `scale(${((settings as any)?.watermarkScale || 100) / 100})` }} className="max-w-[460px] max-h-[460px] object-contain" />
               </div>
             )}
+
             <div className="relative z-10">
               <div className="flex items-center justify-between pb-3.5 mb-4 border-b-[3px] border-[#008bcd]">
                 <div className="flex items-center gap-3.5">
@@ -177,7 +177,6 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
                 </div>
               </div>
 
-              {/* TARJETA DEL PACIENTE CON FOTO Y FORMATO REFORZADO */}
               <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-3.5">
                   <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-[#008bcd] shrink-0 bg-neutral-200 flex items-center justify-center shadow-xs">
@@ -201,7 +200,6 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
                     </p>
                   </div>
                 </div>
-
                 <div className="flex flex-col items-end gap-1.5 text-right">
                   <div className="text-xs text-slate-600">
                     <span className="text-slate-400 font-medium">Edad:</span>{" "}
@@ -211,18 +209,14 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
                     <span className="text-slate-400 font-medium">Teléfono:</span>{" "}
                     <strong className="font-mono text-slate-800 font-bold">{patient?.phone || "--"}</strong>
                   </div>
+                  {/* CORRECCIÓN: La píldora de alerta médica se muestra de forma compacta en la vista previa */}
+                  {patient?.medicalAlerts && (
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-rose-50 border border-rose-200 text-rose-700 text-[10px] font-bold">
+                      <span>⚠️ Alerta:</span> <span>{patient.medicalAlerts}</span>
+                    </div>
+                  )}
                 </div>
               </div>
-
-              {patient?.medicalAlerts && (
-                <div className="mb-4 p-2.5 border border-rose-400 bg-rose-50 rounded-lg flex gap-2.5 items-start">
-                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-rose-700 tracking-wider">Alerta Médica:</span>
-                    <p className="text-[11px] font-bold text-rose-900 leading-tight mt-0.5">{patient.medicalAlerts}</p>
-                  </div>
-                </div>
-              )}
 
               <div className="grid grid-cols-2 gap-x-8 gap-y-4">
                 <div>
@@ -234,13 +228,14 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
                   <PrintRow label="Estado Civil" value={patient?.estadoCivil} />
                   <PrintRow label="Profesión" value={patient?.profesion} />
                   <PrintRow label="Nivel Educativo" value={patient?.nivelEducativo} />
+                  
                   <h4 className="text-[11px] font-black text-[#008bcd] uppercase tracking-wider mt-4 mb-1.5 border-b border-[#008bcd]/30 pb-0.5">
                     2. Contacto y Ubicación
                   </h4>
                   <PrintRow label="Celular" value={patient?.phone} />
                   <PrintRow label="Teléfono Fijo" value={patient?.telefonoFijo} />
                   <PrintRow label="Email" value={patient?.email} />
-                  <PrintRow label="Ciudad / Prov." value={`${patient?.ciudad || ""} ${patient?.departamento ? `/ ${patient.departamento}` : ""}`} />
+                  <PrintRow label="Ciudad / Prov." value={ciudadProvincia} />
                   <PrintRow label="Dirección" value={patient?.address} />
                 </div>
                 <div>
@@ -251,12 +246,14 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
                   <PrintRow label="Tipo Paciente" value={patient?.tipoPaciente} />
                   <PrintRow label="Convenio" value={patient?.convenio} />
                   <PrintRow label="Grupo Sanguíneo" value={patient?.grupoSanguineo} />
+                  
                   <h4 className="text-[11px] font-black text-[#008bcd] uppercase tracking-wider mt-4 mb-1.5 border-b border-[#008bcd]/30 pb-0.5">
                     4. Acompañante / Emergencia
                   </h4>
                   <PrintRow label="Nombre Acudiente" value={patient?.nombreAcompanante} />
                   <PrintRow label="Cédula Acudiente" value={patient?.cedulaAcudiente} />
                   <PrintRow label="Teléfono Acudiente" value={patient?.telefonoAcompanante} />
+                  
                   <h4 className="text-[11px] font-black text-[#008bcd] uppercase tracking-wider mt-4 mb-1.5 border-b border-[#008bcd]/30 pb-0.5">
                     5. Observaciones
                   </h4>
@@ -267,12 +264,11 @@ export function PrintPatientInfoModal({ patient, trigger }: PrintPatientInfoModa
               </div>
             </div>
 
-            {/* PIE INSTITUCIONAL */}
             <div className="relative z-10 pt-6 mt-6">
               <div className="w-full border-b-[3.5px] border-[#008bcd] mb-3" />
               <div className="text-center space-y-1 text-slate-800">
                 <p className="text-[10.5px] font-black uppercase tracking-wider text-[#1e293b]">DIRECCIÓN: {clinicAddress}</p>
-                <p className="text-[10px] font-medium text-neutral-600">Cel.: {clinicPhone} &nbsp;•&nbsp; e-mail: {clinicEmail}</p>
+                <p className="text-[10px] font-medium text-neutral-600">Cel.: {clinicPhone} &nbsp; &nbsp; e-mail: {clinicEmail}</p>
               </div>
             </div>
           </div>

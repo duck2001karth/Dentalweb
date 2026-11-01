@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
+import { PrintArqueoTemplate } from "./print-arqueo-template"
 
 interface ExportBillingMenuProps {
   payments: any[]
@@ -18,6 +19,8 @@ interface ExportBillingMenuProps {
 
 export function ExportBillingMenu({ payments = [] }: ExportBillingMenuProps) {
   const { toast } = useToast()
+  // Usamos un estado para forzar la renderización del componente invisible que lanza la impresión
+  const [printTrigger, setPrintTrigger] = React.useState(0)
 
   const exportToCSV = () => {
     if (payments.length === 0) {
@@ -27,7 +30,6 @@ export function ExportBillingMenu({ payments = [] }: ExportBillingMenuProps) {
         variant: "destructive"
       })
     }
-
     const headers = "Fecha,Hora,Recibo,Paciente,CI,Metodo,Estado,Monto\n"
     const rows = payments.map(p => {
       const date = format(new Date(p.createdAt), "dd/MM/yyyy")
@@ -52,30 +54,32 @@ export function ExportBillingMenu({ payments = [] }: ExportBillingMenuProps) {
         variant: "destructive"
       })
     }
-
-    setTimeout(() => {
-      window.print()
-    }, 150)
+    // Dispara el engine
+    setPrintTrigger(prev => prev + 1)
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          className="h-10 px-4 rounded-xl text-[#008bcd] border-[#008bcd]/30 hover:bg-[#008bcd]/10 bg-card font-bold text-xs shrink-0 cursor-pointer shadow-none focus:ring-0 focus:outline-none transition-colors"
-        >
-          <Download className="w-4 h-4 mr-2" /> Exportar
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-52 rounded-xl p-1.5 shadow-xl border-border print:hidden">
-        <DropdownMenuItem onClick={exportToCSV} className="cursor-pointer text-xs font-bold py-2.5 rounded-lg focus:bg-emerald-50 focus:text-emerald-700 dark:focus:bg-emerald-500/10">
-          <FileSpreadsheet className="w-4 h-4 mr-2.5 text-emerald-600" /> Exportar a Excel (CSV)
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={exportToPDF} className="cursor-pointer text-xs font-bold py-2.5 rounded-lg focus:bg-rose-50 focus:text-rose-700 dark:focus:bg-rose-500/10">
-          <FileText className="w-4 h-4 mr-2.5 text-rose-600" /> Imprimir / PDF
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      {printTrigger > 0 && <PrintArqueoTemplate payments={payments} dateFilter="Historial" />}
+      
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="outline"
+            className="h-10 px-4 rounded-xl text-[#008bcd] border-[#008bcd]/30 hover:bg-[#008bcd]/10 bg-card font-bold text-xs shrink-0 cursor-pointer shadow-none focus:ring-0 focus:outline-none transition-colors"
+          >
+            <Download className="w-4 h-4 mr-2" /> Exportar
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52 rounded-xl p-1.5 shadow-xl border-border print:hidden">
+          <DropdownMenuItem onClick={exportToCSV} className="cursor-pointer text-xs font-bold py-2.5 rounded-lg focus:bg-emerald-50 focus:text-emerald-700 dark:focus:bg-emerald-500/10">
+            <FileSpreadsheet className="w-4 h-4 mr-2.5 text-emerald-600" /> Exportar a Excel (CSV)
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={exportToPDF} className="cursor-pointer text-xs font-bold py-2.5 rounded-lg focus:bg-rose-50 focus:text-rose-700 dark:focus:bg-rose-500/10">
+            <FileText className="w-4 h-4 mr-2.5 text-rose-600" /> Imprimir / PDF
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   )
 }

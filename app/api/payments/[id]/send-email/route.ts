@@ -1,48 +1,22 @@
-import { NextResponse } from "next/server"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
+import { z } from "zod"
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id: paymentId } = await params
-    const { email } = await request.json()
-
-    if (!email) {
-      return NextResponse.json(
-        { error: "El correo es requerido" },
-        { status: 400 }
-      )
-    }
+export const POST = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],
+    schema: z.object({ email: z.string().email("Correo inválido") }),
+  },
+  async (req, { params, data }) => {
+    const paymentId = params.id as string
 
     const payment = await prisma.payment.findUnique({
       where: { id: paymentId },
     })
 
-    if (!payment) {
-      return NextResponse.json(
-        { error: "Pago no encontrado" },
-        { status: 404 }
-      )
-    }
+    if (!payment) throw new Error("NOT_FOUND")
 
-    // Aquí puedes conectar tu servicio de email
-    // (Resend, Nodemailer, etc.)
-
-    return NextResponse.json({
-      success: true,
-      message: `Comprobante enviado a ${email}`,
-    })
-  } catch (error) {
-    console.error(
-      "Error al enviar comprobante por correo:",
-      error
-    )
-
-    return NextResponse.json(
-      { error: "Error al enviar correo" },
-      { status: 500 }
-    )
+    // Aquí conectas Resend, Nodemailer, etc.
+    return { success: true, message: `Comprobante enviado a ${data.email}` }
   }
-}
+)

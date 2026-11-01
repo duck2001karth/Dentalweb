@@ -1,27 +1,27 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
-import { logAuditEvent } from "@/lib/audit"
+import { z } from "zod"
+import { headers } from "next/headers"
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+export const GET = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async (req, { params }) => {
+    const id = params.id as string
+    const patient = await prisma.patient.findUnique({ where: { id } })
+    if (!patient) throw new Error("NOT_FOUND")
+    return { patient }
+  }
+)
 
-    const body = await request.json()
-    const input = body.input || body
+export const PATCH = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"], schema: z.any() },
+  async (req, { params, user, data }) => {
+    const id = params.id as string
+    const input = data.input || data
 
     if (!input || Object.keys(input).length === 0) {
-      return NextResponse.json({ error: "No se proporcionaron datos para actualizar" }, { status: 400 })
+      throw new Error("No se proporcionaron datos para actualizar")
     }
-
-    const { id } = await params
 
     const safeData: any = {
       ...(input.firstName !== undefined && { firstName: input.firstName }),
@@ -33,94 +33,97 @@ export async function PATCH(
       ...(input.birthDate !== undefined && { birthDate: input.birthDate ? new Date(input.birthDate) : null }),
       ...(input.convenio !== undefined && { convenio: input.convenio }),
       ...(input.medicalAlerts !== undefined && { medicalAlerts: input.medicalAlerts }),
-      // Añade aquí los demás campos específicos (sexo, profesion, eps, etc.)
+      ...(input.sexo !== undefined && { sexo: input.sexo }),
+      ...(input.profesion !== undefined && { profesion: input.profesion }),
+      ...(input.eps !== undefined && { eps: input.eps }),
+      ...(input.tipoRegistro !== undefined && { tipoRegistro: input.tipoRegistro }),
+      ...(input.cedulaAcudiente !== undefined && { cedulaAcudiente: input.cedulaAcudiente }),
+      ...(input.tipoIdentificacion !== undefined && { tipoIdentificacion: input.tipoIdentificacion }),
+      ...(input.nombreSocial !== undefined && { nombreSocial: input.nombreSocial }),
+      ...(input.grupoSanguineo !== undefined && { grupoSanguineo: input.grupoSanguineo }),
+      ...(input.pertenenciaEtnica !== undefined && { pertenenciaEtnica: input.pertenenciaEtnica }),
+      ...(input.estadoCivil !== undefined && { estadoCivil: input.estadoCivil }),
+      ...(input.nivelEducativo !== undefined && { nivelEducativo: input.nivelEducativo }),
+      ...(input.tipoPaciente !== undefined && { tipoPaciente: input.tipoPaciente }),
+      ...(input.ciudad !== undefined && { ciudad: input.ciudad }),
+      ...(input.departamento !== undefined && { departamento: input.departamento }),
+      ...(input.zonaResidencia !== undefined && { zonaResidencia: input.zonaResidencia }),
+      ...(input.telefonoFijo !== undefined && { telefonoFijo: input.telefonoFijo }),
+      ...(input.nombreAcompanante !== undefined && { nombreAcompanante: input.nombreAcompanante }),
+      ...(input.telefonoAcompanante !== undefined && { telefonoAcompanante: input.telefonoAcompanante }),
+      ...(input.nombreResponsable !== undefined && { nombreResponsable: input.nombreResponsable }),
+      ...(input.gestante !== undefined && { gestante: Boolean(input.gestante) }),
+      ...(input.observaciones !== undefined && { observaciones: input.observaciones }),
     }
 
-    const previousPatient = await prisma.patient.findUnique({ where: { id } })
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
-    const updatedPatient = await prisma.patient.update({
-      where: { id },
-      data: safeData,
+    const updatedPatient = await prisma.$transaction(async (tx) => {
+      const previousPatient = await tx.patient.findUnique({ where: { id } })
+      if (!previousPatient) throw new Error("NOT_FOUND")
+
+      const res = await tx.patient.update({
+        where: { id },
+        data: safeData,
+      })
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE_PATIENT",
+          entity: "PATIENT",
+          entityId: id,
+          patientId: id,
+          details: `Modificación de datos demográficos del paciente: ${res.firstName} ${res.lastName}`,
+          oldData: previousPatient,
+          newData: res,
+          ipAddress,
+          userAgent,
+        },
+      })
+      return res
     })
 
-    await logAuditEvent({
-      userId: (session.user as any).id,
-      action: "UPDATE",
-      entity: "PATIENT",
-      entityId: id,
-      patientId: id,
-      details: `Modificación de datos demográficos del paciente: ${updatedPatient.firstName} ${updatedPatient.lastName}`,
-      oldData: previousPatient,
-      newData: updatedPatient
-    })
-
-    return NextResponse.json({ patient: updatedPatient }, { status: 200 })
-  } catch (error) {
-    console.error("[PATIENT_PATCH_ERROR]", error)
-    return NextResponse.json({ error: "Error al actualizar el paciente" }, { status: 500 })
+    return { patient: updatedPatient }
   }
-}
-export async function GET(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+)
 
-    const { id } = await params
-    const patient = await prisma.patient.findUnique({
-      where: { id },
+export const DELETE = createApiHandler(
+  { roles: ["ADMIN"] },
+  async (req, { params, user }) => {
+    const id = params.id as string
+
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
+
+    await prisma.$transaction(async (tx) => {
+      const previous = await tx.patient.findUnique({ where: { id } })
+      if (!previous) throw new Error("NOT_FOUND")
+
+      const deletedPatient = await tx.patient.update({
+        where: { id },
+        data: { isDeleted: true },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "DELETE_PATIENT",
+          entity: "PATIENT",
+          entityId: id,
+          patientId: id,
+          details: `Eliminación lógica de paciente: ${deletedPatient.firstName} ${deletedPatient.lastName}`,
+          oldData: { isDeleted: previous.isDeleted, ci: previous.ci },
+          newData: { isDeleted: true },
+          ipAddress,
+          userAgent,
+        },
+      })
     })
 
-    if (!patient) {
-      return NextResponse.json({ error: "Paciente no encontrado" }, { status: 404 })
-    }
-
-    return NextResponse.json({ patient })
-  } catch (error) {
-    console.error("[PATIENT_GET_ERROR]", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
+    return { success: true }
   }
-}
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
-    
-    // RBAC: Solo Administradores pueden borrar pacientes
-    const userRole = String((session.user as any).role || "").toUpperCase()
-    if (userRole !== "ADMIN" && userRole !== "ADMINISTRADOR") {
-      return NextResponse.json({ error: "Solo administradores pueden eliminar pacientes." }, { status: 403 })
-    }
-
-    const { id } = await params
-    
-    const deletedPatient = await prisma.patient.update({
-      where: { id },
-      data: { isDeleted: true }, 
-    })
-
-    await logAuditEvent({
-      userId: (session.user as any).id,
-      action: "DELETE",
-      entity: "PATIENT",
-      entityId: id,
-      patientId: id,
-      details: `Eliminación lógica de paciente: ${deletedPatient.firstName} ${deletedPatient.lastName}`,
-    })
-
-    return NextResponse.json({ success: true }, { status: 200 })
-  } catch (error) {
-    console.error("[PATIENT_DELETE_ERROR]", error)
-    return NextResponse.json({ error: "Error al eliminar el paciente" }, { status: 500 })
-  }
-}
+)

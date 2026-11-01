@@ -4,6 +4,7 @@ import React, { useState } from "react"
 import { format, differenceInYears } from "date-fns"
 import { es } from "date-fns/locale"
 import { Eye, Printer } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
 import { useClinicSettings } from "@/config/clinic-settings"
@@ -32,10 +33,10 @@ export function PrintPatientAppointmentsModal({
   const clinicSlogan = settings?.slogan?.trim() || "CLÍNICA DE ESPECIALIDADES ODONTOLÓGICAS"
   const doctorHolder = settings?.razonSocial?.trim() || "Dr. Especialista Asignado"
   const clinicRuc = settings?.ruc?.trim() || ""
-  const clinicAddress = settings?.address?.trim() || "Solanda, Av Jose Argudo, Quito, Ecuador"
+  const clinicAddress = settings?.address?.trim() || "Quito, Ecuador"
   const clinicPhone = settings?.phone?.trim() || settings?.whatsappNumber?.trim() || "(+593) 99 999 9999"
   const clinicEmail = settings?.email?.trim() || "contacto@clinicadental.com"
-
+  
   const edad = patientData?.birthDate ? differenceInYears(new Date(), new Date(patientData.birthDate)) : "-"
 
   const buildAppointmentsTableHtml = () => {
@@ -99,6 +100,7 @@ export function PrintPatientAppointmentsModal({
       settings,
       bodyHtml: buildAppointmentsTableHtml(),
       doctorName: doctorHolder,
+      showSignature: false,
     })
   }
 
@@ -117,6 +119,7 @@ export function PrintPatientAppointmentsModal({
           </Button>
         </DialogTrigger>
       )}
+
       <DialogContent className="sm:max-w-[1000px] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden bg-background border-border/80">
         <div className="px-6 py-4 border-b border-border/70 flex items-center justify-between bg-card shrink-0">
           <div className="flex items-center gap-2.5">
@@ -152,6 +155,7 @@ export function PrintPatientAppointmentsModal({
                 />
               </div>
             )}
+
             <div className="relative z-10">
               <div className="flex items-center justify-between pb-3.5 mb-4 border-b-[3px] border-[#008bcd]">
                 <div className="flex items-center gap-3.5">
@@ -186,7 +190,6 @@ export function PrintPatientAppointmentsModal({
                 </div>
               </div>
 
-              {/* TARJETA DEL PACIENTE REDISEÑADA */}
               <div className="mb-4 bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-start justify-between gap-4">
                 <div>
                   <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">
@@ -199,7 +202,6 @@ export function PrintPatientAppointmentsModal({
                     C.I. / Doc.: <strong className="font-mono text-slate-800 font-bold">{patientData?.ci || "--"}</strong>
                   </p>
                 </div>
-
                 <div className="flex flex-col items-end gap-1.5">
                   <div className="flex items-center gap-4 text-xs text-slate-600">
                     <div>
@@ -276,21 +278,14 @@ export function PrintPatientAppointmentsModal({
               </table>
             </div>
 
-            {/* PIE INSTITUCIONAL CON FRANJA AZUL ASEGURADA */}
             <div className="relative z-10 pt-8 mt-6">
-              <div className="flex flex-col items-center justify-center mb-4">
-                <div className="border-b-[1.5px] border-neutral-900 w-48 mb-1.5" />
-                <p className="text-[10px] font-black text-neutral-900 tracking-wider uppercase">
-                  FIRMA DEL PROFESIONAL
-                </p>
-              </div>
               <div className="w-full border-b-[3.5px] border-[#008bcd] mb-3" />
               <div className="text-center space-y-1 text-slate-800">
                 <p className="text-[10.5px] font-black uppercase tracking-wider text-[#1e293b]">
                   DIRECCIÓN: {clinicAddress}
                 </p>
                 <p className="text-[10px] font-medium text-neutral-600">
-                  Cel.: {clinicPhone} &nbsp;•&nbsp; e-mail: {clinicEmail}
+                  Cel.: {clinicPhone} &nbsp; &nbsp; e-mail: {clinicEmail}
                 </p>
               </div>
             </div>

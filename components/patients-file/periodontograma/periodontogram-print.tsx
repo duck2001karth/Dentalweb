@@ -1,5 +1,4 @@
 "use client"
-
 import React from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -37,6 +36,10 @@ export function PeriodontogramPrint({
   const clinicSlogan = settings?.slogan?.trim() || "CENTRO DE ESPECIALIDADES"
   const clinicRuc = settings?.ruc?.trim() || ""
   const clinicAddress = settings?.address?.trim() || ""
+  
+  const watermarkOpacity = ((settings?.watermarkOpacity ?? 8) / 100)
+  const watermarkScale = ((settings?.watermarkScale || 100) / 100)
+
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es })
   const activeDoctor = doctorName?.startsWith("Dr") ? doctorName : `Dr. ${doctorName || "Especialista"}`
 
@@ -59,14 +62,12 @@ export function PeriodontogramPrint({
             <td className="p-1 border border-neutral-300 text-left font-semibold text-neutral-500 bg-neutral-50">Esquema</td>
             {numbers.map((n) => (
               <td key={`svg-${n}`} className="p-0 border border-neutral-300 bg-white align-bottom">
-                {/* SVG Render (Los gráficos se imprimirán intactos gracias a print-color-adjust) */}
                 <div className="scale-75 origin-bottom flex justify-center">
                   <PerioGraphic tooth={n} data={chartData[n]} isUpper={isUpper} />
                 </div>
               </td>
             ))}
           </tr>
-          {/* Filas de datos (BOP, PD, MG, CAL) */}
           <tr>
             <td className="p-1 border border-neutral-300 text-left font-medium text-neutral-600">BOP</td>
             {numbers.map((n) => {
@@ -82,7 +83,7 @@ export function PeriodontogramPrint({
             <td className="p-1 border border-neutral-300 text-left font-bold text-neutral-700">Prof. Bolsa</td>
             {numbers.map((n) => (
               <td key={`pd-${n}`} className="p-1 border border-neutral-300 font-mono text-[9px]">
-                {chartData[n]?.pd?.map((v: string) => parseInt(v)>3 ? `<b style="color:red">${v}</b>` : v || "-").join(" ")}
+                <div dangerouslySetInnerHTML={{ __html: chartData[n]?.pd?.map((v: string) => parseInt(v)>3 ? `<b style="color:red">${v}</b>` : v || "-").join(" ") }} />
               </td>
             ))}
           </tr>
@@ -93,6 +94,22 @@ export function PeriodontogramPrint({
 
   return (
     <div id="periodontogram-printable" className="hidden print:block font-sans text-slate-900 bg-white min-h-[210mm] relative overflow-hidden">
+      
+      {/* MARCA DE AGUA (SIN GRAYSCALE) */}
+      {settings?.watermarkUrl && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center pointer-events-none select-none z-0"
+          style={{ opacity: watermarkOpacity }}
+        >
+          <img 
+            src={settings.watermarkUrl} 
+            alt="" 
+            style={{ transform: `scale(${watermarkScale})` }}
+            className="w-[450px] max-h-[450px] object-contain"
+          />
+        </div>
+      )}
+
       <div className="relative z-10 flex flex-col justify-between min-h-[190mm]">
         <div>
           {/* Cabecera */}

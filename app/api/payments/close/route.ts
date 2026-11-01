@@ -1,20 +1,17 @@
-import { NextResponse } from "next/server"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
-import { withProtection, ProtectedRouteContext } from "@/lib/api-wrapper"
+import { z } from "zod"
 
-export const POST = withProtection(
-  ["ADMIN", "RECEPTIONIST"], 
-  async (req: Request, ctx: ProtectedRouteContext) => {
-    const { user } = ctx 
-
-    const body = await req.json()
-    const { expectedCash, countedCash, difference, notes, breakdown } = body
+export const POST = createApiHandler(
+  {
+    roles: ["ADMIN", "RECEPTIONIST"],
+    schema: z.any(),
+  },
+  async (req, { user, data }) => {
+    const { expectedCash, countedCash, difference, notes, breakdown } = data
 
     if (expectedCash === undefined || countedCash === undefined) {
-      return NextResponse.json(
-        { error: "Parámetros incompletos. Se requiere monto teórico y contado." },
-        { status: 400 }
-      )
+      throw new Error("Parámetros incompletos. Se requiere monto teórico y contado.")
     }
 
     const numExpected = Number(expectedCash)
@@ -38,6 +35,7 @@ export const POST = withProtection(
           breakdown: breakdown || null,
         },
       })
+
       await tx.auditLog.create({
         data: {
           userId: user.id,
@@ -58,10 +56,6 @@ export const POST = withProtection(
       return cashClose
     })
 
-    return NextResponse.json({
-      success: true,
-      message: "Cierre de caja y auditoría guardados correctamente.",
-      data: result,
-    })
+    return { success: true, message: "Cierre de caja y auditoría guardados correctamente.", data: result }
   }
 )

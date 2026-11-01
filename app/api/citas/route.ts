@@ -1,7 +1,6 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { createApiHandler } from "@/lib/server/api-handler";
 import { prisma } from "@/lib/db";
+import { z } from "zod";
 import { headers } from "next/headers";
 
 function timeToMinutes(timeStr: string): number {
@@ -17,17 +16,20 @@ function getClinicDayUtcRange(fechaStr: string) {
   return { startOfDay, endOfDay, cleanDate };
 }
 
-export async function GET(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+const createAppointmentSchema = z.object({
+  date: z.string().min(1, "La fecha es obligatoria"),
+  startTime: z.string().min(1, "Hora de inicio obligatoria"),
+  endTime: z.string().min(1, "Hora de fin obligatoria"),
+  patientId: z.string().min(1, "ID de paciente obligatorio"),
+  doctorId: z.string().optional().nullable(),
+  box: z.string().optional(),
+  reason: z.string().optional(),
+  status: z.string().optional(),
+});
 
-    const userRole = session.user.role as string;
-    const userId = session.user.id as string;
-
-    const { searchParams } = new URL(request.url);
+export const GET = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async (req, { user, searchParams }) => {
     const fechaStr = searchParams.get("fecha");
     const doctorIdParam = searchParams.get("doctorId");
     const patientIdParam = searchParams.get("patientId");
@@ -37,15 +39,10 @@ export async function GET(request: Request) {
     if (patientIdParam) {
       whereClause.patientId = patientIdParam;
     } else {
-      if (userRole === "DOCTOR") {
-        whereClause.doctorId = userId;
-      } else if (
-        userRole === "ADMIN" ||
-        userRole === "ADMINISTRADOR" ||
-        userRole === "RECEPTIONIST" ||
-        userRole === "RECEPCIONISTA"
-      ) {
-        if (doctorIdParam && doctorIdParam !== "all" && doctorIdParam !== "ALL") {
+      if (user.role === "DOCTOR") {
+        whereClause.doctorId = user.id;
+      } else if (["ADMIN", "RECEPTIONIST"].includes(user.role)) {
+        if (doctorIdParam && doctorIdParam.toLowerCase() !== "all") {
           whereClause.doctorId = doctorIdParam;
         }
       }
@@ -53,111 +50,66 @@ export async function GET(request: Request) {
 
     if (fechaStr) {
       const { startOfDay, endOfDay } = getClinicDayUtcRange(fechaStr);
-      whereClause.date = {
-        gte: startOfDay,
-        lte: endOfDay,
-      };
+      whereClause.date = { gte: startOfDay, lte: endOfDay };
     }
 
     const citas = await prisma.appointment.findMany({
       where: whereClause,
       include: {
-        patient: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            ci: true,
-            phone: true,
-          },
-        },
-        doctor: {
-          select: { id: true, name: true, specialty: true, calendarColor: true },
-        },
+        patient: { select: { id: true, firstName: true, lastName: true, ci: true, phone: true } },
+        doctor: { select: { id: true, name: true, specialty: true, calendarColor: true } },
       },
       orderBy: patientIdParam ? { date: "desc" } : { startTime: "asc" },
     });
 
-    return NextResponse.json({ citas });
-  } catch (error) {
-    console.error("[CITAS_GET_ERROR]", error);
-    return NextResponse.json(
-      { error: "Error interno al obtener citas" },
-      { status: 500 }
-    );
+    return { citas }; 
   }
-}
+);
 
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const input = body.input || body;
-
-    if (!input || !input.date || !input.startTime || !input.endTime || !input.patientId) {
-      return NextResponse.json(
-        { error: "Faltan datos obligatorios para agendar la cita" },
-        { status: 400 }
-      );
-    }
-
-    const userRole = session.user.role as string;
-    const userId = session.user.id as string;
-
-    let finalDoctorId = input.doctorId;
-    if (userRole === "DOCTOR") {
-      finalDoctorId = userId;
+export const POST = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],
+    schema: createAppointmentSchema,
+  },
+  async (req, { user, data }) => {
+    let finalDoctorId = data.doctorId;
+    
+    if (user.role === "DOCTOR") {
+      finalDoctorId = user.id;
     }
 
     let doctorValido = finalDoctorId
       ? await prisma.user.findUnique({ where: { id: finalDoctorId } })
       : null;
 
-    if (!doctorValido && userId) {
-      doctorValido = await prisma.user.findUnique({ where: { id: userId, isActive: true } });
+    if (!doctorValido && user.id) {
+      doctorValido = await prisma.user.findUnique({ where: { id: user.id, isActive: true } });
     }
 
     if (!doctorValido || !doctorValido.isActive) {
-      return NextResponse.json(
-        { error: "Debe asignar un especialista clínico válido y activo para agendar la cita." },
-        { status: 400 }
-      );
+      throw new Error("Debe asignar un especialista clínico válido y activo para agendar la cita.");
     }
 
     finalDoctorId = doctorValido.id;
-    const dateString = typeof input.date === "string" ? input.date : new Date(input.date).toISOString();
-    const { startOfDay, endOfDay, cleanDate } = getClinicDayUtcRange(dateString);
 
-    const newStart = timeToMinutes(input.startTime);
-    const newEnd = timeToMinutes(input.endTime);
-    const boxAsignado = input.box || "Box 1";
+    const { startOfDay, endOfDay, cleanDate } = getClinicDayUtcRange(data.date);
+    const newStart = timeToMinutes(data.startTime);
+    const newEnd = timeToMinutes(data.endTime);
+    const boxAsignado = data.box || "Box 1";
 
-    if (newEnd <= newStart) {
-      return NextResponse.json(
-        { error: "La hora de fin debe ser posterior a la de inicio" },
-        { status: 400 }
-      );
-    }
+    if (newEnd <= newStart) throw new Error("La hora de fin debe ser posterior a la de inicio");
+
     const citasDelDia = await prisma.appointment.findMany({
       where: {
         date: { gte: startOfDay, lte: endOfDay },
         status: { notIn: ["CANCELLED"] },
       },
-      include: {
-        patient: { select: { firstName: true, lastName: true } },
-      },
+      include: { patient: { select: { firstName: true, lastName: true } } },
     });
 
     for (const cita of citasDelDia) {
-      if (cita.patientId === input.patientId) {
-        return NextResponse.json(
-          { error: `El paciente ya cuenta con una cita activa el día de hoy (${cita.startTime} - ${cita.endTime}).` },
-          { status: 400 }
-        );
+      if (cita.patientId === data.patientId) {
+        throw new Error(`El paciente ya cuenta con una cita activa el día de hoy (${cita.startTime} - ${cita.endTime}).`);
       }
 
       const citaStart = timeToMinutes(cita.startTime);
@@ -167,33 +119,31 @@ export async function POST(request: Request) {
       if (hasOverlap) {
         if (cita.doctorId === finalDoctorId) {
           const nombrePaciente = `${cita.patient?.firstName || ""} ${cita.patient?.lastName || ""}`.trim();
-          return NextResponse.json(
-            { error: `El especialista ya tiene una cita de ${cita.startTime} a ${cita.endTime} (${nombrePaciente || "Paciente agendado"}).` },
-            { status: 400 }
-          );
+          throw new Error(`El especialista ya tiene una cita de ${cita.startTime} a ${cita.endTime} (${nombrePaciente || "Paciente agendado"}).`);
         }
         if (cita.box === boxAsignado) {
-          return NextResponse.json(
-            { error: `El sillón ${boxAsignado} ya está reservado de ${cita.startTime} a ${cita.endTime}.` },
-            { status: 400 }
-          );
+          throw new Error(`El sillón ${boxAsignado} ya está reservado de ${cita.startTime} a ${cita.endTime}.`);
         }
       }
     }
 
     const citaDateNormalized = new Date(`${cleanDate}T12:00:00.000Z`);
+    
+    const headersList = await headers();
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1";
+    const userAgent = headersList.get("user-agent") || "Desconocido";
 
     const nuevaCita = await prisma.$transaction(async (tx) => {
       const created = await tx.appointment.create({
         data: {
           date: citaDateNormalized,
-          startTime: input.startTime,
-          endTime: input.endTime,
+          startTime: data.startTime,
+          endTime: data.endTime,
           box: boxAsignado,
-          reason: input.reason || "Consulta general",
-          patient: { connect: { id: input.patientId } },
+          reason: data.reason || "Consulta general",
+          patient: { connect: { id: data.patientId } },
           doctor: { connect: { id: finalDoctorId } },
-          status: input.status || "SCHEDULED",
+          status: (data.status as any) || "SCHEDULED",
           payment: "UP_TO_DATE",
         },
         include: {
@@ -202,16 +152,13 @@ export async function POST(request: Request) {
         },
       });
 
-      const headersList = await headers();
-      const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1";
-      
       await tx.auditLog.create({
         data: {
-          userId,
-          action: "CREATE",
+          userId: user.id,
+          action: "CREATE_APPOINTMENT",
           entity: "APPOINTMENT",
           entityId: created.id,
-          patientId: input.patientId,
+          patientId: data.patientId,
           details: `Cita agendada para el ${cleanDate} (${created.startTime} - ${created.endTime}) con ${created.doctor?.name}`,
           newData: {
             date: cleanDate,
@@ -222,19 +169,13 @@ export async function POST(request: Request) {
             status: created.status,
           },
           ipAddress,
-          userAgent: headersList.get("user-agent") || "Desconocido",
+          userAgent,
         },
       });
 
       return created;
     });
 
-    return NextResponse.json({ success: true, cita: nuevaCita }, { status: 201 });
-  } catch (error: any) {
-    console.error("[CITAS_POST_ERROR]", error);
-    return NextResponse.json(
-      { error: error.message || "Error al crear la cita en la base de datos" },
-      { status: 500 }
-    );
+    return { success: true, cita: nuevaCita };
   }
-}
+);

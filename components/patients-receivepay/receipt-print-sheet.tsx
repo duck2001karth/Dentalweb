@@ -1,6 +1,8 @@
 "use client"
+
 import { format } from "date-fns"
-import { es } from "date-fns/locale"
+import { escapeHTML } from "@/lib/sanitize"
+import { executePrintEngine } from "@/lib/print-engine"
 
 interface ReceiptPrintSheetProps {
   receiptNumber: string
@@ -11,15 +13,6 @@ interface ReceiptPrintSheetProps {
   items?: any[]
   emissionDate?: Date
   clinic?: any
-}
-
-const escapeHtml = (unsafe: string | null | undefined): string => {
-  return String(unsafe || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
 }
 
 export function generateReceiptHTML({
@@ -33,40 +26,25 @@ export function generateReceiptHTML({
   clinic
 }: ReceiptPrintSheetProps) {
   
-  const safeReceiptNumber = escapeHtml(receiptNumber)
-  const safePatientName = escapeHtml(patientName)
-  const safePatientDocumentId = escapeHtml(patientDocumentId || "Consumidor Final")
-  const safePaymentMethod = escapeHtml(paymentMethod)
+  const safeReceiptNumber = escapeHTML(receiptNumber)
+  const safePaymentMethod = escapeHTML(paymentMethod)
+  const currency = escapeHTML(clinic?.currency || "$")
+  const safeClinicName = escapeHTML(clinic?.name || "nuestra clínica")
   
-  const clinicName = escapeHtml(clinic?.clinicName || "C")
-  const clinicSlogan = escapeHtml(clinic?.slogan || "C")
-  const clinicRuc = escapeHtml(clinic?.ruc || "1")
-  const logoUrl = escapeHtml(clinic?.logoUrl || "")
-  const currency = escapeHtml(clinic?.currency || "$")
-  const watermarkUrl = escapeHtml(clinic?.watermarkUrl || clinic?.logoUrl || "")
-  const watermarkOpacity = clinic?.watermarkOpacity ? Number(clinic.watermarkOpacity) / 100 : 0.05
-  
-  const addressParts = [clinic?.city, clinic?.country].filter(Boolean)
-  const clinicLocation = escapeHtml(addressParts.length > 0 ? addressParts.join(", ") : "or")
-  const clinicEmail = escapeHtml(clinic?.email || "")
-  
-  const formattedDate = escapeHtml(format(emissionDate, "dd 'de' MMMM 'de' yyyy - HH:mm", { locale: es }))
   const formattedAmount = Number(totalPaid || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })
 
   // LÓGICA DE DESGLOSE
   let showBreakdown = false
   let calcSubtotal = 0
   let calcDiscount = 0
-
+  
   if (items && items.length > 0) {
     let hasDiscount = false
     let sumPaid = 0
-
     items.forEach(item => {
       const debt = Number(item.itemDebt || item.appliedAmount || item.finalPrice || totalPaid)
       const descPerc = Number(item.discountPercent || 0)
       sumPaid += debt
-
       if (descPerc > 0) {
         hasDiscount = true
         const original = debt / (1 - (descPerc / 100))
@@ -76,448 +54,133 @@ export function generateReceiptHTML({
         calcSubtotal += debt
       }
     })
-
     if (hasDiscount && Math.abs(sumPaid - totalPaid) < 0.1) {
       showBreakdown = true
     }
   }
 
-  return `
-    <!DOCTYPE html>
-    <html lang="es">
-    <head>
-      <meta charset="UTF-8">
-      <title>Comprobante de Pago - ${safeReceiptNumber}</title>
-      <style>
-        @page {
-          size: A4 portrait;
-          margin: 15mm;
-        }
-        * {
-          box-sizing: border-box;
-          margin: 0;
-          padding: 0;
-          font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-          -webkit-font-smoothing: antialiased;
-        }
-        body {
-          background-color: #ffffff;
-          color: #0f172a;
-          position: relative;
-          min-height: 100vh;
-        }
-        
-        /* MARCA DE AGUA */
-        .watermark {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          width: 500px;
-          opacity: ${watermarkOpacity};
-          z-index: -1;
-          pointer-events: none;
-        }
-
-        /* ENCABEZADO */
-        .header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 25px; 
-        }
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-        .logo {
-          max-height: 80px; 
-          max-width: 140px;
-          object-fit: contain;
-        }
-        .clinic-info-group {
-          display: flex;
-          flex-direction: column;
-        }
-        .clinic-brand {
-          font-size: 24px;
-          font-weight: 900;
-          color: #008bcd;
-          text-transform: uppercase;
-          letter-spacing: -0.5px;
-          line-height: 1.1;
-        }
-        .clinic-slogan {
-          font-size: 11px;
-          font-weight: 700;
-          color: #008bcd;
-          letter-spacing: 0.5px;
-          margin-top: 2px;
-          margin-bottom: 6px;
-        }
-        .clinic-contact {
-          font-size: 10px;
-          color: #475569;
-          line-height: 1.4;
-        }
-
-        /* CAJA DE ESTADO */
-        .status-box {
-          border: 1px solid #cbd5e1;
-          border-radius: 12px;
-          padding: 12px 24px;
-          text-align: center;
-          background: #ffffff;
-        }
-        .status-title {
-          font-size: 9px;
-          font-weight: 800;
-          color: #008bcd;
-          letter-spacing: 1px;
-        }
-        .status-number {
-          font-size: 18px;
-          font-weight: 900;
-          color: #0f172a;
-          margin: 4px 0 6px 0;
-        }
-        .status-badge {
-          display: inline-block;
-          border: 1px solid #10b981;
-          color: #10b981;
-          font-size: 9px;
-          font-weight: 800;
-          padding: 3px 10px;
-          border-radius: 12px;
-          letter-spacing: 0.5px;
-        }
-
-        /* CAJA DEL PACIENTE */
-        .patient-box {
-          display: flex;
-          justify-content: space-between;
-          border: 1px solid #cbd5e1;
-          border-radius: 12px;
-          padding: 20px 24px;
-          margin-bottom: 25px;
-        }
-        .info-col {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-        .info-group {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .info-label {
-          font-size: 10px;
-          font-weight: 700;
-          color: #64748b;
-          letter-spacing: 0.3px;
-        }
-        .info-value {
-          font-size: 14px;
-          font-weight: 800;
-          color: #0f172a;
-        }
-        .method-value {
-          font-size: 14px;
-          font-weight: 800;
-          color: #008bcd;
-        }
-
-        /* TABLA */
-        .table-container {
-          border: 1px solid #cbd5e1;
-          border-radius: 12px;
-          overflow: hidden; 
-          margin-bottom: 25px;
-        }
-        table {
-          width: 100%;
-          border-collapse: collapse;
-        }
-        thead th {
-          background-color: #f8fafc;
-          color: #475569;
-          font-size: 10px;
-          font-weight: 700;
-          padding: 14px 16px;
-          border-bottom: 1px solid #cbd5e1;
-        }
-        tbody td {
-          padding: 16px;
-          vertical-align: middle;
-          border-bottom: 1px solid #e2e8f0;
-        }
-        tbody tr:last-child td {
-          border-bottom: none;
-        }
-        .item-name {
-          font-size: 12px;
-          font-weight: 800;
-          color: #0f172a;
-        }
-        .item-plan {
-          font-size: 10px;
-          color: #64748b;
-          margin-top: 4px;
-        }
-        .tooth-text {
-          font-size: 11px;
-          font-weight: 700;
-          color: #334155;
-        }
-        .amount-text {
-          font-size: 13px;
-          font-weight: 800;
-          color: #0f172a;
-        }
-        .discount-badge {
-          display: inline-block;
-          font-size: 9px;
-          font-weight: 700;
-          color: #059669;
-          margin-top: 4px;
-        }
-
-        /* CAJA DEL TOTAL CON DESGLOSE */
-        .total-section {
-          display: flex;
-          justify-content: flex-end;
-          margin-bottom: 50px;
-        }
-        .total-box {
-          background-color: #f8fafc;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          padding: 16px 24px;
-          display: flex;
-          align-items: center;
-          gap: 24px;
-          min-width: 280px;
-        }
-        .total-box-breakdown {
-          flex-direction: column;
-          align-items: stretch;
-          gap: 8px;
-        }
-        .breakdown-row {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        .breakdown-label {
-          font-size: 11px;
-          font-weight: 600;
-          color: #64748b;
-        }
-        .breakdown-value {
-          font-size: 12px;
-          font-weight: 700;
-          color: #334155;
-        }
-        .discount-row .breakdown-label, .discount-row .breakdown-value {
-          color: #059669;
-        }
-        .total-final-row {
-          border-top: 1px solid #e2e8f0;
-          padding-top: 10px;
-          margin-top: 2px;
-        }
-        
-        .total-label {
-          font-size: 13px;
-          font-weight: 800;
-          color: #475569;
-        }
-        .total-value {
-          font-size: 22px;
-          font-weight: 900;
-          color: #0f172a;
-        }
-
-        /* PIE DE PÁGINA Y FIRMAS */
-        .footer {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-end;
-          padding-top: 20px;
-        }
-        .footer-left {
-          font-size: 9px;
-          color: #64748b;
-          line-height: 1.5;
-        }
-        .footer-left strong {
-          color: #0f172a;
-          font-weight: 700;
-        }
-        .footer-left .blue-thanks {
-          color: #008bcd;
-          font-weight: 800;
-          font-size: 10px;
-          margin-top: 6px;
-        }
-        .mt-3 { margin-top: 12px; }
-        
-        .footer-right {
-          width: 220px;
-          text-align: center;
-        }
-        .signature-line {
-          border-top: 1px solid #cbd5e1;
-          margin-bottom: 8px;
-        }
-        .signature-label {
-          font-size: 10px;
-          font-weight: 700;
-          color: #475569;
-        }
-      </style>
-    </head>
-    <body>
-      ${watermarkUrl ? `<img src="${watermarkUrl}" class="watermark" alt="" />` : ''}
-
-      <!-- ENCABEZADO -->
-      <div class="header">
-        <div class="header-left">
-          ${logoUrl ? `<img src="${logoUrl}" class="logo" alt="Logo" />` : ''}
-          <div class="clinic-info-group">
-            <div class="clinic-brand">${clinicName}</div>
-            <div class="clinic-slogan">${clinicSlogan}</div>
-            <div class="clinic-contact">
-              RUC: ${clinicRuc}<br/>
-              ${clinicLocation}<br/>
-              ${clinicEmail}
-            </div>
-          </div>
-        </div>
-        <div class="header-right">
-          <div class="status-box">
-            <div class="status-title">Comprobante de Pago</div>
-            <div class="status-number">${safeReceiptNumber}</div>
-            <div class="status-badge">Pagado en Caja</div>
-          </div>
-        </div>
+  // 1. Tarjeta Personalizada (Diseño 2 Columnas)
+  const customPatientCard = `
+    <style>
+      .custom-card { display: grid; grid-template-columns: 1.2fr 1fr; border: 1px solid #e2e8f0; border-radius: 10px; margin-bottom: 20px; background: #f8fafc; page-break-inside: avoid; break-inside: avoid; }
+      .custom-col { padding: 10px 14px; }
+      .custom-col:first-child { border-right: 1px solid #e2e8f0; }
+      .c-label { font-size: 8.5px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.3px; }
+      .c-title { font-size: 14px; font-weight: 800; color: #0f172a; margin-top: 2px; }
+      .c-sub { font-size: 10.5px; color: #475569; margin-top: 3px; }
+    </style>
+    <div class="custom-card">
+      <div class="custom-col">
+        <div class="c-label">Paciente / Titular</div>
+        <div class="c-title">${escapeHTML(patientName)}</div>
+        <div class="c-sub"><b>Identificación:</b> ${escapeHTML(patientDocumentId || "Consumidor Final")}</div>
       </div>
-
-      <!-- CAJA DEL PACIENTE -->
-      <div class="patient-box">
-        <div class="info-col">
-          <div class="info-group">
-            <span class="info-label">Paciente</span>
-            <span class="info-value">${safePatientName}</span>
-          </div>
-          <div class="info-group">
-            <span class="info-label">Identificación (CI/RUC)</span>
-            <span class="info-value">${safePatientDocumentId}</span>
-          </div>
-        </div>
-        <div class="info-col" style="text-align: right;">
-          <div class="info-group">
-            <span class="info-label">Fecha de Emisión</span>
-            <span class="info-value" style="font-size: 12px;">${formattedDate}</span>
-          </div>
-          <div class="info-group">
-            <span class="info-label">Método de Pago</span>
-            <span class="method-value">${safePaymentMethod}</span>
-          </div>
-        </div>
+      <div class="custom-col">
+        <div class="c-label">Detalles del Pago</div>
+        <div class="c-title" style="color: #008bcd;">${safePaymentMethod}</div>
+        <div class="c-sub"><b>Recibo Nº:</b> <span style="font-family: monospace; font-weight: 700;">${safeReceiptNumber}</span></div>
       </div>
-
-      <!-- TABLA DE DETALLES -->
-      <div class="table-container">
-        <table>
-          <thead>
-            <tr>
-              <th style="text-align: left;">Descripción de Prestación / Plan</th>
-              <th style="text-align: center; width: 150px;">Pieza Dental</th>
-              <th style="text-align: right; width: 160px;">Abono Registrado</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${
-              items.length > 0
-                ? items.map(item => {
-                    const hasDiscount = item.discountPercent > 0;
-                    const safeItemName = escapeHtml(item.name || item.procedureName || 'Tratamiento Odontológico');
-                    const safePlanName = escapeHtml(item.planName || 'General');
-                    const safeToothLabel = escapeHtml(item.toothLabel || (item.tooth ? 'Pieza ' + item.tooth : 'General'));
-
-                    return `
-                      <tr>
-                        <td>
-                          <div class="item-name">${safeItemName}</div>
-                          <div class="item-plan">Plan: ${safePlanName}</div>${hasDiscount ? `<div class="discount-badge">Aplica ${escapeHtml(String(item.discountPercent))}% desc. (Convenio)</div>` : ''}
-                        </td>
-                        <td style="text-align: center;">
-                          <span class="tooth-text">${safeToothLabel}</span>
-                        </td>
-                        <td style="text-align: right;">
-                          <span class="amount-text">${currency}${Number(item.itemDebt || item.appliedAmount || item.finalPrice || totalPaid).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-                        </td>
-                      </tr>
-                    `
-                  }).join('')
-                : `
-                  <tr>
-                    <td>
-                      <div class="item-name">Abono General a Cuenta</div>
-                      <div class="item-plan">Aplicación directa a saldo de tratamientos pendientes</div>
-                    </td>
-                    <td style="text-align: center;">
-                      <span class="tooth-text">General</span>
-                    </td>
-                    <td style="text-align: right;">
-                      <span class="amount-text">${currency}${formattedAmount}</span>
-                    </td>
-                  </tr>
-                `
-            }
-          </tbody>
-        </table>
-      </div>
-
-      <!-- CAJA DEL TOTAL (Con o Sin Desglose) -->
-      <div class="total-section">
-        <div class="total-box ${showBreakdown ? 'total-box-breakdown' : ''}">
-          ${showBreakdown ? `
-            <div class="breakdown-row">
-              <span class="breakdown-label">Subtotal de la cuota</span>
-              <span class="breakdown-value">${currency}${calcSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div class="breakdown-row discount-row">
-              <span class="breakdown-label">Descuento aplicado (Convenio)</span>
-              <span class="breakdown-value">-${currency}${calcDiscount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-            </div>
-            <div class="breakdown-row total-final-row">
-              <span class="total-label">Total Abonado</span>
-              <span class="total-value">${currency}${formattedAmount}</span>
-            </div>
-          ` : `
-            <span class="total-label" style="flex-grow: 1;">Total Abonado</span>
-            <span class="total-value">${currency}${formattedAmount}</span>
-          `}
-        </div>
-      </div>
-
-      <!-- PIE DE PÁGINA Y FIRMAS -->
-      <div class="footer">
-        <div class="footer-left">
-          <p>Este documento es un comprobante de control interno emitido para<br/>certificar la recepción del pago detallado en caja.</p>
-          <p class="mt-3"><strong>Atendido por:</strong> Usuario de Caja</p>
-          <p class="blue-thanks">¡Gracias por confiar su sonrisa en ${clinicName}!</p>
-        </div>
-        <div class="footer-right">
-          <div class="signature-line"></div>
-          <div class="signature-label">Firma Autorizada - Caja</div>
-        </div>
-      </div>
-    </body>
-    </html>
+    </div>
   `
+
+  const rowsHtml = items.length > 0
+    ? items.map(item => {
+        const hasDiscount = item.discountPercent > 0;
+        const safeItemName = escapeHTML(item.name || item.procedureName || 'Tratamiento Odontológico');
+        const safePlanName = escapeHTML(item.planName || 'General');
+        const safeToothLabel = escapeHTML(item.toothLabel || (item.tooth ? 'Pieza ' + item.tooth : 'General'));
+        
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 12px 8px;">
+              <div style="font-size: 12px; font-weight: 800; color: #0f172a;">${safeItemName}</div>
+              <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Plan: ${safePlanName}</div>
+              ${hasDiscount ? `<div style="display: inline-block; font-size: 9px; font-weight: 700; color: #059669; margin-top: 4px;">Aplica ${escapeHTML(String(item.discountPercent))}% desc.</div>` : ''}
+            </td>
+            <td style="padding: 12px 8px; text-align: center;">
+              <span style="font-size: 11px; font-weight: 700; color: #334155;">${safeToothLabel}</span>
+            </td>
+            <td style="padding: 12px 8px; text-align: right;">
+              <span style="font-size: 13px; font-weight: 800; color: #0f172a; font-family: monospace;">${currency}${Number(item.itemDebt || item.appliedAmount || item.finalPrice || totalPaid).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+            </td>
+          </tr>
+        `
+      }).join('')
+    : `
+      <tr>
+        <td style="padding: 12px 8px;">
+          <div style="font-size: 12px; font-weight: 800; color: #0f172a;">Abono General a Cuenta</div>
+          <div style="font-size: 10px; color: #64748b; margin-top: 2px;">Aplicación directa a saldo de tratamientos pendientes</div>
+        </td>
+        <td style="padding: 12px 8px; text-align: center;"><span style="font-size: 11px; font-weight: 700; color: #334155;">General</span></td>
+        <td style="padding: 12px 8px; text-align: right;"><span style="font-size: 13px; font-weight: 800; color: #0f172a; font-family: monospace;">${currency}${formattedAmount}</span></td>
+      </tr>
+    `
+
+  const bodyHtml = `
+    ${customPatientCard}
+    
+    <div style="border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; margin-bottom: 25px;">
+      <table style="width: 100%; border-collapse: collapse; text-align: left;">
+        <thead>
+          <tr style="background-color: #f8fafc; border-bottom: 1px solid #cbd5e1;">
+            <th style="padding: 12px 8px; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase;">Descripción de Prestación / Plan</th>
+            <th style="padding: 12px 8px; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; text-align: center; width: 150px;">Pieza Dental</th>
+            <th style="padding: 12px 8px; font-size: 10px; font-weight: 700; color: #475569; text-transform: uppercase; text-align: right; width: 160px;">Abono Registrado</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end; margin-bottom: 40px; page-break-inside: avoid; break-inside: avoid;">
+      <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 24px; min-width: 280px; display: flex; flex-direction: column; gap: 8px;">
+        ${showBreakdown ? `
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 11px; font-weight: 600; color: #64748b;">Subtotal de la cuota</span>
+            <span style="font-size: 12px; font-weight: 700; color: #334155; font-family: monospace;">${currency}${calcSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 11px; font-weight: 600; color: #059669;">Descuento aplicado (Convenio)</span>
+            <span style="font-size: 12px; font-weight: 700; color: #059669; font-family: monospace;">-${currency}${calcDiscount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 2px;">
+            <span style="font-size: 13px; font-weight: 800; color: #475569;">Total Abonado</span>
+            <span style="font-size: 22px; font-weight: 900; color: #0f172a; font-family: monospace;">${currency}${formattedAmount}</span>
+          </div>
+        ` : `
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; font-weight: 800; color: #475569;">Total Abonado</span>
+            <span style="font-size: 22px; font-weight: 900; color: #0f172a; font-family: monospace;">${currency}${formattedAmount}</span>
+          </div>
+        `}
+      </div>
+    </div>
+  `
+
+  const footerHtml = `
+    <div style="margin-top: 30px; padding-top: 15px; page-break-inside: avoid; break-inside: avoid;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+        <div style="font-size: 9px; color: #64748b; line-height: 1.5;">
+          <p>Este documento es un comprobante de control interno emitido para<br/>certificar la recepción del pago detallado en caja.</p>
+          <p style="margin-top: 12px;"><strong style="color: #0f172a; font-weight: 700;">Atendido por:</strong> Usuario de Caja</p>
+          <p style="color: #008bcd; font-weight: 800; font-size: 10px; margin-top: 6px;">¡Gracias por confiar su sonrisa en ${safeClinicName}!</p>
+        </div>
+        <div style="width: 220px; text-align: center;">
+          <div style="border-top: 1px solid #cbd5e1; margin-bottom: 8px;"></div>
+          <div style="font-size: 10px; font-weight: 700; color: #475569;">Firma Autorizada - Caja</div>
+        </div>
+      </div>
+    </div>
+  `
+
+  executePrintEngine({
+    title: "Comprobante de Pago",
+    documentTypeBadge: "RECIBO DE CAJA",
+    patient: undefined,
+    settings: clinic,
+    bodyHtml,
+    footerHtml,
+    showSignature: false,
+  })
 }

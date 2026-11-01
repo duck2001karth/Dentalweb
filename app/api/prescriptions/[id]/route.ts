@@ -1,81 +1,35 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { headers } from "next/headers";
+import { createApiHandler } from "@/lib/server/api-handler"
+import { prisma } from "@/lib/db"
+import { z } from "zod"
+import { headers } from "next/headers"
 
-async function createAuditEntry(
-  tx: any,
-  data: {
-    userId: string;
-    action: "UPDATE" | "DELETE";
-    entityId: string;
-    patientId?: string | null;
-    details?: string;
-    oldData?: any;
-    newData?: any;
-  }
-) {
-  try {
-    const headersList = await headers();
-    const forwardedFor = headersList.get("x-forwarded-for");
-    const ipAddress = forwardedFor
-      ? forwardedFor.split(",")[0].trim()
-      : headersList.get("x-real-ip") || "127.0.0.1";
-    const userAgent = headersList.get("user-agent") || "Desconocido";
+export const PUT = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR"],
+    schema: z.any(),
+  },
+  async (req, { user, params, data: reqData }) => {
+    const id = params.id as string
+    const data = reqData.input || reqData
+    const { medications, indications, observations, doctorSignature } = data
 
-    await tx.auditLog.create({
-      data: {
-        userId: data.userId,
-        action: data.action,
-        entity: "PRESCRIPTION",
-        entityId: data.entityId,
-        patientId: data.patientId || null,
-        details: data.details || null,
-        oldData: data.oldData || null,
-        newData: data.newData || null,
-        ipAddress,
-        userAgent,
-      },
-    });
-  } catch (err) {
-    console.error("Error al registrar auditoría en Prescription [id]:", err);
-  }
-}
+    if (!id) throw new Error("Falta el ID de la receta")
 
-export async function PUT(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
-
-    const { id } = await params;
-    const body = await request.json();
-    const data = body.input || body;
-    const { medications, indications, observations, doctorSignature } = data;
-
-    if (!id) {
-      return NextResponse.json({ error: "Falta el ID de la receta" }, { status: 400 });
-    }
-
-    const currentUser = session.user as any;
-    const userRole = String(currentUser?.role || "").toUpperCase().trim();
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const updated = await prisma.$transaction(async (tx) => {
       const previous = await tx.prescription.findUnique({
         where: { id },
-      });
+      })
+      if (!previous) throw new Error("NOT_FOUND")
 
-      if (!previous) throw new Error("NOT_FOUND");
-      const isAdmin = userRole === "ADMIN" || userRole === "ADMINISTRADOR" || userRole === "ADMINISTRATION";
-      const isAuthor = previous.authorId === currentUser.id;
+      const isAdmin = user.role === "ADMIN" 
+      const isAuthor = previous.authorId === user.id
 
       if (!isAdmin && !isAuthor) {
-        throw new Error("FORBIDDEN");
+        throw new Error("UNAUTHORIZED_ROLE") 
       }
 
       const res = await tx.prescription.update({
@@ -92,123 +46,99 @@ export async function PUT(
               id: true,
               name: true,
               specialty: true,
-              signatureBase64: true, 
+              signatureBase64: true,
               professionalCard: true,
             },
           },
         },
-      });
+      })
 
-      await createAuditEntry(tx, {
-        userId: currentUser.id,
-        action: "UPDATE",
-        entityId: id,
-        patientId: previous.patientId,
-        details: "Modificación de fármacos o posología en receta médica",
-        oldData: {
-          medications: previous.medications,
-          indications: previous.indications,
-          observations: previous.observations,
-          hasDoctorSignature: Boolean(previous.doctorSignature),
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE_PRESCRIPTION",
+          entity: "PRESCRIPTION",
+          entityId: id,
+          patientId: previous.patientId,
+          details: "Modificación de fármacos o posología en receta médica",
+          oldData: {
+            medications: previous.medications,
+            indications: previous.indications,
+            observations: previous.observations,
+            hasDoctorSignature: Boolean(previous.doctorSignature),
+          },
+          newData: {
+            medications: res.medications,
+            indications: res.indications,
+            observations: res.observations,
+            hasDoctorSignature: Boolean(res.doctorSignature),
+          },
+          ipAddress,
+          userAgent,
         },
-        newData: {
-          medications: res.medications,
-          indications: res.indications,
-          observations: res.observations,
-          hasDoctorSignature: Boolean(res.doctorSignature),
-        },
-      });
+      })
 
-      return res;
-    });
+      return res
+    })
 
-    const authorLicense =
-      updated.author?.professionalCard 
-      "";
+    const authorLicense = updated.author?.professionalCard || ""
 
-    return NextResponse.json({
+    return {
       ...updated,
       doctorSignature: updated.doctorSignature || updated.author?.signatureBase64 || null,
       doctorLicense: authorLicense,
-    });
-  } catch (error: any) {
-    if (error?.message === "NOT_FOUND") {
-      return NextResponse.json({ error: "Receta médica no encontrada" }, { status: 404 });
     }
-    if (error?.message === "FORBIDDEN") {
-      return NextResponse.json(
-        { error: "No tiene permisos para modificar recetas emitidas por otro profesional" },
-        { status: 403 }
-      );
-    }
-    console.error("Error PUT prescription:", error);
-    return NextResponse.json({ error: "Error al actualizar la receta" }, { status: 500 });
   }
-}
+)
 
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-    }
+export const DELETE = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR"] },
+  async (req, { user, params }) => {
+    const id = params.id as string
+    if (!id) throw new Error("Falta el ID de la receta")
 
-    const currentUser = session.user as any;
-    const userRole = String(currentUser?.role || "").toUpperCase().trim();
-    const { id } = await params;
-
-    if (!id) {
-      return NextResponse.json({ error: "Falta el ID de la receta" }, { status: 400 });
-    }
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
     await prisma.$transaction(async (tx) => {
       const previous = await tx.prescription.findUnique({
         where: { id },
-      });
+      })
+      if (!previous) throw new Error("NOT_FOUND")
 
-      if (!previous) throw new Error("NOT_FOUND");
-      const isAdmin = userRole === "ADMIN" || userRole === "ADMINISTRADOR" || userRole === "ADMINISTRATION";
-      const isAuthor = previous.authorId === currentUser.id;
+      const isAdmin = user.role === "ADMIN"
+      const isAuthor = previous.authorId === user.id
 
       if (!isAdmin && !isAuthor) {
-        throw new Error("FORBIDDEN");
+        throw new Error("UNAUTHORIZED_ROLE")
       }
 
       await tx.prescription.delete({
         where: { id },
-      });
+      })
 
-      await createAuditEntry(tx, {
-        userId: currentUser.id,
-        action: "DELETE",
-        entityId: id,
-        patientId: previous.patientId,
-        details: "Eliminación de receta médica del expediente",
-        oldData: {
-          medications: previous.medications,
-          indications: previous.indications,
-          observations: previous.observations,
-          authorId: previous.authorId,
-          createdAt: previous.createdAt,
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "DELETE_PRESCRIPTION",
+          entity: "PRESCRIPTION",
+          entityId: id,
+          patientId: previous.patientId,
+          details: "Eliminación de receta médica del expediente",
+          oldData: {
+            medications: previous.medications,
+            indications: previous.indications,
+            observations: previous.observations,
+            authorId: previous.authorId,
+            createdAt: previous.createdAt,
+          },
+          ipAddress,
+          userAgent,
         },
-      });
-    });
+      })
+    })
 
-    return NextResponse.json({ success: true, message: "Receta eliminada y auditada correctamente" });
-  } catch (error: any) {
-    if (error?.message === "NOT_FOUND") {
-      return NextResponse.json({ error: "La receta no existe o ya fue eliminada" }, { status: 404 });
-    }
-    if (error?.message === "FORBIDDEN") {
-      return NextResponse.json(
-        { error: "No tiene permisos para eliminar recetas clínicas de otro doctor" },
-        { status: 403 }
-      );
-    }
-    console.error("Error DELETE prescription:", error);
-    return NextResponse.json({ error: "Error al eliminar la receta" }, { status: 500 });
+    return { success: true, message: "Receta eliminada y auditada correctamente" }
   }
-}
+)

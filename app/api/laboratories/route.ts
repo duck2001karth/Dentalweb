@@ -1,121 +1,121 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { logAuditEvent } from "@/lib/audit";
+import { createApiHandler } from "@/lib/server/api-handler"
+import { prisma } from "@/lib/db"
+import { z } from "zod"
+import { headers } from "next/headers"
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+// Esquemas de validación
+const createLabSchema = z.object({
+  name: z.string().min(1, "El nombre del laboratorio es requerido"),
+  details: z.string().optional().nullable(),
+  balance: z.union([z.string(), z.number()]).optional().default(0),
+  contactPerson: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().email("Email inválido").optional().nullable(),
+  address: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+  isActive: z.boolean().optional().default(true),
+})
 
-    const labs = await prisma.laboratory.findMany({
+const updateLabSchema = createLabSchema.partial().extend({
+  id: z.string().min(1, "El ID del laboratorio es obligatorio"),
+})
+
+export const GET = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async () => {
+    return await prisma.laboratory.findMany({
       orderBy: { name: "asc" },
-    });
-    return NextResponse.json(labs, { status: 200 });
-  } catch (error) {
-    console.error("Error al cargar laboratorios:", error);
-    return NextResponse.json({ error: "Error al cargar laboratorios" }, { status: 500 });
+    })
   }
-}
+)
 
-export async function POST(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    const userRole = String((session?.user as any)?.role || "").toUpperCase();
+export const POST = createApiHandler(
+  {
+    roles: ["ADMIN"],
+    schema: createLabSchema,
+  },
+  async (req, { user, data }) => {
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
-    // RBAC: Solo Administradores
-    if (userRole !== "ADMIN" && userRole !== "ADMINISTRADOR") {
-      return NextResponse.json({ error: "Solo administradores pueden crear laboratorios." }, { status: 403 });
-    }
+    const newLab = await prisma.$transaction(async (tx) => {
+      const created = await tx.laboratory.create({
+        data: {
+          name: data.name,
+          details: data.details || null,
+          balance: Number(data.balance) || 0,
+          contactPerson: data.contactPerson || null,
+          phone: data.phone || null,
+          email: data.email || null,
+          address: data.address || null,
+          notes: data.notes || null,
+          isActive: data.isActive,
+        },
+      })
 
-    const body = await request.json();
-    const { name, details, balance, contactPerson, phone, email, address, notes, isActive } = body;
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "CREATE_LABORATORY",
+          entity: "LABORATORY",
+          entityId: created.id,
+          details: `Creación de laboratorio externo: "${created.name}"`,
+          newData: created,
+          ipAddress,
+          userAgent,
+        },
+      })
 
-    if (!name || name.trim() === "") {
-      return NextResponse.json({ error: "El nombre del laboratorio es requerido" }, { status: 400 });
-    }
+      return created
+    })
 
-    const newLab = await prisma.laboratory.create({
-      data: {
-        name,
-        details,
-        balance: Number(balance) || 0,
-        contactPerson,
-        phone,
-        email,
-        address,
-        notes,
-        isActive: isActive ?? true,
-      },
-    });
-
-    await logAuditEvent({
-      userId: (session!.user as any).id,
-      action: "CREATE",
-      entity: "LABORATORY",
-      entityId: newLab.id,
-      details: `Creación de laboratorio externo: "${newLab.name}"`,
-    });
-
-    return NextResponse.json(newLab, { status: 201 });
-  } catch (error) {
-    console.error("Error al crear laboratorio:", error);
-    return NextResponse.json({ error: "Error al crear laboratorio" }, { status: 500 });
+    return newLab
   }
-}
+)
 
-export async function PATCH(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    const userRole = String((session?.user as any)?.role || "").toUpperCase();
+export const PATCH = createApiHandler(
+  {
+    roles: ["ADMIN"],
+    schema: updateLabSchema,
+  },
+  async (req, { user, data }) => {
+    // 1. Extraemos 'balance' aquí para que no contamine 'updateData'
+    const { id, balance, ...updateData } = data
 
-    if (userRole !== "ADMIN" && userRole !== "ADMINISTRADOR") {
-      return NextResponse.json({ error: "No autorizado para modificar laboratorios." }, { status: 403 });
-    }
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
-    const body = await request.json();
-    const { id, balance, name, details, contactPerson, phone, email, address, notes, isActive } = body;
+    const updatedLab = await prisma.$transaction(async (tx) => {
+      const previousLab = await tx.laboratory.findUnique({ where: { id } })
+      if (!previousLab) throw new Error("NOT_FOUND")
 
-    if (!id) {
-      return NextResponse.json({ error: "El ID del laboratorio es obligatorio" }, { status: 400 });
-    }
+      const updated = await tx.laboratory.update({
+        where: { id },
+        data: {
+          ...updateData,
+          ...(balance !== undefined && { balance: Number(balance) }),
+        },
+      })
 
-    const previousLab = await prisma.laboratory.findUnique({ where: { id } });
-    if (!previousLab) return NextResponse.json({ error: "Laboratorio no encontrado" }, { status: 404 });
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE_LABORATORY",
+          entity: "LABORATORY",
+          entityId: id,
+          details: `Actualización de laboratorio: "${updated.name}"`,
+          oldData: previousLab,
+          newData: updated,
+          ipAddress,
+          userAgent,
+        },
+      })
 
-    const safeData: any = {
-      ...(name !== undefined && { name }),
-      ...(details !== undefined && { details }),
-      ...(contactPerson !== undefined && { contactPerson }),
-      ...(phone !== undefined && { phone }),
-      ...(email !== undefined && { email }),
-      ...(address !== undefined && { address }),
-      ...(notes !== undefined && { notes }),
-      ...(isActive !== undefined && { isActive }),
-      ...(balance !== undefined && { balance: Number(balance) || 0 }),
-    };
+      return updated
+    })
 
-    const updatedLab = await prisma.laboratory.update({
-      where: { id },
-      data: safeData,
-    });
-
-    await logAuditEvent({
-      userId: (session!.user as any).id,
-      action: "UPDATE",
-      entity: "LABORATORY",
-      entityId: id,
-      details: `Actualización de laboratorio: "${updatedLab.name}"`,
-      oldData: previousLab,
-      newData: updatedLab,
-    });
-
-    return NextResponse.json(updatedLab, { status: 200 });
-  } catch (error) {
-    console.error("Error al actualizar laboratorio:", error);
-    return NextResponse.json({ error: "Error al actualizar" }, { status: 500 });
+    return updatedLab
   }
-}
+)

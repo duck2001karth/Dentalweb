@@ -1,191 +1,196 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth/next"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
-import { authOptions } from "@/lib/auth"
-import { logAuditEvent } from "@/lib/audit"
+import { z } from "zod"
+import { headers } from "next/headers"
 
-export const dynamic = "force-dynamic"
+// Esquemas de validación
+const createItemSchema = z.object({
+  name: z.string().min(1, "El nombre es obligatorio"),
+  sku: z.string().optional().nullable(),
+  marca: z.string().optional().nullable(),
+  presentacion: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  registroSanitario: z.string().optional().nullable(),
+  concentracion: z.string().optional().nullable(),
+  unidadMedida: z.string().optional().nullable(),
+  lote: z.string().optional().nullable(),
+  fechaExpiracion: z.string().datetime().optional().nullable(),
+  minStock: z.number().optional().default(5),
+  unitCost: z.number().optional().default(0),
+  stock: z.number().optional().default(0),
+  supplier: z.string().optional().nullable(),
+})
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+const updateItemSchema = createItemSchema.partial().extend({
+  id: z.string().min(1, "El ID es obligatorio"),
+  isActive: z.boolean().optional(),
+})
 
-    const inventoryItems = await prisma.inventoryItem.findMany({
+export const GET = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async () => {
+    return await prisma.inventoryItem.findMany({
       where: { isActive: true },
-      orderBy: { createdAt: "desc" }
+      orderBy: { createdAt: "desc" },
     })
-    return NextResponse.json(inventoryItems)
-  } catch (error) {
-    console.error("Error fetching inventory:", error)
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 })
   }
-}
+)
 
-export async function POST(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    const userRole = String((session?.user as any)?.role || "").toUpperCase()
-
-    if (userRole !== "ADMIN" && userRole !== "ADMINISTRADOR" && userRole !== "DOCTOR") {
-      return NextResponse.json({ error: "Permisos insuficientes para crear insumos." }, { status: 403 })
-    }
-
-    const currentUserId = (session!.user as any).id
-    const body = await req.json()
-    const stockInitial = Number(body.stock) || 0
-    const cost = Number(body.unitCost) || 0
+export const POST = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR"],
+    schema: createItemSchema,
+  },
+  async (req, { user, data }) => {
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const newItem = await prisma.$transaction(async (tx) => {
       const item = await tx.inventoryItem.create({
         data: {
-          name: body.name,
-          sku: body.sku || null,
-          marca: body.marca || null,
-          presentacion: body.presentacion || null,
-          category: body.category || null,
-          registroSanitario: body.registroSanitario || null,
-          concentracion: body.concentracion || null,
-          unidadMedida: body.unidadMedida || null,
-          lote: body.lote || null,
-          fechaExpiracion: body.fechaExpiracion ? new Date(body.fechaExpiracion) : null,
-          minStock: body.minStock !== undefined ? Number(body.minStock) : 5,
-          unitCost: cost,
-          stock: stockInitial,
-          supplier: body.supplier || null,
+          name: data.name,
+          sku: data.sku || null,
+          marca: data.marca || null,
+          presentacion: data.presentacion || null,
+          category: data.category || null,
+          registroSanitario: data.registroSanitario || null,
+          concentracion: data.concentracion || null,
+          unidadMedida: data.unidadMedida || null,
+          lote: data.lote || null,
+          fechaExpiracion: data.fechaExpiracion ? new Date(data.fechaExpiracion) : null,
+          minStock: data.minStock,
+          unitCost: data.unitCost,
+          stock: data.stock,
+          supplier: data.supplier || null,
           isActive: true,
-        }
+        },
       })
 
-      if (stockInitial > 0) {
+      if (data.stock > 0) {
         await tx.inventoryMovement.create({
           data: {
             itemId: item.id,
-            quantity: stockInitial,
+            quantity: data.stock,
             type: "INCOMING",
             reason: "Inventario Inicial",
-          }
+          },
         })
       }
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "CREATE_INVENTORY_ITEM",
+          entity: "INVENTORY_ITEM",
+          entityId: item.id,
+          details: `Creación de producto "${item.name}" (SKU: ${item.sku || "N/A"}) con stock inicial de ${data.stock} unid. a $${data.unitCost.toFixed(2)} c/u`,
+          newData: item,
+          ipAddress,
+          userAgent,
+        },
+      })
+
       return item
     })
 
-    await logAuditEvent({
-      userId: currentUserId,
-      action: "CREATE",
-      entity: "INVENTORY_ITEM",
-      entityId: newItem.id,
-      details: `Creación de producto "${newItem.name}" (SKU: ${newItem.sku || "N/A"}) con stock inicial de ${stockInitial} unid. a $${cost.toFixed(2)} c/u`,
-      newData: newItem,
-    })
-
-    return NextResponse.json(newItem, { status: 201 })
-  } catch (error: any) {
-    console.error("Error creando item:", error)
-    return NextResponse.json({ error: error.message || "Error al crear el producto" }, { status: 500 })
+    return newItem
   }
-}
+)
 
-export async function PATCH(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    const userRole = String((session?.user as any)?.role || "").toUpperCase()
+export const PATCH = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR"],
+    schema: updateItemSchema,
+  },
+  async (req, { user, data }) => {
+    const { id, ...updateData } = data
 
-    if (userRole !== "ADMIN" && userRole !== "ADMINISTRADOR" && userRole !== "DOCTOR") {
-      return NextResponse.json({ error: "Permisos insuficientes para editar inventario." }, { status: 403 })
-    }
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
-    const currentUserId = (session!.user as any).id
-    const body = await req.json()
-    const { id, ...data } = body
+    const updatedItem = await prisma.$transaction(async (tx) => {
+      const previousItem = await tx.inventoryItem.findUnique({ where: { id } })
+      if (!previousItem) throw new Error("NOT_FOUND")
 
-    if (!id) return NextResponse.json({ error: "ID de producto requerido" }, { status: 400 })
+      const updated = await tx.inventoryItem.update({
+        where: { id },
+        data: {
+          ...updateData,
+          ...(updateData.fechaExpiracion && { fechaExpiracion: new Date(updateData.fechaExpiracion) }),
+        },
+      })
 
-    const previousItem = await prisma.inventoryItem.findUnique({ where: { id } })
-    if (!previousItem) return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 })
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE_INVENTORY_ITEM",
+          entity: "INVENTORY_ITEM",
+          entityId: id,
+          details: `Modificación de insumo "${updated.name}". Costo: $${updated.unitCost}, Stock Mínimo: ${updated.minStock}`,
+          oldData: previousItem,
+          newData: updated,
+          ipAddress,
+          userAgent,
+        },
+      })
 
-    const updatedItem = await prisma.inventoryItem.update({
-      where: { id },
-      data: {
-        ...(data.name !== undefined && { name: String(data.name) }),
-        ...(data.sku !== undefined && { sku: data.sku || null }),
-        ...(data.marca !== undefined && { marca: data.marca || null }),
-        ...(data.presentacion !== undefined && { presentacion: data.presentacion || null }),
-        ...(data.category !== undefined && { category: data.category || null }),
-        ...(data.registroSanitario !== undefined && { registroSanitario: data.registroSanitario || null }),
-        ...(data.concentracion !== undefined && { concentracion: data.concentracion || null }),
-        ...(data.unidadMedida !== undefined && { unidadMedida: data.unidadMedida || null }),
-        ...(data.lote !== undefined && { lote: data.lote || null }),
-        ...(data.fechaExpiracion !== undefined && { fechaExpiracion: data.fechaExpiracion ? new Date(data.fechaExpiracion) : null }),
-        ...(data.minStock !== undefined && { minStock: Number(data.minStock) }),
-        ...(data.unitCost !== undefined && { unitCost: Number(data.unitCost) }),
-        ...(data.supplier !== undefined && { supplier: data.supplier || null }),
-        ...(data.isActive !== undefined && { isActive: Boolean(data.isActive) }),
-      }
+      return updated
     })
 
-    await logAuditEvent({
-      userId: currentUserId,
-      action: "UPDATE",
-      entity: "INVENTORY_ITEM",
-      entityId: id,
-      details: `Modificación de insumo "${updatedItem.name}". Costo: $${updatedItem.unitCost}, Stock Mínimo: ${updatedItem.minStock}`,
-      oldData: previousItem,
-      newData: updatedItem,
-    })
-
-    return NextResponse.json(updatedItem)
-  } catch (error: any) {
-    console.error("Error actualizando item:", error)
-    return NextResponse.json({ error: "Error al actualizar el producto" }, { status: 500 })
+    return updatedItem
   }
-}
+)
 
-export async function DELETE(req: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    const userRole = String((session?.user as any)?.role || "").toUpperCase()
-
-    if (userRole !== "ADMIN" && userRole !== "ADMINISTRADOR") {
-      return NextResponse.json({ error: "Solo administradores pueden eliminar insumos." }, { status: 403 })
-    }
-
-    const currentUserId = (session!.user as any).id
-    const { searchParams } = new URL(req.url)
+export const DELETE = createApiHandler(
+  { roles: ["ADMIN"] },
+  async (req, { user, searchParams }) => {
     const id = searchParams.get("id")
     const permanent = searchParams.get("permanent") === "true"
 
-    if (!id) return NextResponse.json({ error: "ID requerido" }, { status: 400 })
+    if (!id) throw new Error("Falta el ID del producto") // El wrapper atrapa esto
 
-    const itemToDelete = await prisma.inventoryItem.findUnique({ where: { id } })
-    if (!itemToDelete) return NextResponse.json({ error: "Producto no encontrado" }, { status: 404 })
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
-    if (permanent) {
-      await prisma.inventoryItem.delete({ where: { id } })
-      await logAuditEvent({
-        userId: currentUserId,
-        action: "DELETE",
-        entity: "INVENTORY_ITEM",
-        entityId: id,
-        details: `Eliminación FÍSICA del insumo "${itemToDelete.name}" (SKU: ${itemToDelete.sku || "N/A"})`,
-        oldData: itemToDelete,
-      })
-    } else {
-      await prisma.inventoryItem.update({ where: { id }, data: { isActive: false } })
-      await logAuditEvent({
-        userId: currentUserId,
-        action: "UPDATE",
-        entity: "INVENTORY_ITEM",
-        entityId: id,
-        details: `Desactivación/Archivo del insumo "${itemToDelete.name}"`,
-      })
-    }
+    await prisma.$transaction(async (tx) => {
+      const itemToDelete = await tx.inventoryItem.findUnique({ where: { id } })
+      if (!itemToDelete) throw new Error("NOT_FOUND")
 
-    return NextResponse.json({ success: true })
-  } catch (error: any) {
-    console.error("Error eliminando item:", error)
-    return NextResponse.json({ error: "Error al eliminar el producto" }, { status: 500 })
+      if (permanent) {
+        await tx.inventoryItem.delete({ where: { id } })
+        
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "DELETE_INVENTORY_ITEM",
+            entity: "INVENTORY_ITEM",
+            entityId: id,
+            details: `Eliminación FÍSICA del insumo "${itemToDelete.name}" (SKU: ${itemToDelete.sku || "N/A"})`,
+            oldData: itemToDelete,
+            ipAddress,
+            userAgent,
+          },
+        })
+      } else {
+        await tx.inventoryItem.update({ where: { id }, data: { isActive: false } })
+        
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "ARCHIVE_INVENTORY_ITEM",
+            entity: "INVENTORY_ITEM",
+            entityId: id,
+            details: `Desactivación/Archivo del insumo "${itemToDelete.name}"`,
+            ipAddress,
+            userAgent,
+          },
+        })
+      }
+    })
+
+    return { success: true, message: "Producto eliminado correctamente" }
   }
-}
+)

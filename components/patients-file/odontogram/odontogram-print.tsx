@@ -1,5 +1,4 @@
 "use client"
-
 import React from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -63,10 +62,8 @@ export function OdontogramPrint({
   
   const watermarkOpacity = ((settings?.watermarkOpacity ?? 8) / 100)
   const watermarkScale = ((settings?.watermarkScale || 100) / 100)
-  
   const today = format(new Date(), "dd 'de' MMMM 'de' yyyy", { locale: es })
   const activeDoctor = doctorName || settings?.razonSocial?.trim() || "Especialista"
-
   const viewFormatted = view.toLowerCase().includes("diagn") ? "Diagnóstico" : "Evolución"
   const dentitionFormatted = dentition.toLowerCase().includes("perman") ? "Permanente" : "Temporal"
 
@@ -92,7 +89,7 @@ export function OdontogramPrint({
 
   return (
     <div id="odontogram-printable" className="hidden print:block font-sans text-slate-900 bg-white min-h-[280mm] relative">
-      {/* MARCA DE AGUA */}
+      {/* MARCA DE AGUA (SIN GRAYSCALE) */}
       {settings?.watermarkUrl && (
         <div 
           className="fixed inset-0 flex items-center justify-center pointer-events-none select-none z-0"

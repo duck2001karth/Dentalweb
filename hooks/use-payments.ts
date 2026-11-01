@@ -1,117 +1,88 @@
-"use client";
-
-import { useState, useCallback } from 'react';
-import { useToast } from '@/hooks/use-toast';
-import type { PaymentRecord, PaymentFormData } from '@/types/billing';
+"use client"
+import { useState } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useToast } from "@/hooks/use-toast"
+import type { PaymentRecord, PaymentFormData } from "@/types/billing"
 
 export function usePayments() {
-  const { toast } = useToast();
-  const [payments, setPayments] = useState<PaymentRecord[]>([]);
-  const [lastClose, setLastClose] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const [localLastClose, setLocalLastClose] = useState<any>(null)
 
-  const fetchPayments = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const res = await fetch('/api/payments');
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setPayments(data);
-          setLastClose(null);
-        } else if (data && typeof data === 'object') {
-          setPayments(Array.isArray(data.payments) ? data.payments : []);
-          setLastClose(data.lastClose || null);
-        } else {
-          setPayments([]);
-        }
-      }
-    } catch (error) {
-      toast({ 
-        title: "Error", 
-        description: "No se pudieron cargar los pagos.", 
-        variant: "destructive" 
-      });
-      setPayments([]);
-    } finally {
-      setIsLoading(false);
+  const { data, isLoading, refetch } = useQuery({
+    queryKey: ["payments"],
+    queryFn: async () => {
+      const res = await fetch("/api/payments")
+      if (!res.ok) throw new Error("Error al cargar los pagos")
+      return res.json()
     }
-  }, [toast]);
+  })
 
-  const createPayment = async (
-    data: PaymentFormData & { treatmentPlanId?: string; reference?: string; receiptImage?: string | null }, 
-    processedById?: string
-  ) => {
-    setIsSaving(true);
-    try {
-      const res = await fetch('/api/payments', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...data, processedById })
-      });
-      if (!res.ok) throw new Error();
-      await fetchPayments();
-      return true;
-    } catch (error) {
-      toast({ title: "Error de Registro", variant: "destructive" });
-      return false;
-    } finally { 
-      setIsSaving(false); 
-    }
-  };
+  const payments: PaymentRecord[] = Array.isArray(data) ? data : data?.payments || []
+  const lastClose = data?.lastClose || localLastClose
 
-  const updatePayment = async (id: string, data: Partial<PaymentFormData & { reference?: string }>) => {
-    setIsSaving(true);
-    try {
-      const res = await fetch('/api/payments', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...data })
-      });
-      if (!res.ok) throw new Error();
-      await fetchPayments();
-      return true;
-    } catch (error) {
-      toast({ title: "Error al actualizar", variant: "destructive" });
-      return false;
-    } finally { 
-      setIsSaving(false); 
-    }
-  };
+  const createMutation = useMutation({
+    mutationFn: async ({ payload, processedById }: { payload: any; processedById?: string }) => {
+      const res = await fetch("/api/payments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...payload, processedById })
+      })
+      if (!res.ok) throw new Error()
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] })
+      queryClient.invalidateQueries({ queryKey: ["treatments"] }) // Actualiza saldos de planes automáticamente
+    },
+    onError: () => toast({ title: "Error de Registro", variant: "destructive" })
+  })
 
-  const deletePayment = async (id: string, reason?: string, permanent: boolean = false) => {
-    setIsSaving(true);
-    try {
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, payload }: { id: string; payload: any }) => {
+      const res = await fetch("/api/payments", {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, ...payload })
+      })
+      if (!res.ok) throw new Error()
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] })
+      queryClient.invalidateQueries({ queryKey: ["treatments"] })
+    },
+    onError: () => toast({ title: "Error al actualizar", variant: "destructive" })
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async ({ id, reason, permanent }: { id: string; reason?: string; permanent: boolean }) => {
       const res = await fetch(`/api/payments/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          reason: reason || "Anulación registrada desde módulo de caja",
-          permanent 
-        })
-      });
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: reason || "Anulación registrada desde módulo de caja", permanent })
+      })
+      if (!res.ok) throw new Error()
+      return res.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["payments"] })
+      queryClient.invalidateQueries({ queryKey: ["treatments"] })
+    },
+    onError: () => toast({ title: "Error al anular cobro", variant: "destructive" })
+  })
 
-      if (!res.ok) throw new Error();
-      await fetchPayments();
-      return true;
-    } catch (error) {
-      toast({ title: "Error al anular cobro", variant: "destructive" });
-      return false;
-    } finally {
-      setIsSaving(false);
+  return {
+    payments,
+    lastClose,
+    setLastClose: setLocalLastClose,
+    isLoading,
+    isSaving: createMutation.isPending || updateMutation.isPending || deleteMutation.isPending,
+    fetchPayments: refetch,
+    createPayment: async (payload: PaymentFormData & { treatmentPlanId?: string; reference?: string; receiptImage?: string | null }, processedById?: string) => {
+      try { await createMutation.mutateAsync({ payload, processedById }); return true } catch { return false }
+    },
+    updatePayment: async (id: string, payload: Partial<PaymentFormData & { reference?: string }>) => {
+      try { await updateMutation.mutateAsync({ id, payload }); return true } catch { return false }
+    },
+    deletePayment: async (id: string, reason?: string, permanent: boolean = false) => {
+      try { await deleteMutation.mutateAsync({ id, reason, permanent }); return true } catch { return false }
     }
-  };
-
-  return { 
-    payments, 
-    lastClose, 
-    setLastClose, 
-    isLoading, 
-    isSaving, 
-    fetchPayments, 
-    createPayment, 
-    updatePayment, 
-    deletePayment 
-  };
+  }
 }

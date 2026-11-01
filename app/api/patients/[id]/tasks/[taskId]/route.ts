@@ -1,80 +1,50 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-import { logAuditEvent } from "@/lib/audit";
+import { createApiHandler } from "@/lib/server/api-handler"
+import { prisma } from "@/lib/db"
 
-export async function PATCH(
-  req: Request, 
-  props: { params: Promise<{ id: string, taskId: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
-
-    const params = await props.params;
-    const body = await req.json();
-    const { isCompleted } = body;
+export const PATCH = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async (req, { params, data, audit }) => {
+    const taskId = params.taskId as string
+    const patientId = params.id as string
 
     const task = await prisma.patientTask.update({
-      where: { id: params.taskId },
-      data: { isCompleted: Boolean(isCompleted) },
+      where: { id: taskId },
+      data: { isCompleted: Boolean(data.isCompleted) },
       include: { assignedTo: { select: { name: true } } }
-    });
+    })
 
-    await logAuditEvent({
-      userId: (session.user as any).id,
-      action: "UPDATE",
+    await audit({
+      action: "UPDATE_PATIENT_TASK",
       entity: "PATIENT_TASK",
-      entityId: params.taskId,
-      patientId: params.id,
-      details: `Tarea "${task.title}" marcada como ${isCompleted ? "completada" : "pendiente"}.`,
-    });
+      entityId: taskId,
+      patientId: patientId,
+      details: `Tarea "${task.title}" marcada como ${data.isCompleted ? "completada" : "pendiente"}.`,
+    })
 
-    return NextResponse.json(task);
-  } catch (error) {
-    return NextResponse.json({ error: "Error interno al actualizar tarea" }, { status: 500 });
+    return task
   }
-}
+)
 
-export async function DELETE(
-  req: Request, 
-  props: { params: Promise<{ id: string, taskId: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-    }
+export const DELETE = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async (req, { params, audit }) => {
+    const taskId = params.taskId as string
+    const patientId = params.id as string
 
-    const params = await props.params;
-    const existingTask = await prisma.patientTask.findUnique({
-      where: { id: params.taskId }
-    });
+    const existingTask = await prisma.patientTask.findUnique({ where: { id: taskId } })
+    if (!existingTask) throw new Error("NOT_FOUND")
 
-    if (!existingTask) {
-      return NextResponse.json({ error: "Tarea no encontrada" }, { status: 404 });
-    }
+    await prisma.patientTask.delete({ where: { id: taskId } })
 
-    await prisma.patientTask.delete({
-      where: { id: params.taskId }
-    });
-
-    await logAuditEvent({
-      userId: (session.user as any).id,
-      action: "DELETE",
+    await audit({
+      action: "DELETE_PATIENT_TASK",
       entity: "PATIENT_TASK",
-      entityId: params.taskId,
-      patientId: params.id,
+      entityId: taskId,
+      patientId: patientId,
       details: `Tarea eliminada: "${existingTask.title}".`,
       oldData: { title: existingTask.title }
-    });
+    })
 
-    return NextResponse.json({ success: true, message: "Tarea eliminada correctamente" });
-  } catch (error) {
-    console.error("Error al eliminar tarea:", error);
-    return NextResponse.json({ error: "Error interno al eliminar tarea" }, { status: 500 });
+    return { success: true, message: "Tarea eliminada correctamente" }
   }
-}
+)

@@ -1,78 +1,106 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth/next"
-import { authOptions } from "@/lib/auth"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
+import { z } from "zod"
 import { headers } from "next/headers"
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-    }
+const updateTemplateSchema = z.object({
+  title: z.string().optional(),
+  type: z.string().optional(),
+  category: z.string().optional(),
+  content: z.string().optional(),
+  requiresPatientSignature: z.boolean().optional(),
+  requiresDoctorSignature: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  isDefault: z.boolean().optional(),
+})
 
-    const { id } = await params
-    const body = await request.json()
+export const PATCH = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR"],
+    schema: updateTemplateSchema,
+  },
+  async (req, { user, params, data }) => {
+    const id = params.id as string
+
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const updated = await prisma.$transaction(async (tx) => {
       const existing = await tx.documentTemplate.findUnique({ where: { id } })
       if (!existing) throw new Error("NOT_FOUND")
 
-      if (body.isDefault) {
-        await tx.documentTemplate.updateMany({
-          where: { type: body.type || existing.type, id: { not: id } },
-          data: { isDefault: false },
-        })
-      }
+      if (data.isDefault) {
+      await tx.documentTemplate.updateMany({
+        where: { type: (data.type || existing.type) as any, id: { not: id } }, 
+        data: { isDefault: false },
+      })
+    }
 
-      return await tx.documentTemplate.update({
+      const res = await tx.documentTemplate.update({
         where: { id },
         data: {
-          ...(body.title !== undefined && { title: body.title.trim() }),
-          ...(body.type !== undefined && { type: body.type }),
-          ...(body.category !== undefined && { category: body.category.trim() }),
-          ...(body.content !== undefined && { content: body.content.trim() }),
-          ...(body.requiresPatientSignature !== undefined && {
-            requiresPatientSignature: Boolean(body.requiresPatientSignature),
-          }),
-          ...(body.requiresDoctorSignature !== undefined && {
-            requiresDoctorSignature: Boolean(body.requiresDoctorSignature),
-          }),
-          ...(body.isActive !== undefined && { isActive: Boolean(body.isActive) }),
-          ...(body.isDefault !== undefined && { isDefault: Boolean(body.isDefault) }),
+          ...(data.title !== undefined && { title: data.title.trim() }),
+          ...(data.type !== undefined && { type: data.type as any }),
+          ...(data.category !== undefined && { category: data.category.trim() }),
+          ...(data.content !== undefined && { content: data.content.trim() }),
+          ...(data.requiresPatientSignature !== undefined && { requiresPatientSignature: data.requiresPatientSignature }),
+          ...(data.requiresDoctorSignature !== undefined && { requiresDoctorSignature: data.requiresDoctorSignature }),
+          ...(data.isActive !== undefined && { isActive: data.isActive }),
+          ...(data.isDefault !== undefined && { isDefault: data.isDefault }),
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE_TEMPLATE",
+          entity: "DOCUMENT_TEMPLATE",
+          entityId: id,
+          details: `Actualización de plantilla clínica: "${res.title}"`,
+          oldData: { title: existing.title, isActive: existing.isActive },
+          newData: { title: res.title, isActive: res.isActive },
+          ipAddress,
+          userAgent,
+        },
+      })
+
+      return res
+    })
+
+    return updated
+  }
+)
+
+export const DELETE = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR"] },
+  async (req, { user, params }) => {
+    const id = params.id as string
+
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
+
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.documentTemplate.findUnique({ where: { id } })
+      if (!existing) throw new Error("NOT_FOUND")
+
+      await tx.documentTemplate.delete({ where: { id } })
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "DELETE_TEMPLATE",
+          entity: "DOCUMENT_TEMPLATE",
+          entityId: id,
+          details: `Eliminación de plantilla clínica: "${existing.title}"`,
+          oldData: { title: existing.title, type: existing.type },
+          ipAddress,
+          userAgent,
         },
       })
     })
 
-    return NextResponse.json(updated)
-  } catch (error: any) {
-    if (error?.message === "NOT_FOUND") {
-      return NextResponse.json({ error: "Plantilla no encontrada" }, { status: 404 })
-    }
-    console.error("Error en PATCH /api/configuration/templates/[id]:", error)
-    return NextResponse.json({ error: "Error al actualizar la plantilla" }, { status: 500 })
+    return { success: true, message: "Plantilla eliminada y auditada correctamente" }
   }
-}
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "No autenticado" }, { status: 401 })
-    }
-
-    const { id } = await params
-    await prisma.documentTemplate.delete({ where: { id } })
-
-    return NextResponse.json({ success: true, message: "Plantilla eliminada" })
-  } catch (error: any) {
-    console.error("Error en DELETE /api/configuration/templates/[id]:", error)
-    return NextResponse.json({ error: "Error al eliminar plantilla" }, { status: 500 })
-  }
-}
+)

@@ -17,7 +17,7 @@ const AppCommand = dynamic(() => import('../app-command').then((mod) => mod.AppC
 const GlobalLoader = dynamic(() => import('../global-loader').then((mod) => mod.GlobalLoader))
 
 // 1. Corrección del Loader del Nav para que use bg-card y no desentone al cargar
-const Nav = dynamic(() => import('@/components/nav').then((mod) => mod.Nav), {
+const Nav = dynamic(() => import('@/components/navigations/nav').then((mod) => mod.Nav), {
   loading: () => <div className="w-[70px] h-full bg-card border-r border-border/50" />,
 })
 

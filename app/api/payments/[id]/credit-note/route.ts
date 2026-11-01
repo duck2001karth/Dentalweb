@@ -1,91 +1,120 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth/next"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
+import { z } from "zod"
+import { headers } from "next/headers"
 
-export async function POST(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const session = await getServerSession()
-    const { id: paymentId } = await params
-    const body = await request.json()
-    const { reason, amount, notes } = body
-
+export const POST = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],
+    schema: z.any(),
+  },
+  async (req, { user, params, data }) => {
+    const paymentId = params.id as string
+    const { reason, amount, notes } = data
     const refundAmount = parseFloat(amount || 0)
 
     if (!paymentId || refundAmount <= 0) {
-      return NextResponse.json({ error: "Monto o parámetro no válido para la nota de crédito" }, { status: 400 })
-    }
-    const originalPayment = await prisma.payment.findUnique({
-      where: { id: paymentId },
-    })
-
-    if (!originalPayment) {
-      return NextResponse.json({ error: "Pago original no encontrado" }, { status: 404 })
+      throw new Error("Monto o parámetro no válido para la nota de crédito")
     }
 
-    if (originalPayment.treatmentPlanId) {
-      const plan = await prisma.treatmentPlan.findUnique({
-        where: { id: originalPayment.treatmentPlanId },
-        include: { items: true }
+    const headersList = await headers()
+    const ipAddress =
+      headersList.get("x-forwarded-for")?.split(",")[0].trim() ||
+      headersList.get("x-real-ip") ||
+      "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
+
+    // A04: Transacción atómica para que el descuento del plan y la nota de crédito no se desincronicen
+    const creditNoteRecord = await prisma.$transaction(async (tx) => {
+      const originalPayment = await tx.payment.findUnique({
+        where: { id: paymentId },
       })
 
-      if (plan) {
-        const newTotalPaid = Math.max(0, (plan.totalPaid || 0) - refundAmount)
-        let remainingRefundToDistribute = refundAmount
-        for (const item of plan.items) {
-          if (remainingRefundToDistribute <= 0) break
-          if ((item.paidAmount || 0) > 0) {
-            const deduct = Math.min(item.paidAmount, remainingRefundToDistribute)
-            const updatedPaidAmount = item.paidAmount - deduct
-            
-            await prisma.treatmentItem.update({
-              where: { id: item.id },
-              data: {
-                paidAmount: updatedPaidAmount,
-                isPaid: false, 
-              }
-            })
+      if (!originalPayment) throw new Error("NOT_FOUND")
 
-            remainingRefundToDistribute -= deduct
-          }
-        }
-        await prisma.treatmentPlan.update({
+      if (originalPayment.treatmentPlanId) {
+        const plan = await tx.treatmentPlan.findUnique({
           where: { id: originalPayment.treatmentPlanId },
-          data: {
-            totalPaid: newTotalPaid,
-            status: "ACTIVE", 
-          }
+          include: { items: true },
         })
-      }
-    }
-    const currentUserId = (session?.user as any)?.id || null
 
-    const creditNoteRecord = await prisma.payment.create({
-      data: {
-        patientId: originalPayment.patientId,
-        amount: -refundAmount,
-        method: originalPayment.method,
-        reference: `NC-${originalPayment.receiptNumber || originalPayment.id.slice(-6)}`,
-        treatmentPlanId: originalPayment.treatmentPlanId || undefined,
-        processedById: currentUserId || undefined,
-        notes: ` [${reason}]: ${notes || 'Sin observaciones'}`,
-      },
-      include: {
-        treatmentPlan: { select: { id: true, name: true } },
-        processedBy: { select: { id: true, name: true, specialty: true, role: true } }
+        if (plan) {
+          const newTotalPaid = Math.max(0, Number(plan.totalPaid || 0) - refundAmount)
+          let remainingRefundToDistribute = refundAmount
+
+          for (const item of plan.items) {
+            if (remainingRefundToDistribute <= 0) break
+            const currentItemPaid = Number(item.paidAmount || 0)
+            if (currentItemPaid > 0) {
+              const deduct = Math.min(currentItemPaid, remainingRefundToDistribute)
+              const updatedPaidAmount = currentItemPaid - deduct
+
+              await tx.treatmentItem.update({
+                where: { id: item.id },
+                data: {
+                  paidAmount: updatedPaidAmount,
+                  isPaid: false,
+                },
+              })
+              remainingRefundToDistribute -= deduct
+            }
+          }
+
+          await tx.treatmentPlan.update({
+            where: { id: originalPayment.treatmentPlanId },
+            data: {
+              totalPaid: newTotalPaid,
+              status: "ACTIVE",
+            },
+          })
+        }
       }
+
+      const createdNC = await tx.payment.create({
+        data: {
+          patientId: originalPayment.patientId,
+          amount: -refundAmount,
+          method: originalPayment.method,
+          reference: `NC-${originalPayment.receiptNumber || originalPayment.id.slice(-6)}`,
+          treatmentPlanId: originalPayment.treatmentPlanId || undefined,
+          processedById: user.id || undefined,
+          notes: ` [${reason}]: ${notes || "Sin observaciones"}`,
+        },
+        include: {
+          treatmentPlan: { select: { id: true, name: true } },
+          processedBy: { select: { id: true, name: true, specialty: true, role: true } },
+        },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "CREATE_CREDIT_NOTE",
+          entity: "PAYMENT",
+          entityId: createdNC.id,
+          patientId: originalPayment.patientId,
+          details: `Nota de crédito emitida por $${refundAmount.toFixed(2)} sobre recibo #${originalPayment.receiptNumber || paymentId}. Motivo: ${reason}`,
+          oldData: {
+            originalPaymentId: originalPayment.id,
+            originalAmount: originalPayment.amount,
+          },
+          newData: {
+            refundAmount: -refundAmount,
+            reference: createdNC.reference,
+            reason,
+          },
+          ipAddress,
+          userAgent,
+        },
+      })
+
+      return createdNC
     })
 
-    return NextResponse.json({
+    return {
       success: true,
       message: "Nota de crédito emitida correctamente",
       creditNote: creditNoteRecord,
-    })
-
-  } catch (error) {
-    console.error("Error al emitir nota de crédito:", error)
-    return NextResponse.json({ error: "Error interno al procesar la nota de crédito" }, { status: 500 })
+    }
   }
-}
+)

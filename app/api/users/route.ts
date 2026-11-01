@@ -1,126 +1,80 @@
-import { NextResponse } from "next/server"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
-import { logAuditEvent } from "@/lib/audit"
+import { z } from "zod"
+import { headers } from "next/headers"
 
-export async function GET(request: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user) {
-      return NextResponse.json({ error: "Acceso denegado. No autenticado." }, { status: 401 })
-    }
-
-    const { searchParams } = new URL(request.url)
+export const GET = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async (req, { searchParams }) => {
     const role = searchParams.get("role")
     
-    const whereClause: any = { isActive: true } 
-    if (role) {
-      whereClause.role = role
-    }
+    const whereClause: any = { isActive: true }
+    if (role) whereClause.role = role
 
     const users = await prisma.user.findMany({
       where: whereClause,
       select: {
-        id: true,
-        name: true,
-        email: true, 
-        role: true,
-        specialty: true,
-        language: true,
-        image: true
+        id: true, name: true, email: true, role: true, 
+        specialty: true, language: true, image: true
       },
-      orderBy: {
-        name: "asc",
-      },
+      orderBy: { name: "asc" },
     })
 
-    return NextResponse.json(users)
-  } catch (error) {
-    console.error("Error al obtener usuarios:", error)
-    return NextResponse.json(
-      { error: "Error interno al obtener el listado de usuarios" },
-      { status: 500 }
-    )
+    return users
   }
-}
+)
 
-export async function PATCH(request: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    const currentUserId = (session?.user as any)?.id
-
-    if (!currentUserId) {
-      return NextResponse.json(
-        { error: "No autorizado. Inicie sesión para guardar preferencias." },
-        { status: 401 }
-      )
-    }
-
-    const body = await request.json()
-    const { language, calendarColor, phoneNumber } = body
-
-    if (!language && calendarColor === undefined && phoneNumber === undefined) {
-      return NextResponse.json(
-        { error: "No se proporcionaron datos para actualizar." },
-        { status: 400 }
-      )
+export const PATCH = createApiHandler(
+  {
+    schema: z.object({
+      language: z.string().optional(),
+      calendarColor: z.string().optional(),
+      phoneNumber: z.string().optional(),
+    }).passthrough(),
+  },
+  async (req, { user, data }) => {
+    if (!data.language && data.calendarColor === undefined && data.phoneNumber === undefined) {
+      throw new Error("No se proporcionaron datos para actualizar.")
     }
 
     const updateData: Record<string, any> = {}
+    if (data.language !== undefined) updateData.language = data.language.trim()
+    if (data.calendarColor !== undefined) updateData.calendarColor = data.calendarColor
+    if (data.phoneNumber !== undefined) updateData.phoneNumber = data.phoneNumber
 
-    if (language !== undefined) {
-      if (typeof language !== "string" || language.trim().length === 0) {
-        return NextResponse.json({ error: "Formato de idioma no válido." }, { status: 400 })
-      }
-      updateData.language = language.trim()
-    }
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
 
-    if (calendarColor !== undefined) updateData.calendarColor = calendarColor
-    if (phoneNumber !== undefined) updateData.phoneNumber = phoneNumber
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      const previousUser = await tx.user.findUnique({
+        where: { id: user.id },
+        select: { language: true, calendarColor: true, phoneNumber: true, name: true },
+      })
 
-    const previousUser = await prisma.user.findUnique({
-      where: { id: currentUserId },
-      select: { language: true, calendarColor: true, phoneNumber: true, name: true },
+      const res = await tx.user.update({
+        where: { id: user.id },
+        data: updateData,
+        select: { id: true, name: true, email: true, language: true, calendarColor: true, phoneNumber: true },
+      })
+
+      await tx.auditLog.create({
+        data: {
+          userId: user.id,
+          action: "UPDATE_USER_PREFERENCES",
+          entity: "USER_PREFERENCES",
+          entityId: user.id,
+          details: `Actualización de preferencias de usuario (${res.name || user.id}). Idioma: ${res.language}`,
+          oldData: previousUser || undefined,
+          newData: { language: res.language, calendarColor: res.calendarColor, phoneNumber: res.phoneNumber },
+          ipAddress,
+          userAgent,
+        },
+      })
+
+      return res
     })
 
-    const updatedUser = await prisma.user.update({
-      where: { id: currentUserId },
-      data: updateData,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        language: true,
-        calendarColor: true,
-        phoneNumber: true,
-      },
-    })
-
-    await logAuditEvent({
-      userId: currentUserId,
-      action: "UPDATE",
-      entity: "USER_PREFERENCES",
-      entityId: currentUserId,
-      details: `Actualización de preferencias de usuario (${updatedUser.name || currentUserId}). Idioma: ${updatedUser.language}`,
-      oldData: previousUser,
-      newData: {
-        language: updatedUser.language,
-        calendarColor: updatedUser.calendarColor,
-        phoneNumber: updatedUser.phoneNumber,
-      },
-    })
-
-    return NextResponse.json({
-      success: true,
-      message: "Preferencias guardadas exitosamente.",
-      user: updatedUser,
-    })
-  } catch (error: any) {
-    console.error("Error al actualizar preferencias de usuario:", error)
-    return NextResponse.json(
-      { error: error?.message || "Error interno al actualizar usuario." },
-      { status: 500 }
-    )
+    return { success: true, message: "Preferencias guardadas exitosamente.", user: updatedUser }
   }
-}
+)

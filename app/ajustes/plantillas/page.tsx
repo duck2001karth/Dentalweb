@@ -1,4 +1,4 @@
-import { Nav } from "@/components/nav"
+import { Nav } from "@/components/navigations/nav"
 import { TemplatesView } from "@/components/configurations/templates/templates-view"
 
 export const metadata = {

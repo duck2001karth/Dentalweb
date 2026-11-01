@@ -1,26 +1,19 @@
-import { NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
+import { z } from "zod"
 
-export async function GET(request: Request) {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session || !session.user) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 401 })
-    }
+export const GET = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async (req, { user }) => {
+    const isDoctor = user.role === "DOCTOR"
+    const canSeeFinancialDebts = ["ADMIN", "RECEPTIONIST", "DOCTOR"].includes(user.role)
 
-    const userRole = String(session.user.role || "").toUpperCase().trim()
-    const userId = session.user.id as string
-    const isDoctor = userRole === "DOCTOR"
-    const canSeeFinancialDebts = userRole === "ADMIN" || userRole === "RECEPCION" || userRole === "RECEPCIONISTA" || isDoctor
-
-    let whereClause: any = {}
-    if (userRole !== "ADMIN") {
+    const whereClause: any = {}
+    if (user.role !== "ADMIN") {
       whereClause.OR = [
-        { targetRole: userRole },
+        { targetRole: user.role },
         { targetRole: "ALL" },
-        { userId: userId },
+        { userId: user.id },
       ]
     }
 
@@ -30,17 +23,12 @@ export async function GET(request: Request) {
       take: 15,
     })
 
-    // 2. Consulta y cálculo de deudas en tiempo real
-    let debtNotifications: any[] = []
-
+    const debtNotifications: any[] = []
+    
     if (canSeeFinancialDebts) {
       const planWhere: any = {
         status: { in: ["ACTIVE", "DRAFT"] },
-      }
-
-      // Si es doctor, restringir a los planes donde es titular
-      if (isDoctor) {
-        planWhere.doctorId = userId
+        ...(isDoctor && { doctorId: user.id }),
       }
 
       const activePlans = await prisma.treatmentPlan.findMany({
@@ -52,33 +40,11 @@ export async function GET(request: Request) {
           totalPaid: true,
           commercialDiscount: true,
           updatedAt: true,
-          patient: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              phone: true,
-            },
-          },
-          doctor: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          agreement: {
-            select: {
-              discountValue: true,
-            },
-          },
+          patient: { select: { id: true, firstName: true, lastName: true, phone: true } },
+          doctor: { select: { id: true, name: true } },
+          agreement: { select: { discountValue: true } },
           items: {
-            select: {
-              cost: true,
-              discount: true,
-              paidAmount: true,
-              progress: true,
-              isCompleted: true,
-            },
+            select: { cost: true, discount: true, paidAmount: true, progress: true, isCompleted: true },
           },
         },
         take: 30,
@@ -89,7 +55,7 @@ export async function GET(request: Request) {
         const agreementDisc = plan.agreement ? Number(plan.agreement.discountValue || 0) : 0
         const commercialDisc = Number(plan.commercialDiscount || 0)
         const effectiveGlobalDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
-
+        
         let calculatedCost = 0
         let totalPaidItems = 0
         let completedCount = 0
@@ -139,22 +105,20 @@ export async function GET(request: Request) {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
 
-    return NextResponse.json(combined)
-  } catch (error) {
-    console.error("Error en GET /api/notifications:", error)
-    return NextResponse.json({ error: "Error al obtener notificaciones" }, { status: 500 })
+    return combined
   }
-}
+)
 
-export async function PATCH(request: Request) {
-  try {
-    const { ids } = await request.json()
-    
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return NextResponse.json({ success: true })
-    }
-
-    const realDbIds = ids.filter((id: string) => !String(id).startsWith("debt-"))
+export const PATCH = createApiHandler(
+  {
+    roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],
+    schema: z.object({
+      ids: z.array(z.string()),
+    }),
+  },
+  async (req, { data }) => {
+    if (data.ids.length === 0) return { success: true }
+    const realDbIds = data.ids.filter((id) => !id.startsWith("debt-"))
 
     if (realDbIds.length > 0) {
       await prisma.notification.updateMany({
@@ -163,9 +127,6 @@ export async function PATCH(request: Request) {
       })
     }
 
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error("Error en PATCH /api/notifications:", error)
-    return NextResponse.json({ error: "Error al actualizar" }, { status: 500 })
+    return { success: true }
   }
-}
+)
