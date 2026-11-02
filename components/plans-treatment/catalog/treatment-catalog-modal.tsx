@@ -20,7 +20,7 @@ interface TreatmentCatalogModalProps {
   catalogSearch?: string
   setCatalogSearch?: (query: string) => void
   filteredCatalog?: any[]
-  handleAddManualProcedure: (proc: any, toothOrRegionValue?: string, sectionId?: string | null) => void
+  handleAddManualProcedure: (proc: any, toothOrRegionValue?: string, sectionId?: string | null) => Promise<boolean>
   isAddingProcedure?: boolean
   initialLocation?: { type: "GENERAL" | "TOOTH" | "ARCADA" | "SEXTANTE"; value: string }
   targetSectionId?: string | null
@@ -63,7 +63,7 @@ export function TreatmentCatalogModal({
       if (initialLocation && initialLocation.value) setSelectedLocation(initialLocation)
       else setSelectedLocation({ type: "GENERAL", value: "" })
     }
-  }, [isOpen, initialLocation])
+  }, [isOpen, initialLocation?.type, initialLocation?.value])
 
   useEffect(() => {
     if (!isOpen) return
@@ -98,7 +98,7 @@ export function TreatmentCatalogModal({
     })
   }, [baseList, searchQuery])
 
-  const handleSelectProcedure = (proc: any) => {
+  const handleSelectProcedure = async (proc: any) => {
     const nameUpper = (proc.name || "").toUpperCase()
     const catUpper = (proc.category || "").toUpperCase()
     const isProductOrGeneral =
@@ -134,9 +134,11 @@ export function TreatmentCatalogModal({
     }
 
     const toothOrRegionValue = selectedLocation.type === "GENERAL" ? "General" : (selectedLocation.value || undefined)
-    handleAddManualProcedure(proc, toothOrRegionValue, targetSectionId)
-    setSelectedLocation({ type: "GENERAL", value: "" })
-    setIsOpen(false)
+    const saved = await handleAddManualProcedure(proc, toothOrRegionValue, targetSectionId)
+    if (saved) {
+      setSelectedLocation({ type: "GENERAL", value: "" })
+      setIsOpen(false)
+    }
   }
 
   return (

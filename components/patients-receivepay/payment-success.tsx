@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState } from "react"
-import { CheckCircle2, Printer, FileText, ArrowRight, Loader2, Copy, Check, MessageCircle } from "lucide-react"
+import { useState } from "react"
+import { CheckCircle2, Printer, FileText, ArrowRight, Copy, Check, MessageCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { useClinicSettings } from "@/config/clinic-settings"
@@ -32,7 +32,6 @@ const formatReceiptCode = (rawId: string | null) => {
   return `#REC-${clean}`
 }
 
-// Interfaz actualizada para coincidir con lo que envía payment-tab.tsx
 export interface PaymentSuccessStepProps {
   paymentData?: any
   onSendReceipt?: () => void
@@ -41,7 +40,6 @@ export interface PaymentSuccessStepProps {
   onFinish?: () => void
   onClose?: () => void
   
-  // Props de fallback por si se usa la versión antigua
   invoiceId?: string | null
   totalPaid?: number
   paymentMethod?: string
@@ -68,10 +66,7 @@ export function PaymentSuccessStep({
   const { toast } = useToast()
   const { settings } = useClinicSettings()
   const [copied, setCopied] = useState(false)
-  const [isPrinting, setIsPrinting] = useState(false)
-  const [isSendingWa, setIsSendingWa] = useState(false)
 
-  // Normalización para soportar tanto los props antiguos como paymentData
   const activeInvoiceId = paymentData?.receiptNumber || paymentData?.invoiceId || invoiceId
   const activeTotal = paymentData?.amount || paymentData?.totalPaid || totalPaid || 0
   const activeMethod = paymentData?.method || paymentData?.paymentMethod || paymentMethod
@@ -95,59 +90,42 @@ export function PaymentSuccessStep({
     window.open(`/api/invoices/${activeInvoiceId}/pdf`, "_blank")
   }
 
-  const handleSendWhatsApp = async () => {
-    if (onSendReceipt) return onSendReceipt()
-    setIsSendingWa(true)
-    try {
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      toast({
-        title: "¡WhatsApp Enviado!",
-        description: `El comprobante fue enviado al número de ${patientName}.`,
-        variant: "default",
-        className: "bg-emerald-600 text-white border-none"
-      })
-    } catch (error) {
-      toast({ title: "Error", description: "No se pudo enviar el WhatsApp.", variant: "destructive" })
-    } finally {
-      setIsSendingWa(false)
+  const handleSendWhatsApp = () => {
+    if (onSendReceipt) {
+      onSendReceipt()
+      return
     }
+
+    toast({
+      title: "Envío no configurado",
+      description: "El envío de comprobantes por WhatsApp no está disponible en esta pantalla.",
+      variant: "destructive",
+    })
   }
 
   const handlePrintReceipt = () => {
-    if (onPrintTicket) return onPrintTicket()
-    setIsPrinting(true)
-    const receiptHtml = generateReceiptHTML({
-      receiptNumber: displayCode,
-      patientName,
-      patientDocumentId: activePatientDoc,
-      totalPaid: activeTotal,
-      paymentMethod: displayMethod,
-      items: activeItems,
-      clinic: settings
-    })
+    if (onPrintTicket) {
+      onPrintTicket()
+      return
+    }
 
-    const iframe = document.createElement("iframe")
-    iframe.style.position = "fixed"
-    iframe.style.right = "0"
-    iframe.style.bottom = "0"
-    iframe.style.width = "0"
-    iframe.style.height = "0"
-    iframe.style.border = "none"
-    document.body.appendChild(iframe)
-    
-    const doc = iframe.contentWindow?.document
-    if (doc) {
-      doc.open()
-      doc.write(receiptHtml)
-      doc.close()
-      setTimeout(() => {
-        setIsPrinting(false)
-        iframe.contentWindow?.focus()
-        iframe.contentWindow?.print()
-        setTimeout(() => document.body.removeChild(iframe), 1000)
-      }, 300)
-    } else {
-      setIsPrinting(false)
+    try {
+      generateReceiptHTML({
+        receiptNumber: displayCode,
+        patientName,
+        patientDocumentId: activePatientDoc,
+        totalPaid: activeTotal,
+        paymentMethod: displayMethod,
+        items: activeItems,
+        clinic: settings,
+      })
+    } catch (error) {
+      console.error("Error al preparar el comprobante:", error)
+      toast({
+        title: "Error de impresión",
+        description: "No se pudo preparar el comprobante.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -213,11 +191,11 @@ export function PaymentSuccessStep({
         <Button
           type="button"
           variant="outline"
-          disabled={isSendingWa}
+          
           onClick={handleSendWhatsApp}
           className="border-border bg-card hover:bg-muted text-foreground font-bold h-11 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
         >
-          {isSendingWa ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#008bcd]" /> : <MessageCircle className="w-3.5 h-3.5 text-[#008bcd]" />}
+          <MessageCircle className="w-3.5 h-3.5 text-[#008bcd]" />
           <span>Enviar</span>
         </Button>
 
@@ -234,11 +212,10 @@ export function PaymentSuccessStep({
         <Button
           type="button"
           variant="outline"
-          disabled={isPrinting}
-          onClick={handlePrintReceipt}
+                    onClick={handlePrintReceipt}
           className="border-border bg-card hover:bg-muted text-foreground font-bold h-11 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm active:scale-[0.98]"
         >
-          {isPrinting ? <Loader2 className="w-3.5 h-3.5 text-muted-foreground animate-spin" /> : <Printer className="w-3.5 h-3.5 text-muted-foreground" />}
+          <Printer className="w-3.5 h-3.5 text-muted-foreground" />
           <span>Imprimir</span>
         </Button>
 

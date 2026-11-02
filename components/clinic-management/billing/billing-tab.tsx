@@ -15,7 +15,6 @@ import { PaymentModal } from "./modals/payment-modal"
 import { ExpenseModal } from "./modals/expense-modal"
 import { CashCloseModal } from "./modals/cash-close-modal"
 import { DeletePaymentAlert } from "./modals/delete-payment-alert"
-import { PrintArqueoTemplate } from "./print/print-arqueo-template"
 import { CashCloseSuccessDialog } from "./modals/cash-close-success"
 import { BillingTable } from "@/components/clinic-management/billing/tables/billing-table"
 import { DebtsTable } from "./tables/debts-table"
@@ -261,12 +260,6 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
           </TabsContent>
         </Tabs>
       </div>
-
-      <PrintArqueoTemplate
-        payments={safePaymentsList}
-        dateFilter={dateFilter}
-        cashierName={session?.user?.name || "Cajero de Turno"}
-      />
 
       <PaymentModal
         isOpen={isModalOpen}

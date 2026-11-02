@@ -79,15 +79,16 @@ export function printTreatmentPlanSheet({
   const rowsHtml = plan?.items && plan.items.length > 0
     ? plan.items.map((item: any) => {
         const itemDscto = Number(item.discount || 0)
-        const cost = Number(item.cost || item.price || 0)
-        const finalCost = cost - (cost * (itemDscto / 100))
+        const cost = Number(item.cost ?? item.price ?? 0)
+        const effectiveDisc = itemDscto > 0 ? itemDscto : Number(discountPercent || 0)
+        const finalCost = Math.max(0, cost - (cost * (effectiveDisc / 100)))
         return `
-          <tr style="border-bottom: 1px solid #f1f5f9;">
+          <tr style="border-bottom: 1px solid #f1f5f9; break-inside: avoid; page-break-inside: avoid;">
             <td style="padding: 10px; font-weight: 700; color: #0f172a;">${escapeHTML(item.procedureName || item.name)}</td>
             <td style="padding: 10px; text-align: center; font-weight: 600; color: #475569;">${escapeHTML(item.tooth || item.region || "-")}</td>
             ${!isNoDetail && !isLabOrder ? `
-              <td style="padding: 10px; text-align: center; color: #64748b;">${itemDscto > 0 ? `${itemDscto}%` : "-"}</td>
-              <td style="padding: 10px; text-align: right; font-weight: 700; font-family: monospace; font-size: 11.5px;">${clinicCurrency}${finalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+              <td style="padding: 10px; text-align: center; color: #64748b;">${effectiveDisc > 0 ? `${effectiveDisc}%` : "-"}</td>
+              <td style="padding: 10px; text-align: right; font-weight: 700; font-family: monospace; font-size: 11.5px;">${clinicCurrency}&nbsp;${finalCost.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
             ` : ""}
           </tr>
         `
@@ -103,7 +104,7 @@ export function printTreatmentPlanSheet({
     
     ${!isOnlyTotal ? `
       <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px; text-align: left;">
-        <thead>
+        <thead style="display: table-header-group;">
           <tr style="background-color: #f8fafc; color: #008bcd; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; border-top: 2px solid rgba(0, 139, 205, 0.2); border-bottom: 2px solid rgba(0, 139, 205, 0.2);">
             <th style="padding: 10px;">Prestación / Procedimiento</th>
             <th style="padding: 10px; text-align: center; width: 100px;">Región</th>
@@ -123,24 +124,24 @@ export function printTreatmentPlanSheet({
           ${!isOnlyTotal && !isNoDetail ? `
             <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #475569; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
               <span>Subtotal</span>
-              <span style="font-family: monospace; color: #0f172a; font-size: 12px;">${clinicCurrency} ${Number(baseTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+              <span style="font-family: monospace; color: #0f172a; font-size: 12px;">${clinicCurrency}&nbsp;${Number(baseTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
             </div>
-            ${discountPercent > 0 ? `
+            ${discountAmount > 0 ? `
               <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: #059669; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px;">
-                <span>Dscto Global (${discountPercent}%)</span>
-                <span style="font-family: monospace; font-size: 12px;">- ${clinicCurrency}${Number(discountAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                <span>Descuentos Aplicados</span>
+                <span style="font-family: monospace; font-size: 12px;">- ${clinicCurrency}&nbsp;${Number(discountAmount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
               </div>
             ` : ""}
           ` : ""}
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 2px solid rgba(0, 139, 205, 0.2);">
             <span style="font-size: 13px; font-weight: 900; color: #0f172a; text-transform: uppercase; letter-spacing: 1px;">Total</span>
-            <span style="font-size: 18px; font-weight: 900; color: #008bcd; font-family: monospace;">${clinicCurrency}${Number(finalTotalCost || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+            <span style="font-size: 18px; font-weight: 900; color: #008bcd; font-family: monospace;">${clinicCurrency}&nbsp;${Number(finalTotalCost || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
           </div>
         </div>
       </div>
     ` : ""}
 
-    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 9.5px; color: #475569; font-style: italic; line-height: 1.5; margin-bottom: 24px;">
+    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; font-size: 9.5px; color: #475569; font-style: italic; line-height: 1.5; margin-bottom: 24px; break-inside: avoid; page-break-inside: avoid;">
       <div style="font-size: 9px; font-weight: 800; color: #008bcd; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-style: normal;">Observaciones / Condiciones</div>
       ${safeCommentText}
     </div>
@@ -151,8 +152,8 @@ export function printTreatmentPlanSheet({
     : `<span style="font-size: 9px; color: #94a3b8; font-style: italic;">Pendiente de firma digital</span>`
 
   const footerHtml = `
-    <div style="margin-top: auto; padding-top: 20px; page-break-inside: avoid; break-inside: avoid;">
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; text-align: center;">
+    <div style="margin-top: 24px; padding-top: 20px; page-break-inside: avoid; break-inside: avoid;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 40px; text-align: center; background: #ffffff; padding: 12px 8px;">
         <div style="display: flex; flex-direction: column; align-items: center;">
           <div style="height: 60px; width: 220px; border-bottom: 1px solid #cbd5e1; display: flex; align-items: center; justify-content: center; margin-bottom: 8px;">
             ${patientSigHtml}
@@ -178,6 +179,6 @@ export function printTreatmentPlanSheet({
     settings,
     bodyHtml,
     footerHtml,
-    showSignature: false, // Inyectamos 2 firmas en footerHtml
+    showSignature: false, 
   })
 }

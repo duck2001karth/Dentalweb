@@ -28,7 +28,11 @@ interface TreatmentDetailDialogsProps {
   catalogSearch?: string
   setCatalogSearch?: (search: string) => void
   filteredCatalog?: any[]
-  handleAddManualProcedure: (procedure: any, toothNum?: string, sectionId?: string | null) => Promise<void> | void
+  handleAddManualProcedure: (
+  procedure: any,
+  toothNum?: string,
+  sectionId?: string | null
+) => boolean | Promise<boolean>
   isAddingProcedure: boolean
   targetToothOrRegion?: string
   targetSectionId?: string | null

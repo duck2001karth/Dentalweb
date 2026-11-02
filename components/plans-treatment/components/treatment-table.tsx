@@ -159,7 +159,7 @@ function SortableItemRow({
         <Popover open={editingItemId === item.id} onOpenChange={(open) => !open && setEditingItemId(null)}>
           <PopoverTrigger asChild>
             <button onClick={() => { setEditingItemId(item.id); setTempItemDiscount(itemDiscount.toString()) }} className="text-xs font-bold text-[#008bcd] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer">
-              {itemDiscount > 0 ? `${itemDiscount}%` : globalDiscount > 0 ? `${globalDiscount}% (Conv)` : "0%"} <Edit2 className="w-3 h-3 stroke-[2] opacity-60 ml-0.5" />
+              {itemDiscount > 0 ? `${itemDiscount}%` : globalDiscount > 0 ? `${globalDiscount}% (Global)` : "0%"} <Edit2 className="w-3 h-3 stroke-[2] opacity-60 ml-0.5" />
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-48 p-3 bg-card border-border shadow-xl rounded-xl" align="center">
@@ -248,6 +248,12 @@ export function TreatmentTable({
 
   useEffect(() => {
     setItemsList(planItems)
+    // Elimina IDs de prestaciones borradas del estado de selección de la tabla.
+    const activeIds = new Set(planItems.map((item: { id: string }) => item.id))
+    setSelectedItemIds((prev) => {
+      const next = prev.filter((id) => activeIds.has(id))
+      return next.length === prev.length ? prev : next
+    })
   }, [planItems])
 
   // Configuración de sensores para DND

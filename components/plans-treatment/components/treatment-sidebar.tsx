@@ -110,7 +110,7 @@ export function TreatmentSidebar({
   
   const baseCost = useMemo(() => {
     if (effectivePlanItems && effectivePlanItems.length > 0) {
-      return effectivePlanItems.reduce((acc: number, item: any) => acc + Number(item.cost || item.price || 0), 0)
+      return effectivePlanItems.reduce((acc: number, item: any) => acc + Number(item.cost ?? item.price ?? 0), 0)
     }
     return Number(plan?.totalCost || 0)
   }, [effectivePlanItems, plan?.totalCost])
@@ -131,7 +131,7 @@ export function TreatmentSidebar({
   const finalTotalCost = useMemo(() => {
     if (effectivePlanItems && effectivePlanItems.length > 0) {
       return effectivePlanItems.reduce((acc: number, item: any) => {
-        const cost = Number(item.cost || item.price || 0)
+        const cost = Number(item.cost ?? item.price ?? 0)
         const itemDisc = Number(item.discount || 0)
         const effDisc = itemDisc > 0 ? itemDisc : effectiveDiscount
         return acc + Math.max(0, cost - cost * (effDisc / 100))
@@ -145,7 +145,7 @@ export function TreatmentSidebar({
     return effectivePlanItems.reduce((acc: number, item: any) => {
       const isDone = item.isCompleted || Number(item.progress || 0) === 100
       if (isDone) {
-        const cost = Number(item.cost || item.price || 0)
+        const cost = Number(item.cost ?? item.price ?? 0)
         const itemDisc = Number(item.discount || 0)
         const effDisc = itemDisc > 0 ? itemDisc : effectiveDiscount
         return acc + Math.max(0, cost - cost * (effDisc / 100))

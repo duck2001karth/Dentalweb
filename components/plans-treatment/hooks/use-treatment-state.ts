@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { TreatmentItem, EvolutionInput } from "@/types/treatments"
 
 export function useTreatmentState(initialPlan: any, patient: any, currentUser: any, toast: any) {
@@ -42,6 +42,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false)
   const [deleteMode, setDeleteMode] = useState<"ALL" | "SELECTED">("ALL")
   const [itemsToDelete, setItemsToDelete] = useState<string[]>([])
+  const deletingRef = useRef(false)
 
   // --- SINCRONIZACIÓN DE PLAN (CORREGIDO PARA F5) ---
   useEffect(() => {
@@ -95,7 +96,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
     let totalProgressSum = 0
 
     planItems.forEach((item: any) => {
-      const cost = Number(item.cost || item.price || 0)
+      const cost = Number(item.cost ?? item.price ?? 0)
       const itemDisc = Number(item.discount || 0)
       const effectiveDisc = itemDisc > 0 ? itemDisc : discountPercent
       subtotal += Math.max(0, cost - (cost * (effectiveDisc / 100)))
@@ -259,8 +260,10 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
       setIsCatalogModalOpen(false)
       toast({ title: "Prestación agregada", variant: "success" })
       await refreshPlanData()
+      return true
     } catch {
       toast({ title: "Error al agregar", description: "No se pudo agregar la prestación.", variant: "destructive" })
+      return false
     } finally {
       setIsAddingProcedure(false)
       setTargetToothOrRegion(undefined)
@@ -340,24 +343,56 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
   }
 
   const executeDeleteSelected = async () => {
+    if (deletingRef.current) return
+
+    const existingIds = new Set(planItems.map((item) => item.id))
+    const validIds = [...new Set(itemsToDelete)].filter((id) => existingIds.has(id))
+
+    if (validIds.length === 0) {
+      setItemsToDelete([])
+      setIsDeleteModalOpen(false)
+      toast({
+        title: "Sin prestaciones válidas",
+        description: "Actualiza la selección antes de eliminar.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    deletingRef.current = true
     try {
-      await fetch(`/api/treatments/${initialPlan.id}/items`, {
+      const response = await fetch(`/api/treatments/${initialPlan.id}/items`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemIds: itemsToDelete })
+        body: JSON.stringify({ itemIds: validIds }),
       })
-      setPlanItems((prev) => prev.filter((item) => !itemsToDelete.includes(item.id)))
-      setIsDeleteModalOpen(false)
+      const result = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(result?.error || `No se pudieron eliminar (HTTP ${response.status})`)
+      }
+
+      const deletedIds = new Set(validIds)
+      setPlanItems((prev) => prev.filter((item) => !deletedIds.has(item.id)))
       setItemsToDelete([])
+      setIsDeleteModalOpen(false)
       toast({ title: "Prestaciones eliminadas", variant: "success" })
       await refreshPlanData()
-    } catch {
-      toast({ title: "Error", description: "No se pudieron eliminar los ítems.", variant: "destructive" })
+    } catch (error) {
+      toast({
+        title: "Error al eliminar",
+        description: error instanceof Error ? error.message : "No se pudieron eliminar los ítems.",
+        variant: "destructive",
+      })
+    } finally {
+      deletingRef.current = false
     }
   }
 
   const handleDeleteSelected = (ids: string[]) => {
-    setItemsToDelete(ids)
+    const existingIds = new Set(planItems.map((item) => item.id))
+    const validIds = [...new Set(ids)].filter((id) => existingIds.has(id))
+    if (validIds.length === 0) return
+    setItemsToDelete(validIds)
     setDeleteMode("SELECTED")
     setIsDeleteModalOpen(true)
   }

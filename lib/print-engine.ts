@@ -130,7 +130,7 @@ export function executePrintEngine({
           print-color-adjust: exact !important; 
         }
         html, body { width: 100%; height: 100%; background: #ffffff; color: #0f172a; }
-        .sheet { position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 16mm 18mm 14mm 18mm; display: flex; flex-direction: column; overflow: hidden; }
+        .sheet { position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 16mm 18mm 14mm 18mm; display: flex; flex-direction: column; overflow: visible; }
         .watermark-bg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(${watermarkScale}); width: 450px; max-height: 450px; opacity: ${watermarkOpacity}; z-index: 0; pointer-events: none; display: flex; align-items: center; justify-content: center; mix-blend-mode: multiply; }
         .watermark-bg img { width: 100%; height: 100%; object-fit: contain; ${filterStyle} }
         .document-body { position: relative; z-index: 10; flex: 1; display: flex; flex-direction: column; }

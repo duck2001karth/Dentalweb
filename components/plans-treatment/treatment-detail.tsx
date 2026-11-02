@@ -60,10 +60,12 @@ export function TreatmentPlanDetail({
   const patientAge = patient?.age || calculateAge(patient?.birthDate)
 
   const handlePrint = (mode: PrintMode = "COMPLETO") => {
-    const subtotal = state.calculatedTotals.subtotal
+    const subtotal = state.planItems.reduce(
+      (sum: number, item: any) => sum + Number(item.cost ?? item.price ?? 0), 0
+    )
     const discountPct = state.discountPercent
-    const discountAmt = subtotal * (discountPct / 100)
-    const finalTotal = Math.max(0, subtotal - discountAmt)
+    const finalTotal = state.calculatedTotals.subtotal
+    const discountAmt = Math.max(0, subtotal - finalTotal)
     const autoRecoveredSignature = state.currentPlan?.patient?.signatureBase64 || patient?.signatureBase64
 
     printTreatmentPlanSheet({
@@ -215,7 +217,7 @@ export function TreatmentPlanDetail({
               ...proc,
               sectionId: sectionId !== undefined ? sectionId : activeSectionId
             }
-            await (handlers.handleAddManualProcedure as any)(finalProc, toothOrRegionValue)
+            return await handlers.handleAddManualProcedure(finalProc, toothOrRegionValue)
           }}
           isAddingProcedure={state.isAddingProcedure}
           targetToothOrRegion={state.targetToothOrRegion}

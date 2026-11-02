@@ -13,7 +13,7 @@ interface PrintClinicalDocOptions {
   settings?: any
 }
 
-// Función para asegurar que la firma sea una imagen base64 válida
+
 function sanitizeSig(sig?: string | null): string | null {
   if (!sig || typeof sig !== "string") return null
   const clean = sig.trim()
@@ -53,7 +53,7 @@ export function printClinicalDocSheet({
 
   const patientSigUrl = sanitizeSig(doc.patientSignature)
   const doctorSigUrl = sanitizeSig(doc.doctorSignature || doc.author?.signatureBase64)
-  const clinicName = escapeHTML(settings?.clinicName?.trim() || "Carmo Dental")
+  const clinicName = escapeHTML(settings?.clinicName?.trim() || "Clinica Odontológica")
 
   const customPatientCard = `
     <style>
@@ -78,7 +78,9 @@ export function printClinicalDocSheet({
         <div class="c-title">${activeDoctorName}</div>
         <div class="c-sub">
           <b>Especialidad:</b> ${activeSpecialty} &nbsp; &nbsp;
-          <b>Matrícula:</b> ${activeLicense}
+        </div>
+        <div class="c-sub">
+          <b>Matrícula:</b> ${activeLicense} &nbsp; &nbsp;
         </div>
       </div>
     </div>
