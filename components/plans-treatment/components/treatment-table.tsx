@@ -60,7 +60,6 @@ interface TreatmentItem {
   sectionId?: string | null
 }
 
-// --- 1. COMPONENTE PARA LA FILA ARRASTRABLE ---
 function SortableItemRow({ 
   item, 
   isSelected, 
@@ -70,7 +69,8 @@ function SortableItemRow({
   setEditingItemId, 
   tempItemDiscount, 
   setTempItemDiscount, 
-  handleSaveItemDiscount, 
+  handleSaveItemDiscount,
+  isSavingDiscount,
   globalDiscount, 
   currencySymbol 
 }: any) {
@@ -85,8 +85,19 @@ function SortableItemRow({
     boxShadow: isDragging ? "0 10px 15px -3px rgba(0, 0, 0, 0.1)" : "none",
   }
 
+  const isGeneralConsultation = /\b(consulta|consultas|valoraci[oó]n|evaluaci[oó]n)\b/i.test(String(item.procedureName || item.name || ""))
   const currentProg = item.progress || (item.isCompleted ? 100 : 0)
   const itemDiscount = Number(item.discount || 0)
+  const discountText = String(tempItemDiscount ?? "").trim()
+  const discountValue = Number(discountText)
+
+  const isEditingDiscount = editingItemId === item.id
+
+  const isDiscountValid =
+    discountText !== "" &&
+    Number.isFinite(discountValue) &&
+    discountValue >= 0 &&
+    discountValue <= 100
   const effectiveDiscount = itemDiscount > 0 ? itemDiscount : globalDiscount
   const basePrice = Number(item.cost ?? item.price ?? 0)
   const finalItemPrice = basePrice - basePrice * (effectiveDiscount / 100)
@@ -121,8 +132,8 @@ function SortableItemRow({
       </td>
       <td className="px-4 py-3 text-center w-12">
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button className="w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110 focus:outline-none cursor-pointer mx-auto">
+          <DropdownMenuTrigger asChild disabled={isGeneralConsultation}>
+            <button disabled={isGeneralConsultation} title={isGeneralConsultation ? "Las consultas se registran en historia clínica" : "Registrar evolución"} className="w-8 h-8 rounded-full flex items-center justify-center transition-transform hover:scale-110 focus:outline-none cursor-pointer mx-auto">
               {currentProg === 100 ? (
                 <CheckCircle2 className="w-6 h-6 text-emerald-500 fill-emerald-100 dark:fill-emerald-950/50" />
               ) : currentProg > 0 ? (
@@ -163,11 +174,35 @@ function SortableItemRow({
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-48 p-3 bg-card border-border shadow-xl rounded-xl" align="center">
-            <p className="text-xs font-bold text-muted-foreground mb-2">Descuento ítem (%)</p>
-            <div className="flex gap-2">
-              <Input type="number" min="0" max="100" value={tempItemDiscount} onChange={(e) => setTempItemDiscount(e.target.value)} className="h-8 text-xs font-bold bg-background border-border rounded-lg" />
-              <Button size="sm" onClick={() => handleSaveItemDiscount(item.id)} className="h-8 px-3 bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold text-xs rounded-lg cursor-pointer">OK</Button>
-            </div>
+            <p className="text-xs font-bold text-muted-foreground mb-2">Descuento ítem (%)</p>         
+            <div className="flex gap-2"> <Input type="number" min="0" max="100"
+    step="0.01"
+    value={tempItemDiscount}
+    onChange={(e) => setTempItemDiscount(e.target.value)}
+    aria-invalid={isEditingDiscount && !isDiscountValid}
+    className={`h-8 text-xs font-bold bg-background rounded-lg ${
+          isEditingDiscount && !isDiscountValid
+            ? "border-red-500 focus-visible:ring-red-500"
+            : "border-border"
+        }`}
+      />
+
+      <Button
+        size="sm"
+        disabled={!isDiscountValid || isSavingDiscount}
+        onClick={() => handleSaveItemDiscount(item.id)}
+        className="h-8 px-3 bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold text-xs rounded-lg cursor-pointer"
+      >
+        OK
+      </Button>
+    </div>
+
+    {isEditingDiscount && !isDiscountValid && (
+      <p className="mt-2 text-[10px] font-semibold text-red-500">
+        Ingresa un descuento entre 0% y 100%.
+      </p>
+    )}
+
           </PopoverContent>
         </Popover>
       </td>
@@ -245,10 +280,44 @@ export function TreatmentTable({
   const [tempItemDiscount, setTempItemDiscount] = useState<string>("0")
   const [isMoving, setIsMoving] = useState(false)
   const [itemsList, setItemsList] = useState<any[]>(planItems)
+  
+  const [isSavingDiscount, setIsSavingDiscount] = useState(false)
+
+  const handleValidatedItemDiscount = async (id: string) => {
+    if (isSavingDiscount) return
+
+    const text = String(tempItemDiscount ?? "").trim()
+    const value = Number(text)
+
+    if (text === "" || !Number.isFinite(value) || value < 0 || value > 100) {
+      toast({
+        title: "Descuento inválido",
+        description: "Ingresa un porcentaje entre 0% y 100%.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!onUpdateItemDiscount) return
+
+    try {
+      setIsSavingDiscount(true)
+      const result = await onUpdateItemDiscount(id, value)
+      if (result === false) return
+      setEditingItemId(null)
+    } catch {
+      toast({
+        title: "Error al guardar",
+        description: "No se pudo actualizar el descuento.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSavingDiscount(false)
+    }
+  }
 
   useEffect(() => {
     setItemsList(planItems)
-    // Elimina IDs de prestaciones borradas del estado de selección de la tabla.
     const activeIds = new Set(planItems.map((item: { id: string }) => item.id))
     setSelectedItemIds((prev) => {
       const next = prev.filter((id) => activeIds.has(id))
@@ -256,13 +325,11 @@ export function TreatmentTable({
     })
   }, [planItems])
 
-  // Configuración de sensores para DND
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }), 
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   )
 
-  // LOGICA AVANZADA: Mover a base de datos al soltar el drag & drop
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event
     if (!over) return
@@ -391,7 +458,7 @@ export function TreatmentTable({
                   
                   {/* Ítems Sin Fase */}
                   {unassignedItems.map(item => (
-                     <SortableItemRow key={item.id} item={item} isSelected={selectedItemIds.includes(item.id)} toggleSelectItem={toggleSelectItem} openEvolutionModal={openEvolutionModal} editingItemId={editingItemId} setEditingItemId={setEditingItemId} tempItemDiscount={tempItemDiscount} setTempItemDiscount={setTempItemDiscount} handleSaveItemDiscount={(id: string) => { if(onUpdateItemDiscount) onUpdateItemDiscount(id, parseFloat(tempItemDiscount)); setEditingItemId(null) }} globalDiscount={planDiscountPercent} currencySymbol={currencySymbol} />
+                     <SortableItemRow key={item.id} item={item} isSelected={selectedItemIds.includes(item.id)} toggleSelectItem={toggleSelectItem} openEvolutionModal={openEvolutionModal} editingItemId={editingItemId} setEditingItemId={setEditingItemId} tempItemDiscount={tempItemDiscount} setTempItemDiscount={setTempItemDiscount} handleSaveItemDiscount={handleValidatedItemDiscount} isSavingDiscount={isSavingDiscount} globalDiscount={planDiscountPercent} currencySymbol={currencySymbol} />
                   ))}
 
                   {/* Fases y sus Prestaciones */}
@@ -441,7 +508,7 @@ export function TreatmentTable({
                         {/* Ítems o Espacio vacío Droppable */}
                         {secItems.length > 0 ? (
                           secItems.map((item: any) => (
-                            <SortableItemRow key={item.id} item={item} isSelected={selectedItemIds.includes(item.id)} toggleSelectItem={toggleSelectItem} openEvolutionModal={openEvolutionModal} editingItemId={editingItemId} setEditingItemId={setEditingItemId} tempItemDiscount={tempItemDiscount} setTempItemDiscount={setTempItemDiscount} handleSaveItemDiscount={(id: string) => { if(onUpdateItemDiscount) onUpdateItemDiscount(id, parseFloat(tempItemDiscount)); setEditingItemId(null) }} globalDiscount={planDiscountPercent} currencySymbol={currencySymbol} />
+                            <SortableItemRow key={item.id} item={item} isSelected={selectedItemIds.includes(item.id)} toggleSelectItem={toggleSelectItem} openEvolutionModal={openEvolutionModal} editingItemId={editingItemId} setEditingItemId={setEditingItemId} tempItemDiscount={tempItemDiscount} setTempItemDiscount={setTempItemDiscount} handleSaveItemDiscount={handleValidatedItemDiscount} isSavingDiscount={isSavingDiscount} globalDiscount={planDiscountPercent} currencySymbol={currencySymbol} />
                           ))
                         ) : (
                           <DroppableEmptyState sectionId={sec.id}>

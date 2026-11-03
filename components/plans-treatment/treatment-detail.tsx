@@ -129,8 +129,12 @@ export function TreatmentPlanDetail({
                   if (tooth > 0) {
                     setActiveSectionId(null)
                     setters.setTargetToothOrRegion(String(tooth))
-                    setters.setIsCatalogModalOpen(true)
                   }
+                }}
+                onOpenCatalog={(tooth: number) => {
+                  setActiveSectionId(null)
+                  setters.setTargetToothOrRegion(String(tooth))
+                  setters.setIsCatalogModalOpen(true)
                 }}
                 onPlanUpdate={handlers.refreshPlanData}
               />
@@ -159,6 +163,10 @@ export function TreatmentPlanDetail({
               }}
               onDeleteSelectedItems={handlers.handleDeleteSelected}
               openEvolutionModal={(item: any, prog: number) => {
+                if (/\b(consulta|consultas|valoraci[oó]n|evaluaci[oó]n)\b/i.test(String(item.procedureName || item.name || ""))) {
+                  toast({ title: "Evolución no disponible", description: "Las consultas generales se documentan en historia clínica.", variant: "destructive" })
+                  return
+                }
                 setters.setSelectedItemToEvolve(item)
                 setters.setEvolutionProgress(prog)
                 setters.setEvolutionNote(item.evolutionNote || "")
@@ -178,7 +186,8 @@ export function TreatmentPlanDetail({
               isSavingComment={isSavingComment}
               planSignature={state.currentPlan?.patient?.signatureBase64 || patient?.signatureBase64} 
               setIsSignatureModalOpen={setters.setIsSignatureModalOpen} 
-              signedConsents={state.signedConsents} 
+              signedConsents={state.signedConsents}
+              approvalTotal={state.calculatedTotals.subtotal} 
               onPlanUpdate={handlers.refreshPlanData}
               currentUser={currentUser}
               onApproveWithSavedSignature={handlers.handleApprovePlan} 

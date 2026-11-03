@@ -67,6 +67,14 @@ export function TreatmentPlanModals({
   handleSaveDiagnosis,
 }: any) {
   const [isSubmittingSection, setIsSubmittingSection] = useState(false)
+  const discountText = String(tempDiscount ?? "").trim()
+  const discountValue = Number(discountText)
+
+  const isDiscountValid =
+    discountText !== "" &&
+    Number.isFinite(discountValue) &&
+    discountValue >= 0 &&
+    discountValue <= 100
 
   const onSectionSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -136,37 +144,61 @@ export function TreatmentPlanModals({
           </form>
         </DialogContent>
       </Dialog>
-
       {/* 2. MODAL DESCUENTO GLOBAL */}
       <Dialog open={isDiscountModalOpen} onOpenChange={setIsDiscountModalOpen}>
         <DialogContent className="sm:max-w-[400px] bg-card text-card-foreground border-border rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold">Descuento Comercial</DialogTitle>
+            <DialogTitle className="text-lg font-bold">
+              Descuento Comercial
+            </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Porcentaje global aplicado al presupuesto total del plan.
             </DialogDescription>
           </DialogHeader>
+
           <div className="py-4">
             <div className="relative">
               <Input
                 type="number"
                 min="0"
                 max="100"
+                step="0.01"
                 value={tempDiscount}
                 onChange={(e) => setTempDiscount(e.target.value)}
-                className="pr-10 bg-background border-border text-lg font-bold font-mono"
+                aria-invalid={!isDiscountValid}
+                className={`pr-10 bg-background text-lg font-bold font-mono ${
+                  !isDiscountValid
+                    ? "border-red-500 focus-visible:ring-red-500"
+                    : "border-border"
+                }`}
               />
+
               <span className="absolute right-3 top-1/2 -translate-y-1/2 font-extrabold text-muted-foreground">
                 %
               </span>
             </div>
+
+            {!isDiscountValid && (
+              <p className="mt-2 text-xs font-semibold text-red-500">
+                Ingresa un descuento válido entre 0% y 100%.
+              </p>
+            )}
           </div>
+
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setIsDiscountModalOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setIsDiscountModalOpen(false)}
+            >
               Cancelar
             </Button>
+
             <Button
-              onClick={handleApplyDiscount}
+              onClick={() => {
+                if (!isDiscountValid) return
+                handleApplyDiscount()
+              }}
+              disabled={!isDiscountValid}
               className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold"
             >
               Aplicar Descuento
@@ -174,6 +206,7 @@ export function TreatmentPlanModals({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
 
       {/* 3. MODAL CATÁLOGO DESACOPLADO CON FASE ACTIVA */}
       <TreatmentCatalogModal

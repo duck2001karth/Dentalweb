@@ -2,6 +2,7 @@ import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
 import { headers } from "next/headers"
+import { NextResponse } from "next/server"
 
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
@@ -78,6 +79,11 @@ export const POST = createApiHandler(
       throw new Error("Faltan datos obligatorios (Paciente o Nombre)")
     }
 
+    const percentage = Number(input.commercialDiscount ?? 0)
+    if (!Number.isFinite(percentage) || percentage < 0 || percentage > 100) {
+      return NextResponse.json({ error: "Descuento comercial fuera de rango (0-100)" }, { status: 400 })
+    }
+    // El servidor, nunca el navegador, determina el estado y el saldo inicial.
     const headersList = await headers()
     const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
     const userAgent = headersList.get("user-agent") || "Desconocido"
@@ -89,11 +95,11 @@ export const POST = createApiHandler(
           patientId: input.patientId,
           doctorId: input.doctorId,
           agreementId: input.agreementId || null,
-          commercialDiscount: Number(input.commercialDiscount || 0),
+          commercialDiscount: percentage,
           collaborators: input.collaborators || [],
-          status: input.status || "DRAFT",
-          totalCost: input.totalCost || 0,
-          totalPaid: input.totalPaid || 0,
+          status: "DRAFT",
+          totalCost: 0,
+          totalPaid: 0,
         },
         include: {
           agreement: true, patient: true, doctor: true, items: true,

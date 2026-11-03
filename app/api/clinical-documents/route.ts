@@ -10,8 +10,17 @@ export const GET = createApiHandler(
     const patientId = searchParams.get("patientId")
     if (!patientId) throw new Error("Falta el ID del paciente")
 
+    const treatmentPlanId = searchParams.get("treatmentPlanId")
+    if (treatmentPlanId) {
+      const plan = await prisma.treatmentPlan.findFirst({
+        where: { id: treatmentPlanId, patientId },
+        select: { id: true },
+      })
+      if (!plan) throw new Error("El plan no corresponde al paciente")
+    }
+
     const docs = await prisma.clinicalDocument.findMany({
-      where: { patientId },
+      where: { patientId, ...(treatmentPlanId ? { treatmentPlanId } : {}) },
       include: {
         author: {
           select: { id: true, name: true, image: true },
@@ -32,6 +41,7 @@ export const POST = createApiHandler(
   async (req, { user, data }) => {
     const {
       patientId,
+      treatmentPlanId,
       title,
       content,
       specialistName,
@@ -57,9 +67,17 @@ export const POST = createApiHandler(
     const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const document = await prisma.$transaction(async (tx) => {
+      if (treatmentPlanId) {
+        const plan = await tx.treatmentPlan.findFirst({
+          where: { id: treatmentPlanId, patientId },
+          select: { id: true },
+        })
+        if (!plan) throw new Error("El plan no corresponde al paciente")
+      }
       const created = await tx.clinicalDocument.create({
         data: {
           patientId,
+          treatmentPlanId: treatmentPlanId || null,
           title: cleanTitle,
           content: cleanContent,
           specialistName: cleanSpecialistName,
@@ -84,6 +102,7 @@ export const POST = createApiHandler(
           details: `Creación de documento legal/clínico: "${created.title}"`,
           newData: {
             title: created.title,
+            treatmentPlanId: created.treatmentPlanId,
             specialistName: created.specialistName,
             hasDoctorSignature: Boolean(created.doctorSignature),
             hasPatientSignature: Boolean(created.patientSignature),

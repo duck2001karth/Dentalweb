@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db"
 import { z } from "zod"
 import { headers } from "next/headers"
 import crypto from "crypto"
+import { NextResponse } from "next/server"
 
 // Función original intacta
 const normalizePrismaPaymentMethod = (method?: string): string => {
@@ -14,7 +15,7 @@ const normalizePrismaPaymentMethod = (method?: string): string => {
     case "TARJETA_DEBITO": case "TARJETA_DE_DEBITO": case "DEBIT_CARD": return "DEBIT_CARD"
     case "TRANSFERENCIA": case "TRANSFERENCIA_BANCARIA": case "TRANSFER": case "DEUNA": case "DE_UNA": case "BANCO_PICHINCHA": case "BANCO_GUAYAQUIL": case "PRODUBANCO": case "QR": return "TRANSFER"
     case "CHEQUE": case "CHECK": return "CHECK"
-    default: return "CASH"
+    default: throw new Error("Método de pago no reconocido")
   }
 }
 
@@ -91,136 +92,134 @@ export const GET = createApiHandler(
 )
 
 export const POST = createApiHandler(
-  { roles: ["ADMIN", "RECEPTIONIST", "DOCTOR"], schema: z.any() },
-  async (req, { user, data }) => {
-    const { patientId, amount, paymentMethod, method, reference, itemIds, receiptImage, treatmentPlanId, receiptNumber, notes } = data
-    const parsedAmount = parseFloat(amount || 0)
+  { roles: ["ADMIN", "RECEPTIONIST", "DOCTOR"], schema: z.object({
+    patientId: z.string().min(1),
+    amount: z.coerce.number().finite().positive(),
+    paymentMethod: z.string().optional(),
+    method: z.string().optional(),
+    reference: z.string().nullable().optional(),
+    itemIds: z.array(z.string().min(1)).optional(),
+    receiptImage: z.string().nullable().optional(),
+    treatmentPlanId: z.string().min(1),
+    receiptNumber: z.string().nullable().optional(),
+    notes: z.string().nullable().optional(),
+  }) },
+  async (_req, { user, data }) => {
+    const { patientId, amount, paymentMethod, method, reference, itemIds,
+      receiptImage, treatmentPlanId, receiptNumber, notes } = data
+    const validMethod = normalizePrismaPaymentMethod(paymentMethod || method)
+    const ids = [...new Set(itemIds ?? [])]
 
-    if (!patientId || parsedAmount <= 0) throw new Error("Monto o paciente no válido")
-
-    const patientExists = await prisma.patient.findUnique({ where: { id: patientId }, select: { id: true } })
-    if (!patientExists) throw new Error("El paciente indicado no existe")
-
-    const validProcessorId = user.id
-    let targetItemIds: string[] = Array.isArray(itemIds) ? [...itemIds] : []
-
-    if (targetItemIds.length === 0 && treatmentPlanId) {
-      const planItems = await prisma.treatmentItem.findMany({ where: { treatmentPlanId }, orderBy: { id: "asc" } })
-      for (const item of planItems) {
-        const cost = Number(item.cost || 0)
-        const dscto = Number(item.discount || 0)
-        const finalCost = cost - cost * (dscto / 100)
-        const paid = Number(item.paidAmount || 0)
-        if (finalCost - paid > 0 && !item.isPaid) {
-          targetItemIds.push(item.id)
-        }
-      }
+    if (!ids.length) {
+      return NextResponse.json({ error: "Selecciona las prestaciones que se abonarán" }, { status: 400 })
+    }
+    if (!Number.isInteger(Math.round(amount * 100)) || Math.round(amount * 100) <= 0) {
+      return NextResponse.json({ error: "Monto inválido" }, { status: 400 })
     }
 
+    const headersList = await headers()
+    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      headersList.get("x-real-ip") || "127.0.0.1"
+    const userAgent = headersList.get("user-agent") || "Desconocido"
+
+    // SERIALIZABLE permite reintentar la operación completa si hay conflicto.
+    // Para idempotencia fuerte se requiere una clave única persistida por intento.
     const result = await prisma.$transaction(async (tx) => {
-      let remainingMoneyToDistribute = parsedAmount
-      const planIdsToUpdate = new Set<string>()
-      const paidSnapshotItems: any[] = []
-
-      if (treatmentPlanId) planIdsToUpdate.add(treatmentPlanId)
-
-      if (targetItemIds.length > 0) {
-        const itemsToPay = await tx.treatmentItem.findMany({ where: { id: { in: targetItemIds } }, orderBy: { id: "asc" } })
-        for (const item of itemsToPay) {
-          if (remainingMoneyToDistribute <= 0) break
-          planIdsToUpdate.add(item.treatmentPlanId)
-
-          const cost = Number(item.cost || 0)
-          const dscto = Number(item.discount || 0)
-          const itemFinalPrice = cost - cost * (dscto / 100)
-          const currentPaid = Number(item.paidAmount || 0)
-          const pendingDebt = Math.max(0, itemFinalPrice - currentPaid)
-          const moneyForThisItem = Math.min(remainingMoneyToDistribute, pendingDebt)
-          const newPaidAmount = currentPaid + moneyForThisItem
-          const isFullyPaid = newPaidAmount >= itemFinalPrice - 0.01
-
-          await tx.treatmentItem.update({
-            where: { id: item.id },
-            data: { paidAmount: newPaidAmount, isPaid: isFullyPaid },
-          })
-
-          paidSnapshotItems.push({
-            procedureName: item.procedureName || "Procedimiento Odontológico",
-            tooth: item.tooth || "General",
-            appliedAmount: moneyForThisItem,
-          })
-
-          remainingMoneyToDistribute -= moneyForThisItem
+      const plan = await tx.treatmentPlan.findUnique({
+        where: { id: treatmentPlanId },
+        select: { id: true, patientId: true, commercialDiscount: true,
+          agreement: { select: { discountValue: true } } },
+      })
+      if (!plan || plan.patientId !== patientId) {
+        return { error: "El plan no pertenece al paciente", status: 400 } as const
+      }
+      const selectedItems = await tx.treatmentItem.findMany({
+        where: { treatmentPlanId, id: { in: ids } },
+        orderBy: { id: "asc" },
+      })
+      if (selectedItems.length !== ids.length) {
+        return { error: "Una o más prestaciones no pertenecen al plan", status: 400 } as const
+      }
+      const globalDiscount = Number(plan.commercialDiscount || 0) > 0
+        ? Number(plan.commercialDiscount)
+        : Number(plan.agreement?.discountValue || 0)
+      if (!Number.isFinite(globalDiscount) || globalDiscount < 0 || globalDiscount > 100) {
+        return { error: "Descuento global inválido", status: 400 } as const
+      }
+      const allocations = selectedItems.map(item => {
+        const cost = Number(item.cost ?? 0)
+        const individual = Number(item.discount ?? 0)
+        const discount = individual > 0 ? individual : globalDiscount
+        if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(discount) || discount < 0 || discount > 100) {
+          throw new Error("Costo o descuento de prestación inválido")
         }
+        const dueCents = Math.max(0, Math.round(cost * (100 - discount)) -
+          Math.round(Number(item.paidAmount ?? 0) * 100))
+        return { item, dueCents }
+      })
+      const amountCents = Math.round(amount * 100)
+      const totalDue = allocations.reduce((a, b) => a + b.dueCents, 0)
+      if (amountCents > totalDue) {
+        return { error: "El pago supera el saldo de las prestaciones seleccionadas", status: 400 } as const
+      }
+      if (totalDue <= 0) {
+        return { error: "Las prestaciones seleccionadas no tienen saldo", status: 400 } as const
       }
 
-      for (const planId of Array.from(planIdsToUpdate)) {
-        const allPlanItems = await tx.treatmentItem.findMany({ where: { treatmentPlanId: planId } })
-        let totalPaidForPlan = 0
-        let allItemsPaid = false
-
-        if (allPlanItems.length > 0) {
-          totalPaidForPlan = allPlanItems.reduce((acc, i) => acc + (Number(i.paidAmount) || 0), 0)
-          allItemsPaid = allPlanItems.every(
-            (i) => i.isPaid || (Number(i.paidAmount) || 0) >= Number(i.cost || 0) - Number(i.cost || 0) * (Number(i.discount || 0) / 100) - 0.01
-          )
-        } else {
-          const currentPlan = await tx.treatmentPlan.findUnique({ where: { id: planId } })
-          totalPaidForPlan = (Number(currentPlan?.totalPaid) || 0) + parsedAmount
-        }
-
-        await tx.treatmentPlan.update({
-          where: { id: planId },
-          data: { totalPaid: totalPaidForPlan, status: allItemsPaid ? "COMPLETED" : "ACTIVE" },
+      let remaining = amountCents
+      const applied: Array<{ id: string; procedureName: string; tooth: string; appliedAmount: number }> = []
+      for (const { item, dueCents } of allocations) {
+        const cents = Math.min(remaining, dueCents)
+        if (!cents) continue
+        const newPaid = (Math.round(Number(item.paidAmount ?? 0) * 100) + cents) / 100
+        await tx.treatmentItem.update({
+          where: { id: item.id },
+          data: { paidAmount: newPaid, isPaid: cents === dueCents },
         })
+        applied.push({ id: item.id, procedureName: item.procedureName || "Prestación",
+          tooth: item.tooth || "General", appliedAmount: cents / 100 })
+        remaining -= cents
       }
+      if (remaining !== 0) throw new Error("El pago no pudo asignarse por completo")
 
-      let finalReceiptNumber = receiptNumber?.trim()
-      if (!finalReceiptNumber) {
-        const datePart = new Date().toISOString().slice(2, 10).replace(/-/g, "")
-        const randomPart = crypto.randomBytes(2).toString("hex").toUpperCase()
-        finalReceiptNumber = `REC-${datePart}-${randomPart}`
-      }
+      const allItems = await tx.treatmentItem.findMany({ where: { treatmentPlanId } })
+      const totalPaid = allItems.reduce((sum, item) => sum + Number(item.paidAmount ?? 0), 0)
+      const completed = allItems.length > 0 && allItems.every(item => {
+        const discount = Number(item.discount ?? 0) > 0 ? Number(item.discount) : globalDiscount
+        const net = Math.round(Number(item.cost ?? 0) * (100 - discount)) / 100
+        return Number(item.paidAmount ?? 0) >= net - 0.005
+      })
+      await tx.treatmentPlan.update({ where: { id: treatmentPlanId },
+        data: { totalPaid, status: completed ? "COMPLETED" : "ACTIVE" } })
 
-      const validMethod = normalizePrismaPaymentMethod(paymentMethod || method)
-      const primaryPlanId = treatmentPlanId || null
-      const noteContent = notes?.trim() ? notes : paidSnapshotItems.length > 0 ? JSON.stringify(paidSnapshotItems) : `Cobro en caja: $${parsedAmount.toFixed(2)}`
-
-      const newPayment = await tx.payment.create({
-        data: {
-          patientId, amount: parsedAmount, method: validMethod as any,
+      const finalReceiptNumber = receiptNumber?.trim() ||
+        `REC-${new Date().toISOString().slice(2,10).replace(/-/g, "")}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`
+      const payment = await tx.payment.create({
+        data: { patientId, amount: amountCents / 100, method: validMethod as any,
           reference: reference?.trim() || null, receiptImage: receiptImage || null,
-          treatmentPlanId: primaryPlanId, processedById: validProcessorId || null,
-          notes: noteContent, receiptNumber: finalReceiptNumber,
-        },
+          treatmentPlanId, processedById: user.id, receiptNumber: finalReceiptNumber,
+          notes: notes?.trim() || JSON.stringify(applied) },
         include: {
           patient: { select: { id: true, firstName: true, lastName: true, ci: true } },
           treatmentPlan: { select: { id: true, name: true } },
           processedBy: { select: { id: true, name: true, specialty: true, role: true } },
         },
       })
+      await tx.auditLog.create({ data: {
+        userId: user.id, action: "CREATE_PAYMENT", entity: "PAYMENT",
+        entityId: payment.id, patientId,
+        details: `Cobro registrado: $${amount.toFixed(2)} [${validMethod}] - Recibo #${finalReceiptNumber}`,
+        newData: { amount: amountCents / 100, method: validMethod,
+          receiptNumber: finalReceiptNumber, treatmentPlanId, allocations: applied },
+        ipAddress, userAgent,
+      } })
+      return { payment } as const
+    }, { isolationLevel: "Serializable", timeout: 15000 })
 
-      const headersList = await headers()
-      const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
-
-      await tx.auditLog.create({
-        data: {
-          userId: validProcessorId,
-          action: "CREATE_PAYMENT",
-          entity: "PAYMENT",
-          entityId: newPayment.id,
-          patientId,
-          details: `Cobro registrado: $${parsedAmount.toFixed(2)} [${validMethod}] - Recibo #${finalReceiptNumber}`,
-          newData: { amount: parsedAmount, method: validMethod, reference: reference || null, receiptNumber: finalReceiptNumber, treatmentPlanId: primaryPlanId },
-          ipAddress,
-          userAgent: headersList.get("user-agent") || "Desconocido",
-        },
-      })
-
-      return newPayment
-    })
-
-    return { success: true, message: "Pago registrado y procesado correctamente", payment: result }
+    if ("error" in result) {
+      return NextResponse.json({ error: result.error }, { status: result.status })
+    }
+    return { success: true, message: "Pago registrado correctamente", payment: result.payment }
   }
 )
 
@@ -231,12 +230,14 @@ export const PATCH = createApiHandler(
     if (!paymentId) throw new Error("Se requiere el ID del pago para actualizar")
 
     const { method, paymentMethod, reference, notes, receiptNumber, amount } = data
+    if (amount !== undefined) {
+      return NextResponse.json({ error: "No se permite editar el importe de un pago confirmado. Utiliza el procedimiento contable de ajuste." }, { status: 409 })
+    }
 
     const updatedPayment = await prisma.$transaction(async (tx) => {
       const previous = await tx.payment.findUnique({ where: { id: paymentId } })
       if (!previous) throw new Error("NOT_FOUND")
 
-      const parsedAmount = amount !== undefined ? parseFloat(amount) : undefined
       const rawMethod = method || paymentMethod
       const validMethod = rawMethod ? normalizePrismaPaymentMethod(rawMethod) : undefined
 
@@ -247,7 +248,6 @@ export const PATCH = createApiHandler(
           ...(reference !== undefined && { reference }),
           ...(notes !== undefined && { notes }),
           ...(receiptNumber !== undefined && { receiptNumber }),
-          ...(parsedAmount !== undefined && !isNaN(parsedAmount) && { amount: parsedAmount }),
         },
         include: {
           patient: { select: { id: true, firstName: true, lastName: true, ci: true } },
@@ -256,35 +256,6 @@ export const PATCH = createApiHandler(
         },
       })
 
-      if (updated.treatmentPlanId && parsedAmount !== undefined && parsedAmount !== previous.amount) {
-        const activePayments = await tx.payment.findMany({
-          where: { treatmentPlanId: updated.treatmentPlanId, status: "COMPLETED", NOT: { notes: { contains: "[PAGO ELIMINADO" } } },
-        })
-        const realTotalPaid = activePayments.reduce((acc: number, p: any) => acc + Number(p.amount || 0), 0)
-        
-        const items = await tx.treatmentItem.findMany({ where: { treatmentPlanId: updated.treatmentPlanId }, orderBy: { id: "asc" } })
-        let remaining = realTotalPaid
-        let allCovered = items.length > 0
-
-        for (const item of items) {
-          const cost = Number(item.cost || 0)
-          const dscto = Number(item.discount || 0)
-          const finalPrice = cost - cost * (dscto / 100)
-          let itemPaid = 0
-          if (remaining > 0 && finalPrice > 0) {
-            itemPaid = Math.min(finalPrice, remaining)
-            remaining -= itemPaid
-          }
-          const isFullyPaid = itemPaid >= finalPrice - 0.01 && finalPrice > 0
-          if (!isFullyPaid && finalPrice > 0) allCovered = false
-          await tx.treatmentItem.update({ where: { id: item.id }, data: { paidAmount: itemPaid, isPaid: isFullyPaid } })
-        }
-
-        await tx.treatmentPlan.update({
-          where: { id: updated.treatmentPlanId },
-          data: { totalPaid: realTotalPaid, status: allCovered ? "COMPLETED" : "ACTIVE" },
-        })
-      }
 
       const headersList = await headers()
       const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"

@@ -1,6 +1,7 @@
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { headers } from "next/headers"
+import { NextResponse } from "next/server"
 
 export const DELETE = createApiHandler(
   { roles: ["ADMIN", "DOCTOR"] },
@@ -17,8 +18,11 @@ export const DELETE = createApiHandler(
         include: { plan: { select: { name: true, patientId: true } } }
       })
       if (!section) throw new Error("NOT_FOUND")
+      if (section.treatmentPlanId !== planId) {
+        return NextResponse.json({ error: "La fase no pertenece a este plan" }, { status: 400 })
+      }
 
-      await tx.treatmentItem.updateMany({ where: { sectionId: sectionId as string }, data: { sectionId: null } })
+      await tx.treatmentItem.updateMany({ where: { sectionId: sectionId as string, treatmentPlanId: planId as string }, data: { sectionId: null } })
       await tx.treatmentSection.delete({ where: { id: sectionId as string } })
 
       await tx.auditLog.create({

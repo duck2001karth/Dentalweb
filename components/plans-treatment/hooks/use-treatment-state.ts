@@ -7,7 +7,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
   // --- ESTADOS LOCALES ---
   const [currentPlan, setCurrentPlan] = useState<any>(initialPlan)
   const [planItems, setPlanItems] = useState<TreatmentItem[]>(initialPlan?.items || [])
-  const [discountPercent, setDiscountPercent] = useState<number>(Number(initialPlan?.discount || 0))
+  const [discountPercent, setDiscountPercent] = useState<number>(Number(initialPlan?.commercialDiscount ?? 0))
   const [signedConsents, setSignedConsents] = useState<any[]>([])
   const [collaborators, setCollaborators] = useState<string[]>(() => {
     if (Array.isArray(initialPlan?.collaborators)) return initialPlan.collaborators
@@ -49,8 +49,8 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
     if (initialPlan) {
       setCurrentPlan(initialPlan)
       setPlanItems(initialPlan.items || [])
-      setDiscountPercent(Number(initialPlan.discount || 0))
-      setTempDiscount(String(initialPlan.discount || 0))
+      setDiscountPercent(Number(initialPlan.commercialDiscount ?? 0))
+      setTempDiscount(String(initialPlan.commercialDiscount ?? 0))
       setCollaborators(Array.isArray(initialPlan.collaborators) ? initialPlan.collaborators : [])
       
       if (initialPlan.id) {
@@ -64,9 +64,9 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
                 sections: freshPlan.sections !== undefined ? freshPlan.sections : (prev?.sections || [])
               }))
               setPlanItems(freshPlan.items || [])
-              if (freshPlan.discount !== undefined) {
-                setDiscountPercent(Number(freshPlan.discount))
-                setTempDiscount(String(freshPlan.discount))
+              if (freshPlan.commercialDiscount !== undefined) {
+                setDiscountPercent(Number(freshPlan.commercialDiscount))
+                setTempDiscount(String(freshPlan.commercialDiscount))
               }
               if (Array.isArray(freshPlan.collaborators)) {
                 setCollaborators(freshPlan.collaborators)
@@ -79,16 +79,31 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
   }, [initialPlan?.id])
 
   useEffect(() => {
-    if (patient?.id) {
-      fetch(`/api/clinical-documents?patientId=${patient.id}`)
-        .then(res => res.ok ? res.json() : [])
-        .then(data => {
-          const list = Array.isArray(data) ? data : data.documents || []
-          setSignedConsents(list.filter((doc: any) => doc.patientSignature))
-        })
-        .catch(err => console.error("Error al cargar consentimientos:", err))
+    if (!patient?.id || !initialPlan?.id) {
+      setSignedConsents([])
+      return
     }
-  }, [patient?.id])
+    let cancelled = false
+    const query = new URLSearchParams({
+      patientId: String(patient.id),
+      treatmentPlanId: String(initialPlan.id),
+    })
+    fetch(`/api/clinical-documents?${query.toString()}`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => {
+        if (cancelled) return
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.documents) ? data.documents : [])
+        setSignedConsents(list.filter((doc: any) =>
+          Boolean(doc.patientSignature) &&
+          !doc.isVoided &&
+          String(doc.treatmentPlanId ?? "") === String(initialPlan.id)
+        ))
+      })
+      .catch(err => {
+        if (!cancelled) console.error("Error al cargar consentimientos:", err)
+      })
+    return () => { cancelled = true }
+  }, [patient?.id, initialPlan?.id])
 
   // --- CÁLCULOS EN TIEMPO REAL ---
   const calculatedTotals = useMemo(() => {
@@ -127,9 +142,9 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
         }))
         setPlanItems(fetchedPlan.items || [])
         if (Array.isArray(fetchedPlan.collaborators)) setCollaborators(fetchedPlan.collaborators)
-        if (fetchedPlan.discount !== undefined) {
-          setDiscountPercent(Number(fetchedPlan.discount))
-          setTempDiscount(String(fetchedPlan.discount))
+        if (fetchedPlan.commercialDiscount !== undefined) {
+          setDiscountPercent(Number(fetchedPlan.commercialDiscount))
+          setTempDiscount(String(fetchedPlan.commercialDiscount))
         }
       }
     } catch (e) {
@@ -138,12 +153,17 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
   }
 
   const handleApplyDiscount = async () => {
-    const val = Math.max(0, Math.min(100, parseFloat(tempDiscount) || 0))
+    const raw = String(tempDiscount ?? "").trim()
+    const val = Number(raw)
+    if (raw === "" || !Number.isFinite(val) || val < 0 || val > 100) {
+      toast({ title: "Descuento inválido", description: "Ingresa un porcentaje entre 0% y 100%.", variant: "destructive" })
+      return
+    }
     try {
       const res = await fetch(`/api/treatments/${initialPlan.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ discount: val })
+        body: JSON.stringify({ commercialDiscount: val })
       })
       if (!res.ok) throw new Error()
       
@@ -183,7 +203,11 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
     }
   }
 
-  const handleUpdateItemDiscount = async (itemId: string, itemDiscount: number) => {
+  const handleUpdateItemDiscount = async (itemId: string, itemDiscount: number): Promise<boolean> => {
+    if (!Number.isFinite(itemDiscount) || itemDiscount < 0 || itemDiscount > 100) {
+      toast({ title: "Descuento inválido", description: "Ingresa un porcentaje entre 0% y 100%.", variant: "destructive" })
+      return false
+    }
     try {
       setPlanItems((prev) =>
         prev.map((item) => (item.id === itemId ? { ...item, discount: itemDiscount } : item))
@@ -205,6 +229,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
         variant: "success" 
       })
       await refreshPlanData()
+      return true
     } catch (err: any) {
       toast({
         title: "Error al actualizar descuento",
@@ -212,6 +237,7 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
         variant: "destructive"
       })
       await refreshPlanData()
+      return false
     }
   }
 
@@ -272,6 +298,10 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
 
   const handleSaveEvolution = async (data?: EvolutionInput) => {
     if (!selectedItemToEvolve) return
+    if (/\b(consulta|consultas|valoraci[oó]n|evaluaci[oó]n)\b/i.test(String(selectedItemToEvolve.procedureName || ""))) {
+      toast({ title: "No corresponde evolución", description: "Registra la atención en la historia clínica; las consultas generales no se evolucionan como tratamientos.", variant: "destructive" })
+      return
+    }
     try {
       const progress = data?.progress ?? evolutionProgress
       const res = await fetch(`/api/treatments/items/${selectedItemToEvolve.id}`, {
@@ -298,38 +328,70 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
     }
   }
 
+  const approvalErrorMessage = (code: unknown, status: number): string => {
+    const messages: Record<string, string> = {
+      PLAN_EMPTY: "Agrega al menos una prestación antes de aprobar el presupuesto.",
+      PLAN_NOT_FOUND: "No se encontró el presupuesto solicitado.",
+      PLAN_NOT_DRAFT: "Este presupuesto ya no está pendiente de aprobación.",
+      PLAN_ALREADY_APPROVED: "Este presupuesto ya fue aprobado previamente.",
+      PATIENT_SIGNATURE_REQUIRED: "El paciente debe registrar su firma.",
+      INVALID_DISCOUNT: "El descuento comercial no es válido.",
+      INVALID_GLOBAL_DISCOUNT: "El descuento global no es válido.",
+      INVALID_ITEM_AMOUNT: "Revisa los precios y descuentos de las prestaciones.",
+    }
+    if (typeof code === "string" && messages[code]) return messages[code]
+    if (typeof code === "string" && code.trim()) return code
+    if (status === 404) return "No se encontró la ruta de aprobación o el presupuesto solicitado. Revisa Network → Response."
+    return `No se pudo aprobar el presupuesto (HTTP ${status}).`
+  }
+
   const handleSaveSignature = async (base64Signature: string) => {
+    if (!window.confirm("¿El paciente acepta expresamente este presupuesto y sus condiciones?")) return
     try {
-      await fetch(`/api/treatments/${initialPlan.id}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/treatments/${initialPlan.id}/approve`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ signatureBase64: base64Signature, status: "ACTIVE" })
+        body: JSON.stringify({ confirmed: true, signatureBase64: base64Signature })
       })
-      setCurrentPlan((prev: any) => ({
-        ...prev,
-        status: "ACTIVE",
-        patient: { ...prev.patient, signatureBase64: base64Signature }
-      }))
-      toast({ title: "Presupuesto aprobado", description: "Firma registrada exitosamente.", variant: "success" })
-      setIsSignatureModalOpen(false)
+      if (!res.ok) {
+        const result = await res.json().catch(() => null)
+        throw new Error(approvalErrorMessage(result?.error ?? result?.message, res.status))
+      }
       await refreshPlanData()
-    } catch {
-      toast({ title: "Error", description: "No se pudo vincular la firma.", variant: "destructive" })
+      toast({ title: "Presupuesto aprobado", description: "Aceptación enviada y confirmada por el servidor.", variant: "success" })
+      setIsSignatureModalOpen(false)
+    } catch (error) {
+      toast({ title: "Error al aprobar", description: error instanceof Error ? error.message : "No se pudo registrar la aprobación.", variant: "destructive" })
     }
   }
 
-  const handleApprovePlan = async () => {
+  const handleApprovePlan = async (): Promise<boolean> => {
+    if (currentPlan?.status === "ACTIVE" || currentPlan?.status === "COMPLETED") {
+      toast({ title: "Presupuesto ya aprobado", description: "Este plan ya fue aprobado; no es necesario firmarlo otra vez." })
+      return false
+    }
+    const signature = currentPlan?.patient?.signatureBase64 || patient?.signatureBase64
+    if (!signature) {
+      toast({ title: "Firma requerida", description: "No hay firma guardada para este paciente.", variant: "destructive" })
+      return false
+    }
+
     try {
-      await fetch(`/api/treatments/${initialPlan.id}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/treatments/${initialPlan.id}/approve`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "ACTIVE" })
+        body: JSON.stringify({ confirmed: true }),
       })
-      setCurrentPlan((prev: any) => ({ ...prev, status: "ACTIVE" }))
-      toast({ title: "Presupuesto aprobado", description: "Se ha vinculado la firma del paciente.", variant: "success" })
+      if (!res.ok) {
+        const result = await res.json().catch(() => null)
+        throw new Error(approvalErrorMessage(result?.error ?? result?.message, res.status))
+      }
       await refreshPlanData()
-    } catch {
-      toast({ title: "Error", description: "No se pudo aprobar el plan.", variant: "destructive" })
+      toast({ title: "Presupuesto aprobado", description: "La aprobación fue confirmada por el servidor.", variant: "success" })
+      return true
+    } catch (error) {
+      toast({ title: "Error al aprobar", description: error instanceof Error ? error.message : "No se pudo aprobar el plan.", variant: "destructive" })
+      return false
     }
   }
 

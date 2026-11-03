@@ -1,6 +1,7 @@
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { headers } from "next/headers"
+import { NextResponse } from "next/server"
 
 export const DELETE = createApiHandler(
   { roles: ["ADMIN", "DOCTOR"] },
@@ -14,6 +15,16 @@ export const DELETE = createApiHandler(
     const result = await prisma.$transaction(async (tx) => {
       const plan = await tx.treatmentPlan.findUnique({ where: { id }, include: { items: true } })
       if (!plan) throw new Error("PLAN_NOT_FOUND")
+
+      const paymentCount = await tx.payment.count({ where: { treatmentPlanId: id } })
+      if (paymentCount > 0 || Number(plan.totalPaid) > 0 || plan.items.some( (item) => Number(item.paidAmount) > 0 || item.isPaid
+      )
+    ) {
+      return {
+        blocked: true as const,
+        error: "El plan tiene pagos o abonos registrados; no puede vaciarse.",
+      }
+    }
 
       const deleteResult = await tx.treatmentItem.deleteMany({ where: { treatmentPlanId: id } })
       await tx.treatmentPlan.update({ where: { id }, data: { totalCost: 0 } })
@@ -30,6 +41,17 @@ export const DELETE = createApiHandler(
       return { deletedCount: deleteResult.count, planName: plan.name }
     })
 
-    return { success: true, message: "Presupuesto vaciado correctamente", deletedCount: result.deletedCount }
+    if (result.blocked === true) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: 409 }
+      )
+    }
+
+    return {
+      success: true,
+      message: "Presupuesto vaciado correctamente",
+      deletedCount: result.deletedCount,
+    }
   }
 )

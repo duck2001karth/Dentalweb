@@ -2,6 +2,7 @@ import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
 import { headers } from "next/headers"
+import { NextResponse } from "next/server"
 
 export const POST = createApiHandler(
   {
@@ -31,6 +32,20 @@ export const POST = createApiHandler(
       })
 
       if (!originalPayment) throw new Error("NOT_FOUND")
+      if (!Number.isFinite(refundAmount) || refundAmount <= 0 ||
+          refundAmount > Number(originalPayment.amount)) {
+        return { blocked: true, error: "El reembolso supera el importe del pago original" } as const
+      }
+      // Sin tabla de asignaciones, las devoluciones parciales no pueden
+      // reconstruirse con certeza en planes con múltiples prestaciones.
+      if (originalPayment.treatmentPlanId) {
+        const existingItems = await tx.treatmentItem.count({
+          where: { treatmentPlanId: originalPayment.treatmentPlanId },
+        })
+        if (existingItems !== 1) {
+          return { blocked: true, error: "Devolución bloqueada: se requiere historial de asignación por prestación" } as const
+        }
+      }
 
       if (originalPayment.treatmentPlanId) {
         const plan = await tx.treatmentPlan.findUnique({
@@ -111,6 +126,9 @@ export const POST = createApiHandler(
       return createdNC
     })
 
+    if ("blocked" in creditNoteRecord) {
+      return NextResponse.json({ error: creditNoteRecord.error }, { status: 409 })
+    }
     return {
       success: true,
       message: "Nota de crédito emitida correctamente",

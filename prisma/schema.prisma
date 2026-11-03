@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  //directUrl = env("DIRECT_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ==========================================
@@ -370,6 +370,8 @@ model Prescription {
 }
 
 model ClinicalDocument {
+  treatmentPlanId String?
+  treatmentPlan TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
   id               String   @id @default(uuid())
   patientId        String
   patient          Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
@@ -387,11 +389,14 @@ model ClinicalDocument {
   patientSignature String?  @db.Text 
   
   isVoided         Boolean  @default(false) 
+  @@index([treatmentPlanId])
 
   createdAt        DateTime @default(now())
 }
 
 model TreatmentPlan {
+  approvals TreatmentApproval[]
+  clinicalDocuments ClinicalDocument[]
   id          String   @id @default(cuid())
   patientId   String
   patient     Patient  @relation(fields: [patientId], references: [id])
@@ -869,4 +874,19 @@ model CashRegisterClose {
 
   @@index([userId])
   @@index([createdAt])
+}
+model TreatmentApproval {
+  id String @id @default(cuid())
+  treatmentPlanId String
+  treatmentPlan TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Restrict)
+  patientId String
+  approvedById String
+  approvedAt DateTime @default(now())
+  approvedAmount Float
+  snapshotHash String
+  snapshot Json
+  signatureBase64 String @db.Text
+  evidence Json?
+
+  @@index([treatmentPlanId, approvedAt])
 }

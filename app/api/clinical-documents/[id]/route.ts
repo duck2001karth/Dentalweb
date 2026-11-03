@@ -2,6 +2,7 @@ import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
 import { headers } from "next/headers"
+import { NextResponse } from "next/server"
 import { sanitizeRichHTML, escapeHTML } from "@/lib/sanitize"
 
 export const PUT = createApiHandler(
@@ -21,7 +22,10 @@ export const PUT = createApiHandler(
       const previous = await tx.clinicalDocument.findUnique({ where: { id } })
 
       if (!previous) throw new Error("NOT_FOUND")
-      if (previous.isVoided) throw new Error("No se puede editar un documento anulado")
+      if (previous.isVoided) return NextResponse.json({ error: "El documento está anulado" }, { status: 409 })
+      if (previous.patientSignature || previous.doctorSignature) {
+        return NextResponse.json({ error: "Un documento firmado es inmutable; cree una nueva versión" }, { status: 409 })
+      }
 
       const cleanTitle = data.title !== undefined ? escapeHTML(data.title) : previous.title
       const cleanContent = data.content !== undefined ? sanitizeRichHTML(data.content) : previous.content
@@ -86,6 +90,7 @@ export const DELETE = createApiHandler(
     await prisma.$transaction(async (tx) => {
       const previous = await tx.clinicalDocument.findUnique({ where: { id } })
       if (!previous) throw new Error("NOT_FOUND")
+      if (previous.isVoided) return NextResponse.json({ error: "Documento ya anulado" }, { status: 409 })
 
       await tx.clinicalDocument.update({
         where: { id },

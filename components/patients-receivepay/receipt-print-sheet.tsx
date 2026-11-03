@@ -32,31 +32,9 @@ export function generateReceiptHTML({
   const safeClinicName = escapeHTML(clinic?.name || "nuestra clínica")
   
   const formattedAmount = Number(totalPaid || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })
-
-  // LÓGICA DE DESGLOSE
-  let showBreakdown = false
-  let calcSubtotal = 0
-  let calcDiscount = 0
-  
-  if (items && items.length > 0) {
-    let hasDiscount = false
-    let sumPaid = 0
-    items.forEach(item => {
-      const debt = Number(item.itemDebt || item.appliedAmount || item.finalPrice || totalPaid)
-      const descPerc = Number(item.discountPercent || 0)
-      sumPaid += debt
-      if (descPerc > 0) {
-        hasDiscount = true
-        const original = debt / (1 - (descPerc / 100))
-        calcSubtotal += original
-        calcDiscount += (original - debt)
-      } else {
-        calcSubtotal += debt
-      }
-    })
-    if (hasDiscount && Math.abs(sumPaid - totalPaid) < 0.1) {
-      showBreakdown = true
-    }
+  const receivedAmount = (item: any): number => {
+    const value = Number(item.appliedAmount ?? item.payingAmount ?? 0)
+    return Number.isFinite(value) && value >= 0 ? value : 0
   }
 
   // 1. Tarjeta Personalizada (Diseño 2 Columnas)
@@ -101,7 +79,7 @@ export function generateReceiptHTML({
               <span style="font-size: 11px; font-weight: 700; color: #334155;">${safeToothLabel}</span>
             </td>
             <td style="padding: 12px 8px; text-align: right;">
-              <span style="font-size: 13px; font-weight: 800; color: #0f172a; font-family: monospace;">${currency}${Number(item.itemDebt || item.appliedAmount || item.finalPrice || totalPaid).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+              <span style="font-size: 13px; font-weight: 800; color: #0f172a; font-family: monospace;">${currency}${receivedAmount(item).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
             </td>
           </tr>
         `
@@ -135,25 +113,10 @@ export function generateReceiptHTML({
 
     <div style="display: flex; justify-content: flex-end; margin-bottom: 40px; page-break-inside: avoid; break-inside: avoid;">
       <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px 24px; min-width: 280px; display: flex; flex-direction: column; gap: 8px;">
-        ${showBreakdown ? `
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 11px; font-weight: 600; color: #64748b;">Subtotal de la cuota</span>
-            <span style="font-size: 12px; font-weight: 700; color: #334155; font-family: monospace;">${currency}${calcSubtotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 11px; font-weight: 600; color: #059669;">Descuento aplicado (Convenio)</span>
-            <span style="font-size: 12px; font-weight: 700; color: #059669; font-family: monospace;">-${currency}${calcDiscount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-          </div>
-          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 2px;">
-            <span style="font-size: 13px; font-weight: 800; color: #475569;">Total Abonado</span>
-            <span style="font-size: 22px; font-weight: 900; color: #0f172a; font-family: monospace;">${currency}${formattedAmount}</span>
-          </div>
-        ` : `
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 13px; font-weight: 800; color: #475569;">Total Abonado</span>
-            <span style="font-size: 22px; font-weight: 900; color: #0f172a; font-family: monospace;">${currency}${formattedAmount}</span>
-          </div>
-        `}
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 13px; font-weight: 800; color: #475569;">Total Abonado</span>
+          <span style="font-size: 22px; font-weight: 900; color: #0f172a; font-family: monospace;">${currency}${formattedAmount}</span>
+        </div>
       </div>
     </div>
   `

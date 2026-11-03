@@ -2,6 +2,7 @@ import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
 import { headers } from "next/headers"
+import { NextResponse } from "next/server"
 
 export const PATCH = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"], schema: z.any() },
@@ -10,7 +11,17 @@ export const PATCH = createApiHandler(
     if (!itemId) throw new Error("Falta el ID del ítem")
 
     const { progress, isCompleted, discount, paidAmount, isPaid, tooth, region, note, isPrivate, fileUrl, hasIncident, hasAdverseEvent, doctorId } = data
-    const finalIsCompleted = isCompleted ?? (progress === 100 ? true : undefined)
+    // Los abonos solo pueden modificarse desde la API financiera.
+    if (paidAmount !== undefined || isPaid !== undefined) {
+      return NextResponse.json({ error: "Los importes abonados solo pueden modificarse desde Pagos" }, { status: 403 })
+    }
+    if (progress !== undefined && (!Number.isInteger(Number(progress)) || Number(progress) < 0 || Number(progress) > 100)) {
+      return NextResponse.json({ error: "Progreso inválido (0-100)" }, { status: 400 })
+    }
+    if (discount !== undefined && (!Number.isFinite(Number(discount)) || Number(discount) < 0 || Number(discount) > 100)) {
+      return NextResponse.json({ error: "Descuento inválido (0-100)" }, { status: 400 })
+    }
+    const finalIsCompleted = isCompleted ?? (progress !== undefined && Number(progress) === 100 ? true : undefined)
 
     const headersList = await headers()
     const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
@@ -28,8 +39,6 @@ export const PATCH = createApiHandler(
           ...(progress !== undefined && { progress: Number(progress) }),
           ...(finalIsCompleted !== undefined && { isCompleted: Boolean(finalIsCompleted) }),
           ...(discount !== undefined && { discount: Number(discount) }),
-          ...(paidAmount !== undefined && { paidAmount: Number(paidAmount) }),
-          ...(isPaid !== undefined && { isPaid: Boolean(isPaid) }),
           ...(tooth !== undefined && { tooth: String(tooth) }),
           ...(region !== undefined && { tooth: String(region) }),
           ...(note !== undefined && { evolutionNote: String(note) }),
@@ -43,13 +52,7 @@ export const PATCH = createApiHandler(
 
       if (updated.treatmentPlanId) {
         const allItems = await tx.treatmentItem.findMany({ where: { treatmentPlanId: updated.treatmentPlanId } })
-        const newTotalPaid = allItems.reduce((acc, item) => acc + (Number(item.paidAmount) || 0), 0)
-
-        let commercialDisc = 0
-        if (previousItem.plan?.commentsToPatient) {
-          const match = previousItem.plan.commentsToPatient.match(/\[COMMERCIAL_DISCOUNT:([\d.]+)\]/)
-          if (match) commercialDisc = parseFloat(match[1]) || 0
-        }
+        const commercialDisc = Number(previousItem.plan?.commercialDiscount ?? 0)
 
         const agreementDisc = previousItem.plan?.agreement ? Number(previousItem.plan.agreement.discountValue || 0) : 0
         const globalDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
@@ -63,7 +66,7 @@ export const PATCH = createApiHandler(
 
         await tx.treatmentPlan.update({
           where: { id: updated.treatmentPlanId },
-          data: { totalCost: newTotalCost, totalPaid: newTotalPaid }
+          data: { totalCost: Math.round(newTotalCost * 100) / 100 }
         })
       }
 

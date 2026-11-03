@@ -21,6 +21,7 @@ interface OdontogramTabProps {
   planId?: string
   isPlanView?: boolean
   onToothClickCallback?: (tooth: number) => void
+  onOpenCatalog?: (tooth: number) => void
   onPlanUpdate?: () => void
 }
 
@@ -29,6 +30,7 @@ export function OdontogramaTab({
   planId,
   isPlanView = false,
   onToothClickCallback,
+  onOpenCatalog,
   onPlanUpdate,
 }: OdontogramTabProps) {
   const { data: session } = useSession()
@@ -215,7 +217,11 @@ export function OdontogramaTab({
           setCurrentSurfaces([])
         }}
         planId={planId}
-        setIsCatalogModalOpen={() => {}}
+        setIsCatalogModalOpen={(open: boolean) => {
+          if (open && selectedTooth !== null) {
+            onOpenCatalog?.(selectedTooth)
+          }
+        }}
         selectedStatus={selectedStatus}
         setSelectedStatus={setSelectedStatus}
         recordComment={recordComment}

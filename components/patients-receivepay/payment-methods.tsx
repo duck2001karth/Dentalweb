@@ -48,11 +48,19 @@ export function PaymentMethodsEcuador({
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onloadend = () => setReceiptImage(reader.result as string)
-      reader.readAsDataURL(file)
+    if (!file) return
+    const allowed = ["image/png", "image/jpeg", "image/webp"]
+    if (!allowed.includes(file.type) || file.size > 3 * 1024 * 1024) {
+      window.alert("Adjunta una imagen PNG, JPEG o WebP de hasta 3 MB.")
+      e.target.value = ""
+      return
     }
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === "string") setReceiptImage(reader.result)
+    }
+    reader.onerror = () => window.alert("No se pudo leer el comprobante.")
+    reader.readAsDataURL(file)
   }
 
   const isCard = paymentMethod.startsWith("TARJETA")

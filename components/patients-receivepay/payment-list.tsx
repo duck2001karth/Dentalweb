@@ -17,7 +17,7 @@ export function PaymentItemsList({
   onToggleItem,
   onToggleAll,
 }: PaymentItemsListProps) {
-  const allSelected = pendingItems.length > 0 && selectedItemIds.length === pendingItems.length
+  const allSelected = pendingItems.length > 0 && pendingItems.every((item: any) => selectedItemIds.includes(item.id))
 
   if (pendingItems.length === 0) {
     return (
@@ -82,7 +82,6 @@ export function PaymentItemsList({
                     }`}
                   >
                     <td className="py-2.5 px-3 align-middle text-center">
-                      {/* 💥 SE ELIMINÓ onCheckedChange Y SE AGREGÓ pointer-events-none PARA SOLUCIONAR EL DOBLE CLIC */}
                       <Checkbox
                         checked={isSelected}
                         className="w-3.5 h-3.5 rounded-[3px] data-[state=checked]:bg-[#008bcd] data-[state=checked]:border-[#008bcd] mx-auto pointer-events-none"

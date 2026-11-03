@@ -2,6 +2,7 @@ import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
 import { headers } from "next/headers"
+import { NextResponse } from "next/server"
 
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
@@ -37,6 +38,15 @@ export const PATCH = createApiHandler(
   async (req, { user, params, data }) => {
     const id = params.id as string
     const { action, input, collaborators, agreementId, agreementName, discount, ...restBody } = data
+    // B2: ningún cliente puede activar el plan por PATCH.
+    const candidate = input && typeof input === "object" ? input : restBody
+    if (candidate?.status === "ACTIVE" || data?.status === "ACTIVE") {
+      throw new Error("USE_APPROVAL_ENDPOINT")
+    }
+    const existing = await prisma.treatmentPlan.findUnique({ where: { id }, select: { status: true } })
+    if (existing?.status === "ACTIVE" && (discount !== undefined || agreementId !== undefined || agreementName !== undefined || candidate?.commentsToPatient !== undefined || candidate?.comments !== undefined || candidate?.signatureBase64 !== undefined)) {
+      throw new Error("APPROVED_PLAN_LOCKED")
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const previousPlan = await tx.treatmentPlan.findUnique({
@@ -106,15 +116,22 @@ export const PATCH = createApiHandler(
         if (agreementRecord) planData.agreementId = agreementRecord.id
       }
 
-      const targetDiscount = discount !== undefined ? Number(discount) : undefined
-      if (targetDiscount !== undefined) planData.commercialDiscount = Math.max(0, targetDiscount)
+      const discountInput = discount !== undefined ? discount : rawData.commercialDiscount
+      const targetDiscount = discountInput !== undefined ? Number(discountInput) : undefined
+      if (targetDiscount !== undefined) {
+        if (!Number.isFinite(targetDiscount) || targetDiscount < 0 || targetDiscount > 100) {
+          return NextResponse.json({ error: "Descuento comercial fuera de rango (0-100)" }, { status: 400 })
+        }
+        planData.commercialDiscount = targetDiscount
+      }
       if (rawData.commentsToPatient !== undefined) planData.commentsToPatient = rawData.commentsToPatient
       if (rawData.comments !== undefined) planData.commentsToPatient = rawData.comments
       if (rawData.status !== undefined) planData.status = rawData.status
       if (rawData.doctorId !== undefined) planData.doctorId = rawData.doctorId
 
       const allItems = previousPlan.items || []
-      const effectiveGlobalDisc = targetDiscount !== undefined ? targetDiscount : (Number(previousPlan.commercialDiscount || 0) > 0 ? Number(previousPlan.commercialDiscount) : Number(previousPlan.agreement?.discountValue || 0))
+      const currentCommercial = targetDiscount ?? Number(previousPlan.commercialDiscount || 0)
+      const effectiveGlobalDisc = currentCommercial > 0 ? currentCommercial : Number(previousPlan.agreement?.discountValue || 0)
       
       const recalculatedTotalCost = allItems.reduce((acc, itm) => {
         const baseCost = Number(itm.cost || 0)

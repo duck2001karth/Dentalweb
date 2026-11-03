@@ -17,6 +17,11 @@ import {
   DialogFooter,
   DialogDescription
 } from "@/components/ui/dialog"
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogCancel, AlertDialogAction,
+} from "@/components/ui/alert-dialog"
 import { useClinicSettings } from "@/config/clinic-settings"
 import { printClinicalDocSheet } from "@/components/patients-file/documents/document-print"
 
@@ -26,6 +31,7 @@ export interface TreatmentExtraProps {
   planSignature?: string | null
   setIsSignatureModalOpen?: (open: boolean) => void
   signedConsents?: any[]
+  approvalTotal?: number
   commentText?: string
   setCommentText?: (text: string) => void
   isEditingComments?: boolean
@@ -33,7 +39,7 @@ export interface TreatmentExtraProps {
   handleSaveComments?: () => void
   isSavingComment?: boolean
   isSignaturePending?: boolean
-  onApproveWithSavedSignature?: () => void
+  onApproveWithSavedSignature?: () => Promise<boolean>
   onSaveComment?: (comment: string) => void
   onPlanUpdate?: () => void
   currentUser?: any
@@ -45,6 +51,7 @@ export function TreatmentExtraSection({
   planSignature,
   setIsSignatureModalOpen,
   signedConsents = [],
+  approvalTotal,
   commentText: externalCommentText,
   setCommentText: externalSetCommentText,
   isEditingComments: externalIsEditing,
@@ -63,10 +70,8 @@ export function TreatmentExtraSection({
   const [internalIsEditing, setInternalIsEditing] = useState<boolean>(false)
 
   useEffect(() => {
-    if (plan?.commentsToPatient || plan?.comments) {
-      setInternalCommentText(plan.commentsToPatient || plan.comments || "")
-    }
-  }, [plan?.commentsToPatient, plan?.comments])
+    setInternalCommentText(plan?.commentsToPatient ?? plan?.comments ?? "")
+  }, [plan?.id, plan?.commentsToPatient, plan?.comments])
   const commentText = externalCommentText !== undefined ? externalCommentText : internalCommentText
   const setCommentText = externalSetCommentText || setInternalCommentText
   const isEditingComments = externalIsEditing !== undefined ? externalIsEditing : internalIsEditing
@@ -85,7 +90,18 @@ export function TreatmentExtraSection({
 
   const [selectedConsent, setSelectedConsent] = useState<any>(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
-  const firstSignedDoc = (signedConsents || []).find((doc: any) => doc.patientSignature)
+  const [approvalOpen, setApprovalOpen] = useState(false)
+  const [alreadyApprovedOpen, setAlreadyApprovedOpen] = useState(false)
+  const [emptyPlanOpen, setEmptyPlanOpen] = useState(false)
+  const [approving, setApproving] = useState(false)
+  const planConsents = signedConsents.filter((doc: any) =>
+    Boolean(plan?.id) &&
+    String(doc.treatmentPlanId ?? doc.treatmentPlan?.id ?? "") === String(plan.id) &&
+    Boolean(doc.patientSignature) &&
+    !doc.isVoided
+  )
+  const hasPlanItems = Array.isArray(plan?.items) && plan.items.length > 0
+  const hasValidTotal = typeof approvalTotal === "number" && Number.isFinite(approvalTotal) && approvalTotal >= 0
 
   const savedPatientSignature = 
     planSignature ||
@@ -95,15 +111,26 @@ export function TreatmentExtraSection({
     patient?.patientSignature ||
     plan?.patient?.signatureBase64 ||
     plan?.patient?.signature ||
-    plan?.patient?.patientSignature ||
-    firstSignedDoc?.patientSignature || null
+    plan?.patient?.patientSignature || null
 
   const activeSignature = planSignature || savedPatientSignature
-  const isPlanApproved = 
-    plan?.status === "ACTIVE" || 
-    plan?.status === "COMPLETED" || 
-    Boolean(planSignature) ||
-    Boolean(plan?.signatureBase64)
+  // La firma disponible pertenece al paciente; no prueba la aceptación de este plan.
+  const isPlanApproved =
+    plan?.status === "ACTIVE" || plan?.status === "COMPLETED"
+  const canApprove = !isPlanApproved && hasPlanItems && hasValidTotal && !approving
+
+  const requestApproval = (method: "saved" | "new") => {
+    if (isPlanApproved) {
+      setAlreadyApprovedOpen(true)
+      return
+    }
+    if (!hasPlanItems) {
+      setEmptyPlanOpen(true)
+      return
+    }
+    if (method === "saved") setApprovalOpen(true)
+    else setIsSignatureModalOpen?.(true)
+  }
 
   const getSignatureSrc = (base64String: string | null) => {
     if (!base64String) return ""
@@ -123,7 +150,7 @@ export function TreatmentExtraSection({
     printClinicalDocSheet({
       document: {
         ...selectedConsent,
-        patientSignature: activeSignature || selectedConsent.patientSignature,
+        patientSignature: selectedConsent.patientSignature,
         doctorSignature: selectedConsent.doctorSignature
       },
       patientFullName,
@@ -152,7 +179,7 @@ export function TreatmentExtraSection({
               ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20" 
               : "bg-amber-500/10 text-amber-600 border-amber-500/20"
           }`}>
-            {isPlanApproved ? "✓ Presupuesto Aprobado" : "Pendiente de Firma"}
+            {isPlanApproved ? "✓ Presupuesto Aprobado" : "Pendiente de Aprobación"}
           </span>
         </div>
 
@@ -179,17 +206,15 @@ export function TreatmentExtraSection({
               </div>
             </div>
 
-            {setIsSignatureModalOpen && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsSignatureModalOpen(true)}
-                className="border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 font-bold text-xs h-9 px-4 rounded-xl cursor-pointer"
-              >
-                Re-firmar
-              </Button>
-            )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setAlreadyApprovedOpen(true)}
+              className="border-emerald-500/30 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 font-bold text-xs h-9 px-4 rounded-xl cursor-pointer"
+            >
+              Ver aprobación
+            </Button>
           </div>
         ) : savedPatientSignature ? (
           <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -206,7 +231,7 @@ export function TreatmentExtraSection({
                   Firma disponible en Ficha Clínica
                 </p>
                 <p className="text-muted-foreground font-medium mt-0.5">
-                  Haz clic para vincular la firma registrada del paciente y activar el presupuesto.
+                  Confirma con el paciente su aceptación de este plan antes de aprobarlo.
                 </p>
               </div>
             </div>
@@ -215,7 +240,7 @@ export function TreatmentExtraSection({
               {onApproveWithSavedSignature && (
                 <Button 
                   type="button" 
-                  onClick={onApproveWithSavedSignature}
+                  onClick={() => requestApproval("saved")}
                   className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold rounded-xl h-9 text-xs px-4 shadow-xs cursor-pointer"
                 >
                   <Check className="w-4 h-4 mr-1.5" /> Aprobar con firma guardada
@@ -226,7 +251,7 @@ export function TreatmentExtraSection({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => setIsSignatureModalOpen(true)}
+                  onClick={() => requestApproval("new")}
                   className="border-border text-foreground font-bold rounded-xl h-9 text-xs px-3 cursor-pointer"
                   title="Dibujar nueva firma desde cero"
                 >
@@ -251,7 +276,7 @@ export function TreatmentExtraSection({
             {setIsSignatureModalOpen && (
               <Button 
                 type="button"
-                onClick={() => setIsSignatureModalOpen(true)}
+                onClick={() => requestApproval("new")}
                 className="bg-[#008bcd] hover:bg-[#0073a8] text-white font-bold rounded-xl h-9 text-xs px-5 shadow-xs shrink-0 cursor-pointer"
               >
                 <PenTool className="w-4 h-4 mr-1.5" /> Firmar Aprobación
@@ -266,10 +291,10 @@ export function TreatmentExtraSection({
             <FileText className="w-4 h-4 text-[#008bcd]"/> Consentimientos Informados
           </h5>
 
-          {signedConsents.length > 0 ? (
+          {planConsents.length > 0 ? (
             <div className="space-y-2 mb-4">
-              {signedConsents.map((doc: any, i: number) => (
-                <div key={i} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3.5 bg-muted/20 border border-border/80 rounded-xl gap-3">
+              {planConsents.map((doc: any) => (
+                <div key={doc.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3.5 bg-muted/20 border border-border/80 rounded-xl gap-3">
                   <div className="flex items-center gap-3">
                     <div className="p-2 bg-[#008bcd]/10 text-[#008bcd] rounded-lg">
                       <FileText className="w-4 h-4" />
@@ -302,7 +327,7 @@ export function TreatmentExtraSection({
             </div>
           ) : ( 
             <p className="text-xs text-muted-foreground mb-4 font-medium">
-              No se han registrado consentimientos firmados para este paciente.
+              No hay consentimientos firmados vinculados a este plan. Los demás documentos permanecen en la ficha clínica.
             </p> 
           )}
           
@@ -380,6 +405,148 @@ export function TreatmentExtraSection({
 
       </div>
 
+      {/* Aviso informativo antes de firmar un presupuesto vacío */}
+      <AlertDialog open={emptyPlanOpen} onOpenChange={setEmptyPlanOpen}>
+        <AlertDialogContent className="sm:max-w-[480px] rounded-2xl p-7 font-sans antialiased">
+          <AlertDialogHeader className="space-y-3 text-left">
+            <AlertDialogTitle className="flex items-center gap-2 text-xl font-black tracking-tight text-foreground">
+              <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+              Presupuesto sin prestaciones
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed text-muted-foreground">
+              Este presupuesto todavía no tiene prestaciones registradas.
+              Para solicitar la aprobación del paciente, primero debes agregar
+              al menos una prestación clínica.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-2">
+            <p className="text-sm font-extrabold text-foreground">
+              {plan?.name || "Plan de Tratamiento"}
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Utiliza el botón «+ Prestación» para incorporar los procedimientos
+              que el paciente va a aceptar.
+            </p>
+          </div>
+          <AlertDialogFooter className="mt-5">
+            <AlertDialogAction
+              onClick={() => setEmptyPlanOpen(false)}
+              className="h-11 rounded-xl bg-[#008bcd] px-6 font-bold text-white hover:bg-[#0077af]"
+            >
+              Entendido
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirmación previa a reutilizar la firma guardada */}
+      <AlertDialog
+        open={approvalOpen}
+        onOpenChange={(open) => { if (!approving) setApprovalOpen(open) }}
+      >
+        <AlertDialogContent className="sm:max-w-[520px] rounded-2xl p-7 font-sans antialiased">
+          <AlertDialogHeader className="space-y-3 text-left">
+            <AlertDialogTitle className="text-xl font-black tracking-tight text-foreground">
+              Confirmar aprobación del presupuesto
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed text-muted-foreground">
+              Confirma que el paciente ha revisado y aceptado las prestaciones,
+              los importes y las condiciones de este plan, y que autoriza usar
+              su firma previamente registrada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {!hasPlanItems && (
+            <p className="text-xs font-semibold text-amber-600 dark:text-amber-400" role="alert">
+              Este presupuesto no tiene prestaciones. Agrega al menos una antes de aprobarlo.
+            </p>
+          )}
+
+          <div className="rounded-xl border border-border bg-muted/30 p-4 space-y-3">
+            <p className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">
+              Presupuesto que se va a aprobar
+            </p>
+            <p className="text-base font-black text-foreground">
+              {plan?.name || "Plan de Tratamiento"}
+            </p>
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
+              <span className="text-sm font-semibold text-muted-foreground">Importe neto</span>
+              <span className="text-xl font-black text-[#008bcd]">
+                {hasValidTotal
+                  ? `USD ${approvalTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : "Importe no disponible"}
+              </span>
+            </div>
+          </div>
+
+          <AlertDialogFooter className="mt-5 flex flex-row justify-end gap-3 sm:space-x-0">
+            <AlertDialogCancel disabled={approving} className="mt-0 h-11 rounded-xl px-6 font-bold">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!canApprove}
+              className="h-11 rounded-xl bg-[#008bcd] px-6 font-bold text-white hover:bg-[#0077af]"
+              onClick={async (event) => {
+                event.preventDefault()
+                if (!canApprove) return
+                setApproving(true)
+                try {
+                  const approved = await onApproveWithSavedSignature?.()
+                  if (approved === true) setApprovalOpen(false)
+                } catch (error) {
+                  console.error("Error al confirmar aprobación:", error)
+                } finally {
+                  setApproving(false)
+                }
+              }}
+            >
+              {approving ? "Aprobando..." : "Confirmar aprobación"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+              
+        {/* Información de presupuesto ya aprobado */}
+        <AlertDialog
+          open={alreadyApprovedOpen}
+          onOpenChange={setAlreadyApprovedOpen}
+        >
+          <AlertDialogContent className="sm:max-w-[520px] rounded-2xl p-7 font-sans antialiased">
+            <AlertDialogHeader className="space-y-3 text-left">
+              <AlertDialogTitle className="text-xl font-black tracking-tight text-foreground">
+                Presupuesto ya aprobado
+              </AlertDialogTitle>
+
+              <AlertDialogDescription className="text-sm leading-relaxed text-muted-foreground">
+                Este presupuesto ya fue aprobado previamente por el paciente.
+                No es necesario volver a firmarlo.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-2">
+              <p className="text-sm font-extrabold text-foreground">
+                {plan?.name || "Plan de Tratamiento"}
+              </p>
+
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                Si se modifican las prestaciones, los importes, los descuentos
+                o las condiciones del presupuesto, deberá registrarse una
+                nueva aprobación antes de considerar aceptados esos cambios.
+              </p>
+            </div>
+
+            <AlertDialogFooter className="mt-5">
+              <AlertDialogAction
+                onClick={() => setAlreadyApprovedOpen(false)}
+                className="h-11 rounded-xl bg-[#008bcd] px-6 font-bold text-white hover:bg-[#0077af]"
+              >
+                Entendido
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+
       {/* MODAL VISOR DE CONSENTIMIENTO INFORMADO */}
       <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
         <DialogContent className="sm:max-w-[650px] bg-card border-border rounded-2xl p-0 overflow-hidden shadow-2xl">
@@ -404,17 +571,19 @@ export function TreatmentExtraSection({
               </p>
             </div>
 
-            {activeSignature && (
+            {selectedConsent?.patientSignature && (
               <div className="pt-3 border-t border-border/80 flex justify-between items-end">
                 <div>
                   <p className="text-[10px] uppercase font-bold text-muted-foreground">Firma Digital Registrada</p>
                   <div className="h-16 w-36 bg-white rounded-lg border border-border/70 p-1 flex items-center justify-center mt-1">
-                    <img src={getSignatureSrc(activeSignature)} alt="Firma Digital" className="max-h-full object-contain" />
+                    <img src={getSignatureSrc(selectedConsent.patientSignature)} alt="Firma Digital" className="max-h-full object-contain" />
                   </div>
                 </div>
                 <div className="text-right text-[10px] text-muted-foreground font-semibold space-y-0.5">
                   <p className="text-emerald-600 font-bold">✓ FIRMADO DIGITALMENTE</p>
-                  <p>Fecha: {new Date().toLocaleDateString("es-ES")}</p>
+                  <p>Fecha del documento: {selectedConsent?.createdAt
+                      ? String(selectedConsent.createdAt).slice(0, 10)
+                      : "No registrada"}</p>
                 </div>
               </div>
             )}
