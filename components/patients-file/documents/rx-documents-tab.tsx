@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { documentStatuses } from "@/constants/status"
 
-const MAX_FILE_SIZE_MB = 5
+const MAX_FILE_SIZE_MB = 3
 const ALLOWED_IMAGE_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
 const ALLOWED_DOC_TYPES = [
   "application/pdf", 
@@ -121,7 +121,12 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
               }
             })
           })
-          if (!res.ok) throw new Error()
+          if (!res.ok) {
+            const response = await res.json().catch(() => null)
+            throw new Error(
+              response?.error || response?.message || `Error HTTP ${res.status}`
+            )
+          }
         })
       )
 
@@ -131,8 +136,14 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
         variant: "success" as any 
       })
       fetchDocuments()
-    } catch {
-      toast({ title: "Error al guardar archivos", description: "Ocurrió un error durante la carga en la nube.", variant: "destructive" })
+    } catch (error) {
+      // Una carga en paralelo puede haberse completado parcialmente.
+      await fetchDocuments()
+      toast({
+        title: "Error al guardar archivos",
+        description: error instanceof Error ? error.message : "No se pudieron guardar todos los archivos.",
+        variant: "destructive",
+      })
     } finally {
       setIsUploading(false)
     }

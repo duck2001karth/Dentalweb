@@ -52,6 +52,11 @@ export function PaymentAuditForm({
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
+      if (!(["image/jpeg", "image/png", "image/webp"].includes(file.type)) || file.size > 900 * 1024) {
+        window.alert("El comprobante debe ser una imagen PNG, JPG o WEBP menor de 900 KB")
+        e.target.value = ""
+        return
+      }
       const reader = new FileReader()
       reader.onloadend = () => setReceiptImage(reader.result as string)
       reader.readAsDataURL(file)
@@ -134,7 +139,7 @@ export function PaymentAuditForm({
           ) : (
             <label className="cursor-pointer inline-flex items-center text-[10px] font-bold bg-background border border-border px-2 py-1 rounded-md hover:bg-muted transition-colors">
               <Upload className="w-3 h-3 text-[#008bcd] mr-1" /> Subir
-              <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
+              <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageUpload} className="hidden" />
             </label>
           )}
         </div>

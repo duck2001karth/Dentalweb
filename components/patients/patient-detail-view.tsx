@@ -70,7 +70,14 @@ export function PatientDetailView({
   const searchParams = useSearchParams()
   const tabFromUrl = searchParams.get("tab")
 
-  const canReceivePayments = userRole === "ADMIN" || userRole === "RECEPCION" || userRole === "ADMINISTRACION"
+  const normalizedRole = String(userRole || "").trim().toUpperCase()
+  const canReceivePayments = [
+    "ADMIN",
+    "ADMINISTRADOR",
+    "ADMINISTRACION",
+    "RECEPTIONIST",
+    "RECEPCION",
+  ].includes(normalizedRole)
   const initialTab = tabFromUrl === "ficha" ? "historial" : (tabFromUrl || "datos")
   const [activeTab, setActiveTab] = useState(initialTab)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)

@@ -9,6 +9,8 @@ import { NextResponse } from "next/server"
 const normalizePrismaPaymentMethod = (method?: string): string => {
   if (!method) return "CASH"
   const m = method.toUpperCase().trim()
+  if (m.startsWith("TARJETA_CREDITO_") || m.startsWith("TARJETA_DE_CREDITO_")) return "CREDIT_CARD"
+  if (m.startsWith("TARJETA_DEBITO")) return "DEBIT_CARD"
   switch (m) {
     case "EFECTIVO": case "CASH": return "CASH"
     case "TARJETA_CREDITO": case "TARJETA_DE_CREDITO": case "CREDIT_CARD": case "TARJETA": return "CREDIT_CARD"
@@ -91,148 +93,274 @@ export const GET = createApiHandler(
   }
 )
 
+const createPaymentSchema = z.object({
+  destination: z.enum(["COUNTER", "PLAN"]).optional(),
+  patientId: z.string().min(1),
+  amount: z.coerce.number().finite().positive().max(1_000_000),
+  method: z.string().min(1).optional(),
+  paymentMethod: z.string().min(1).optional(),
+  itemIds: z.array(z.string().min(1)).optional(),
+  status: z.enum(["COMPLETED", "PENDING"]).default("COMPLETED"),
+  treatmentPlanId: z.string().min(1).nullish(),
+  reference: z.string().trim().max(150).nullish(),
+  receiptNumber: z.string().trim().max(100).nullish(),
+  receiptImage: z.string().max(2_000_000).nullish(),
+  notes: z.string().trim().max(5000).nullish(),
+}).strict().refine(
+  (data) => Boolean(data.method || data.paymentMethod),
+  {
+    message: "Selecciona un método de cobro",
+    path: ["method"],
+  }
+)
+
+// Compatibilidad B2: el endpoint /approve firma JSON.stringify(snapshot) antes de
+// guardarlo. PostgreSQL jsonb puede devolver las propiedades en otro orden.
+// Reconstruimos exclusivamente el orden ORIGINAL de ese endpoint y comparamos
+// contra el SHA-256 almacenado. No se omite ni se reemplaza la verificación.
+const ORIGINAL_SNAPSHOT_KEYS = [
+  "planId", "patientId", "name", "agreementId", "commercialDiscount",
+  "globalDiscount", "commentsToPatient", "items", "amount",
+] as const
+const ORIGINAL_ITEM_KEYS = ["id", "name", "tooth", "cost", "discount", "net"] as const
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function restoreOriginalSnapshotOrder(snapshot: unknown): Record<string, unknown> | null {
+  if (!isPlainRecord(snapshot)) return null
+  // No se ignoran propiedades inesperadas: cualquier cambio en la evidencia
+  // sigue invalidando la aprobación.
+  const allowedSnapshotKeys = new Set<string>(ORIGINAL_SNAPSHOT_KEYS)
+  if (Object.keys(snapshot).some((key) => !allowedSnapshotKeys.has(key))) return null
+  if (!Array.isArray(snapshot.items) || snapshot.items.length === 0) return null
+
+  const originalItems: Record<string, unknown>[] = []
+  const allowedItemKeys = new Set<string>(ORIGINAL_ITEM_KEYS)
+  for (const item of snapshot.items) {
+    if (!isPlainRecord(item) || Object.keys(item).some((key) => !allowedItemKeys.has(key))) return null
+    const orderedItem: Record<string, unknown> = {}
+    for (const key of ORIGINAL_ITEM_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(item, key)) orderedItem[key] = item[key]
+    }
+    originalItems.push(orderedItem)
+  }
+
+  const orderedSnapshot: Record<string, unknown> = {}
+  for (const key of ORIGINAL_SNAPSHOT_KEYS) {
+    if (key === "items") {
+      orderedSnapshot.items = originalItems
+    } else if (Object.prototype.hasOwnProperty.call(snapshot, key)) {
+      orderedSnapshot[key] = snapshot[key]
+    }
+  }
+  return orderedSnapshot
+}
+
+function hasValidApprovalHash(snapshot: unknown, expectedHash: string): boolean {
+  if (typeof expectedHash !== "string" || !/^[0-9a-f]{64}$/i.test(expectedHash)) return false
+  if (!isPlainRecord(snapshot) || !Array.isArray(snapshot.items) || snapshot.items.length === 0) return false
+  const hash = (value: unknown) => crypto.createHash("sha256").update(JSON.stringify(value)).digest("hex")
+
+  // Compatible con el orden directo si la base de datos lo preserva.
+  if (hash(snapshot) === expectedHash.toLowerCase()) return true
+  // Para jsonb, verificar la serialización EXACTA usada al crear B2.
+  const restored = restoreOriginalSnapshotOrder(snapshot)
+  return restored !== null && hash(restored) === expectedHash.toLowerCase()
+}
+
+const money = (v: number) => Math.round(v * 100)
+
 export const POST = createApiHandler(
-  { roles: ["ADMIN", "RECEPTIONIST", "DOCTOR"], schema: z.object({
-    patientId: z.string().min(1),
-    amount: z.coerce.number().finite().positive(),
-    paymentMethod: z.string().optional(),
-    method: z.string().optional(),
-    reference: z.string().nullable().optional(),
-    itemIds: z.array(z.string().min(1)).optional(),
-    receiptImage: z.string().nullable().optional(),
-    treatmentPlanId: z.string().min(1),
-    receiptNumber: z.string().nullable().optional(),
-    notes: z.string().nullable().optional(),
-  }) },
+  { roles: ["ADMIN", "RECEPTIONIST", "DOCTOR"], schema: createPaymentSchema },
   async (_req, { user, data }) => {
-    const { patientId, amount, paymentMethod, method, reference, itemIds,
-      receiptImage, treatmentPlanId, receiptNumber, notes } = data
-    const validMethod = normalizePrismaPaymentMethod(paymentMethod || method)
-    const ids = [...new Set(itemIds ?? [])]
-
-    if (!ids.length) {
-      return NextResponse.json({ error: "Selecciona las prestaciones que se abonarán" }, { status: 400 })
+    const {
+      patientId, amount, method, paymentMethod, itemIds, status, treatmentPlanId,
+      reference, receiptNumber, receiptImage, notes,
+    } = data
+    // La ficha de paciente sigue usando paymentMethod y itemIds: compatibilidad controlada.
+    const destination = data.destination ?? (treatmentPlanId ? "PLAN" : "COUNTER")
+    if (!method && !paymentMethod) {
+      return NextResponse.json({ error: "Selecciona un método de cobro" }, { status: 400 })
     }
-    if (!Number.isInteger(Math.round(amount * 100)) || Math.round(amount * 100) <= 0) {
-      return NextResponse.json({ error: "Monto inválido" }, { status: 400 })
+    const validMethod = normalizePrismaPaymentMethod(method || paymentMethod)
+    const amountCents = money(amount)
+    if (amountCents <= 0 || Math.abs(amount - amountCents / 100) > 0.00001) {
+      return NextResponse.json({ error: "Introduce un importe válido con máximo dos decimales" }, { status: 400 })
+    }
+    if ((validMethod === "TRANSFER" || validMethod === "CREDIT_CARD" || validMethod === "DEBIT_CARD") && !reference?.trim()) {
+      return NextResponse.json({ error: "Indica la referencia o número de comprobante" }, { status: 400 })
+    }
+    if (receiptImage) {
+      const match = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(receiptImage)
+      if (!match || receiptImage.length > 2_000_000) {
+        return NextResponse.json({ error: "El comprobante debe ser PNG, JPG o WEBP y menor de 1 MB" }, { status: 400 })
+      }
+      const binary = Buffer.from(match[2], "base64")
+      const png = binary.length >= 8 && binary.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
+      const jpeg = binary.length >= 3 && binary[0] === 255 && binary[1] === 216 && binary[2] === 255
+      const webp = binary.length >= 12 && binary.toString("ascii",0,4)==="RIFF" && binary.toString("ascii",8,12)==="WEBP"
+      if (binary.length > 900 * 1024 || !((match[1] === "png" && png) || (match[1] === "jpeg" && jpeg) || (match[1] === "webp" && webp))) {
+        return NextResponse.json({ error: "El comprobante no tiene un formato de imagen permitido o supera 900 KB" }, { status: 400 })
+      }
+    }
+    if (destination === "COUNTER" && treatmentPlanId) {
+      return NextResponse.json({ error: "Los cobros de Mostrador no deben incluir un plan" }, { status: 400 })
+    }
+    if (destination === "PLAN" && (!treatmentPlanId || status !== "COMPLETED")) {
+      return NextResponse.json({ error: "Selecciona un plan aprobado; los abonos a plan deben estar completados" }, { status: 400 })
+    }
+    if (destination === "COUNTER" && !notes?.trim()) {
+      return NextResponse.json({ error: "Indica el concepto del cobro de Mostrador" }, { status: 400 })
     }
 
-    const headersList = await headers()
-    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
+    const h = await headers()
+    const ipAddress = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null
+    const userAgent = h.get("user-agent") || null
+    const finalReceiptNumber = receiptNumber?.trim() ||
+      `REC-${new Date().toISOString().slice(2, 10).replace(/-/g, "")}-${crypto.randomBytes(8).toString("hex").toUpperCase()}`
 
-    // SERIALIZABLE permite reintentar la operación completa si hay conflicto.
-    // Para idempotencia fuerte se requiere una clave única persistida por intento.
-    const result = await prisma.$transaction(async (tx) => {
-      const plan = await tx.treatmentPlan.findUnique({
-        where: { id: treatmentPlanId },
-        select: { id: true, patientId: true, commercialDiscount: true,
-          agreement: { select: { discountValue: true } } },
-      })
-      if (!plan || plan.patientId !== patientId) {
-        return { error: "El plan no pertenece al paciente", status: 400 } as const
-      }
-      const selectedItems = await tx.treatmentItem.findMany({
-        where: { treatmentPlanId, id: { in: ids } },
-        orderBy: { id: "asc" },
-      })
-      if (selectedItems.length !== ids.length) {
-        return { error: "Una o más prestaciones no pertenecen al plan", status: 400 } as const
-      }
-      const globalDiscount = Number(plan.commercialDiscount || 0) > 0
-        ? Number(plan.commercialDiscount)
-        : Number(plan.agreement?.discountValue || 0)
-      if (!Number.isFinite(globalDiscount) || globalDiscount < 0 || globalDiscount > 100) {
-        return { error: "Descuento global inválido", status: 400 } as const
-      }
-      const allocations = selectedItems.map(item => {
-        const cost = Number(item.cost ?? 0)
-        const individual = Number(item.discount ?? 0)
-        const discount = individual > 0 ? individual : globalDiscount
-        if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(discount) || discount < 0 || discount > 100) {
-          throw new Error("Costo o descuento de prestación inválido")
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        const patient = await tx.patient.findUnique({ where: { id: patientId }, select: { id: true } })
+        if (!patient) return { error: "Paciente no encontrado", status: 404 } as const
+
+        let allocations: { id: string; procedureName: string; appliedAmount: number }[] = []
+        if (destination === "PLAN") {
+          const planId = treatmentPlanId!
+          const plan = await tx.treatmentPlan.findUnique({
+            where: { id: planId },
+            include: {
+              items: { orderBy: { id: "asc" } },
+              approvals: { orderBy: { approvedAt: "desc" }, take: 1 },
+            },
+          })
+          if (!plan || plan.patientId !== patientId) {
+            return { error: "El plan no pertenece al paciente", status: 400 } as const
+          }
+          if (plan.status !== "ACTIVE") {
+            return { error: "El plan debe estar ACTIVE y aprobado para registrar abonos", status: 409 } as const
+          }
+          const approval = plan.approvals[0]
+          if (!approval) {
+            return { error: "Este plan no tiene aprobación B2. No se puede cobrar hasta regularizar su autorización", status: 409 } as const
+          }
+          const snapshot = approval.snapshot as any
+          const approvedItems = Array.isArray(snapshot?.items) ? snapshot.items : []
+          if (!hasValidApprovalHash(snapshot, approval.snapshotHash)) {
+            return { error: "La evidencia del presupuesto aprobado es inválida", status: 409 } as const
+          }
+          if (plan.items.length !== approvedItems.length) {
+            return { error: "Las prestaciones cambiaron después de aprobar el presupuesto", status: 409 } as const
+          }
+          const currentById = new Map(plan.items.map(item => [item.id, item]))
+          let remaining = amountCents
+          let approvedTotalCents = 0
+          const chosenIds = itemIds?.length ? new Set(itemIds) : null
+          if (chosenIds && chosenIds.size !== itemIds?.length) {
+            return { error: "Hay prestaciones repetidas", status: 400 } as const
+          }
+          const entries: { item: (typeof plan.items)[number]; dueCents: number }[] = []
+          for (const saved of approvedItems) {
+            const item = currentById.get(String(saved.id))
+            const net = Number(saved.net)
+            if (!item || !Number.isFinite(net) || net < 0 ||
+                Number(item.cost) !== Number(saved.cost) || Number(item.discount) !== Number(saved.discount) ||
+                item.procedureName !== saved.name || (item.tooth ?? null) !== (saved.tooth ?? null)) {
+              return { error: "El plan difiere del presupuesto firmado; requiere revisión", status: 409 } as const
+            }
+            const netCents = money(net)
+            const paidCents = money(Number(item.paidAmount || 0))
+            if (paidCents < 0 || paidCents > netCents) {
+              return { error: "Saldo de prestación inconsistente", status: 409 } as const
+            }
+            approvedTotalCents += netCents
+            if (!chosenIds || chosenIds.has(item.id)) entries.push({ item, dueCents: netCents - paidCents })
+          }
+          if (approvedTotalCents !== money(Number(approval.approvedAmount)) ||
+              approvedTotalCents !== money(Number(plan.totalCost))) {
+            return { error: "El total actual no coincide con el presupuesto aprobado", status: 409 } as const
+          }
+          if (chosenIds && (entries.length !== chosenIds.size || entries.length === 0)) {
+            return { error: "Selecciona prestaciones válidas del plan aprobado", status: 400 } as const
+          }
+          const totalDue = entries.reduce((sum, e) => sum + e.dueCents, 0)
+          if (amountCents > totalDue || totalDue <= 0) {
+            return { error: "El cobro supera el saldo disponible del plan", status: 409 } as const
+          }
+          for (const { item, dueCents } of entries) {
+            const used = Math.min(remaining, dueCents)
+            if (used <= 0) continue
+            const newPaidCents = money(Number(item.paidAmount || 0)) + used
+            await tx.treatmentItem.update({
+              where: { id: item.id },
+              data: { paidAmount: newPaidCents / 100, isPaid: newPaidCents === money(Number(approvedItems.find((i: any) => i.id === item.id).net)) },
+            })
+            allocations.push({ id: item.id, procedureName: item.procedureName, appliedAmount: used / 100 })
+            remaining -= used
+          }
+          if (remaining !== 0) throw new Error("Asignación de pagos incompleta")
+          const paidAfter = plan.items.reduce((sum, item) => sum + money(Number(item.paidAmount || 0)), 0) + amountCents
+          await tx.treatmentPlan.update({
+            where: { id: planId },
+            data: { totalPaid: paidAfter / 100, status: paidAfter >= approvedTotalCents ? "COMPLETED" : "ACTIVE" },
+          })
         }
-        const dueCents = Math.max(0, Math.round(cost * (100 - discount)) -
-          Math.round(Number(item.paidAmount ?? 0) * 100))
-        return { item, dueCents }
-      })
-      const amountCents = Math.round(amount * 100)
-      const totalDue = allocations.reduce((a, b) => a + b.dueCents, 0)
-      if (amountCents > totalDue) {
-        return { error: "El pago supera el saldo de las prestaciones seleccionadas", status: 400 } as const
-      }
-      if (totalDue <= 0) {
-        return { error: "Las prestaciones seleccionadas no tienen saldo", status: 400 } as const
-      }
 
-      let remaining = amountCents
-      const applied: Array<{ id: string; procedureName: string; tooth: string; appliedAmount: number }> = []
-      for (const { item, dueCents } of allocations) {
-        const cents = Math.min(remaining, dueCents)
-        if (!cents) continue
-        const newPaid = (Math.round(Number(item.paidAmount ?? 0) * 100) + cents) / 100
-        await tx.treatmentItem.update({
-          where: { id: item.id },
-          data: { paidAmount: newPaid, isPaid: cents === dueCents },
+        const payment = await tx.payment.create({
+          data: {
+            patientId, amount: amountCents / 100, method: validMethod as any,
+            status, reference: reference?.trim() || null,
+            receiptImage: receiptImage || null,
+            treatmentPlanId: destination === "PLAN" ? treatmentPlanId : null,
+            processedById: user.id, receiptNumber: finalReceiptNumber, notes: notes?.trim() || null,
+          },
+          include: {
+            patient: { select: { id: true, firstName: true, lastName: true, ci: true } },
+            treatmentPlan: { select: { id: true, name: true } },
+            processedBy: { select: { id: true, name: true, specialty: true, role: true } },
+          },
         })
-        applied.push({ id: item.id, procedureName: item.procedureName || "Prestación",
-          tooth: item.tooth || "General", appliedAmount: cents / 100 })
-        remaining -= cents
+        await tx.auditLog.create({ data: {
+          userId: user.id, action: "CREATE_PAYMENT", entity: "PAYMENT", entityId: payment.id,
+          patientId, details: `Cobro ${destination} ${status} $${payment.amount} [${validMethod}] - ${finalReceiptNumber}`,
+          newData: { amount: payment.amount, method: validMethod, status, destination,
+            receiptNumber: finalReceiptNumber, treatmentPlanId: payment.treatmentPlanId, allocations },
+          ipAddress, userAgent,
+        } })
+        return { payment } as const
+      }, { isolationLevel: "Serializable", timeout: 15000 })
+
+      if ("error" in result) {
+        return NextResponse.json({ error: result.error }, { status: result.status })
       }
-      if (remaining !== 0) throw new Error("El pago no pudo asignarse por completo")
-
-      const allItems = await tx.treatmentItem.findMany({ where: { treatmentPlanId } })
-      const totalPaid = allItems.reduce((sum, item) => sum + Number(item.paidAmount ?? 0), 0)
-      const completed = allItems.length > 0 && allItems.every(item => {
-        const discount = Number(item.discount ?? 0) > 0 ? Number(item.discount) : globalDiscount
-        const net = Math.round(Number(item.cost ?? 0) * (100 - discount)) / 100
-        return Number(item.paidAmount ?? 0) >= net - 0.005
-      })
-      await tx.treatmentPlan.update({ where: { id: treatmentPlanId },
-        data: { totalPaid, status: completed ? "COMPLETED" : "ACTIVE" } })
-
-      const finalReceiptNumber = receiptNumber?.trim() ||
-        `REC-${new Date().toISOString().slice(2,10).replace(/-/g, "")}-${crypto.randomBytes(4).toString("hex").toUpperCase()}`
-      const payment = await tx.payment.create({
-        data: { patientId, amount: amountCents / 100, method: validMethod as any,
-          reference: reference?.trim() || null, receiptImage: receiptImage || null,
-          treatmentPlanId, processedById: user.id, receiptNumber: finalReceiptNumber,
-          notes: notes?.trim() || JSON.stringify(applied) },
-        include: {
-          patient: { select: { id: true, firstName: true, lastName: true, ci: true } },
-          treatmentPlan: { select: { id: true, name: true } },
-          processedBy: { select: { id: true, name: true, specialty: true, role: true } },
-        },
-      })
-      await tx.auditLog.create({ data: {
-        userId: user.id, action: "CREATE_PAYMENT", entity: "PAYMENT",
-        entityId: payment.id, patientId,
-        details: `Cobro registrado: $${amount.toFixed(2)} [${validMethod}] - Recibo #${finalReceiptNumber}`,
-        newData: { amount: amountCents / 100, method: validMethod,
-          receiptNumber: finalReceiptNumber, treatmentPlanId, allocations: applied },
-        ipAddress, userAgent,
-      } })
-      return { payment } as const
-    }, { isolationLevel: "Serializable", timeout: 15000 })
-
-    if ("error" in result) {
-      return NextResponse.json({ error: result.error }, { status: result.status })
+      return { success: true, message: "Cobro registrado correctamente", payment: result.payment }
+    } catch (error: any) {
+      if (error?.code === "P2002") {
+        return NextResponse.json({ error: "El número de recibo ya existe. Comprueba si se registró el cobro antes de reintentar." }, { status: 409 })
+      }
+      if (error?.code === "P2034") {
+        return NextResponse.json({ error: "Otro movimiento se procesó al mismo tiempo. Revisa los cobros registrados antes de reintentar." }, { status: 409 })
+      }
+      throw error
     }
-    return { success: true, message: "Pago registrado correctamente", payment: result.payment }
   }
 )
 
 export const PATCH = createApiHandler(
-  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"], schema: z.any() },
+  { roles: ["ADMIN", "RECEPTIONIST", "DOCTOR"], schema: z.object({
+    id: z.string().min(1).optional(), paymentId: z.string().min(1).optional(),
+    method: z.string().optional(), paymentMethod: z.string().optional(),
+    reference: z.string().max(150).nullable().optional(),
+    notes: z.string().max(5000).nullable().optional(),
+    receiptNumber: z.string().min(1).max(100).nullable().optional(),
+  }).strict() },
   async (req, { user, data }) => {
     const paymentId = data.id || data.paymentId
     if (!paymentId) throw new Error("Se requiere el ID del pago para actualizar")
 
-    const { method, paymentMethod, reference, notes, receiptNumber, amount } = data
-    if (amount !== undefined) {
-      return NextResponse.json({ error: "No se permite editar el importe de un pago confirmado. Utiliza el procedimiento contable de ajuste." }, { status: 409 })
-    }
+    const { method, paymentMethod, reference, notes, receiptNumber } = data
 
     const updatedPayment = await prisma.$transaction(async (tx) => {
       const previous = await tx.payment.findUnique({ where: { id: paymentId } })

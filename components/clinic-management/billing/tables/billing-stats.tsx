@@ -13,6 +13,8 @@ export function BillingStats({ payments = [] }: BillingStatsProps) {
     const methodDistribution: Record<string, number> = { Efectivo: 0, Transferencia: 0, Tarjetas: 0, Otros: 0 }
 
     payments.forEach((p) => {
+      if (p.status !== "COMPLETED" ||
+          (typeof p.notes === "string" && p.notes.includes("[PAGO ELIMINADO"))) return
       const amount = Number(p.amount || 0)
       const m = (p.method || "CASH").toUpperCase()
 

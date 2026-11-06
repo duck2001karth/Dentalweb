@@ -3,7 +3,6 @@ export type PaymentMethod =
   | 'CREDIT_CARD' 
   | 'DEBIT_CARD' 
   | 'TRANSFER' 
-  | 'CHECK' 
   | 'INSURANCE' 
   | 'OTHER';
 
@@ -37,6 +36,9 @@ export interface PaymentRecord {
 }
 
 export interface PaymentFormData {
+  destination?: 'COUNTER' | 'PLAN';
+  treatmentPlanId?: string;
+
   patientId: string;
   amount: number | string;
   method: PaymentMethod;

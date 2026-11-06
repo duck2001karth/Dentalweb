@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db"
 import { headers } from "next/headers"
 import { z } from "zod"
 
-// Función original intacta para cuadrar balances del plan de tratamiento
+
 async function syncPlanFinancialsTx(tx: any, planId: string) {
   const activePayments = await tx.payment.findMany({
     where: {
@@ -51,6 +51,7 @@ async function syncPlanFinancialsTx(tx: any, planId: string) {
     })
   }
 
+  const previousPlan = await tx.treatmentPlan.findUnique({ where: { id: planId }, select: { status: true } })
   const finalStatus =
     items.length > 0
       ? allItemsCovered
@@ -64,12 +65,11 @@ async function syncPlanFinancialsTx(tx: any, planId: string) {
     where: { id: planId },
     data: {
       totalPaid: realTotalPaid,
-      status: finalStatus as any,
+      status: finalStatus === "DRAFT" ? (previousPlan?.status || "DRAFT") : finalStatus,
     },
   })
 }
 
-// GET: Obtener pago individual
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
   async (req, { params }) => {
@@ -88,11 +88,15 @@ export const GET = createApiHandler(
   }
 )
 
-// PATCH: Restaurado para edición directa por [id]
 export const PATCH = createApiHandler(
   {
     roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],
-    schema: z.any(),
+    schema: z.object({
+      method: z.enum(["CASH", "TRANSFER", "CREDIT_CARD", "DEBIT_CARD", "INSURANCE", "OTHER"]).optional(),
+      reference: z.string().max(150).nullable().optional(),
+      notes: z.string().max(5000).nullable().optional(),
+      receiptNumber: z.string().min(1).max(100).nullable().optional(),
+    }).strict(),
   },
   async (req, { user, params, data }) => {
     const paymentId = params.id as string
@@ -157,7 +161,6 @@ export const PATCH = createApiHandler(
   }
 )
 
-// DELETE: Anulación o purga física con sincronización de saldos
 export const DELETE = createApiHandler(
   { roles: ["ADMIN"] },
   async (req, { user, params }) => {
@@ -177,6 +180,9 @@ export const DELETE = createApiHandler(
       headersList.get("x-real-ip") ||
       "127.0.0.1"
     const userAgent = headersList.get("user-agent") || "Desconocido"
+    if (isPermanent) {
+      return Response.json({ error: "La purga física de pagos está deshabilitada para preservar el historial contable" }, { status: 403 })
+    }
 
     await prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({
@@ -184,6 +190,9 @@ export const DELETE = createApiHandler(
         include: { treatmentPlan: true },
       })
       if (!payment) throw new Error("NOT_FOUND")
+      if (payment.notes?.includes("[PAGO ELIMINADO")) {
+        throw new Error("El pago ya se encuentra anulado")
+      }
 
       const planId = payment.treatmentPlanId
       const userName = user.name || "Administrador"

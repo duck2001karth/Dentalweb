@@ -116,7 +116,7 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
         table.push(p)
       }
 
-      if (passDate && passMethod && !isVoided) {
+      if (passDate && passMethod && !isVoided && p.status === "COMPLETED") {
         kpi.push(p)
       }
     })

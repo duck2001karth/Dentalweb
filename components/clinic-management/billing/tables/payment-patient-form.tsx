@@ -66,20 +66,13 @@ export function PaymentPatientTargetForm({
         notes: prev.notes?.replace(/\[ABONO PLAN:.*?\]/g, "").trim() || "Consulta General",
       }))
     } else {
-      if (patientPlans.length > 0) {
-        const defaultPlan = patientPlans[0]
-        const debt = Number(defaultPlan.pendingBalance || Math.max(0, Number(defaultPlan.totalCost || 0) - Number(defaultPlan.totalPaid || 0)))
-        setFormData((prev: any) => ({
-          ...prev,
-          treatmentPlanId: defaultPlan.id,
-          amount: debt > 0 ? debt.toFixed(2) : prev.amount,
-        }))
-      }
+      setFormData((prev: any) => ({ ...prev, treatmentPlanId: undefined, status: "COMPLETED",
+        notes: prev.notes === "Consulta General" ? "" : prev.notes }))
     }
   }
 
   const handleSelectPlan = (plan: any) => {
-    const debt = Number(plan.pendingBalance || Math.max(0, Number(plan.totalCost || 0) - Number(plan.totalPaid || 0)))
+    const debt = Number(plan.pendingBalance ?? Math.max(0, Number(plan.totalCost || 0) - Number(plan.totalPaid || 0)))
     setFormData((prev: any) => ({
       ...prev,
       treatmentPlanId: plan.id,
@@ -176,7 +169,7 @@ export function PaymentPatientTargetForm({
               <span className="text-[9px] font-semibold text-muted-foreground">Planes Activos:</span>
               <div className="space-y-1.5 max-h-[140px] overflow-y-auto pr-1 custom-scrollbar">
                 {patientPlans.map((plan: any) => {
-                  const debt = Number(plan.pendingBalance || Math.max(0, Number(plan.totalCost || 0) - Number(plan.totalPaid || 0)))
+                  const debt = Number(plan.pendingBalance ?? Math.max(0, Number(plan.totalCost || 0) - Number(plan.totalPaid || 0)))
                   const isSelected = formData.treatmentPlanId === plan.id
                   return (
                     <div

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo, useEffect } from "react"
+import React, { useState, useMemo, useEffect, useRef } from "react"
 import { DollarSign, CheckCircle2, Loader2, X } from "lucide-react"
 import {
   Dialog,
@@ -16,6 +16,7 @@ import { PaymentItemsList } from "./payment-list"
 import { PaymentMethodsEcuador } from "./payment-methods"
 import { PaymentSuccessStep } from "./payment-success"
 import { cn } from "@/lib/utils"
+import { useToast } from "@/hooks/use-toast"
 
 const formatToothLocation = (item: any): string => {
   const tooth = item.tooth ?? item.toothNumber ?? item.piece ?? item.piezas ?? item.sector ?? null
@@ -33,6 +34,9 @@ export function PaymentReceiptModal({
   plans = [],
   onPaymentSuccess
 }: any) {
+  const { toast } = useToast()
+  const submittingRef = useRef(false)
+  const receiptRef = useRef<string>("")
   const [step, setStep] = useState<"SELECT" | "SUCCESS">("SELECT")
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
   
@@ -66,8 +70,8 @@ export function PaymentReceiptModal({
     )
     
     Array.from(uniquePlansMap.values()).forEach((p: any) => {
-      if (p.status !== "CANCELLED" && Array.isArray(p.items || p.treatmentItems)) {
-        const planGlobalDiscount = parseFloat(p.commercialDiscount ?? p.discountPercent ?? p.planDiscountPercent ?? 0)
+      if (p.status === "ACTIVE" && Array.isArray(p.items || p.treatmentItems)) {
+        const planGlobalDiscount = parseFloat(p.discountPercent ?? p.discount ?? p.planDiscountPercent ?? 0)
         const planConvenioDiscount = parseFloat(p.agreementDiscountPercent ?? p.convenioDiscount ?? patientConvenioDiscount ?? 0)
         const effectivePlanDiscount = Math.max(planGlobalDiscount, planConvenioDiscount)
         
@@ -111,7 +115,7 @@ export function PaymentReceiptModal({
   }, [isOpen, pendingItems])
 
   const toggleSelectItem = (id: string) => setSelectedItemIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id])
-  const toggleSelectAll = () => setSelectedItemIds(pendingItems.every((i: any) => selectedItemIds.includes(i.id)) ? [] : pendingItems.map((i: any) => i.id))
+  const toggleSelectAll = () => setSelectedItemIds(selectedItemIds.length === pendingItems.length ? [] : pendingItems.map((i: any) => i.id))
 
   const selectedTotal = useMemo(() => {
     return pendingItems
@@ -119,88 +123,84 @@ export function PaymentReceiptModal({
       .reduce((acc: number, item: any) => acc + item.itemDebt, 0)
   }, [pendingItems, selectedItemIds])
 
-  const totalToPay = useCustomAmount ? Number(customAmount) : selectedTotal
+  const totalToPay = useCustomAmount && parseFloat(customAmount) > 0 ? parseFloat(customAmount) : selectedTotal
   const requiresReference = paymentMethod === "TRANSFERENCIA" || paymentMethod.startsWith("TARJETA")
   const isReferenceValid = !requiresReference || (requiresReference && reference.trim().length > 0)
-  const validAmount = Number.isFinite(totalToPay) && totalToPay > 0 && totalToPay <= selectedTotal + 0.001
-  const canProcessPayment = selectedItemIds.length > 0 && validAmount
+  const canProcessPayment = selectedItemIds.length > 0 || (useCustomAmount && parseFloat(customAmount) > 0)
 
   const handleProcessPayment = async () => {
-    if (isProcessing || !isReferenceValid || !canProcessPayment) return
+    if (!isReferenceValid || isProcessing || submittingRef.current) return
     const selected = pendingItems.filter((item: any) => selectedItemIds.includes(item.id))
-    const planIds = new Set(selected.map((item: any) => item.planId))
-    if (planIds.size !== 1) {
-      window.alert("Selecciona prestaciones de un solo plan para este cobro.")
+    const planIds = [...new Set(selected.map((item: any) => item.planId))]
+    if (planIds.length !== 1 || selected.length === 0) {
+      toast({ title: "Selecciona un solo plan", description: "Registra por separado los pagos de planes distintos.", variant: "destructive" })
       return
     }
-
-    let remainingCents = Math.round(totalToPay * 100)
-    const selectedItemsData = selected.map((item: any) => {
-      const debtCents = Math.max(0, Math.round(Number(item.itemDebt) * 100))
-      const payingCents = Math.min(debtCents, remainingCents)
-      remainingCents -= payingCents
-      return {
-        id: item.id,
-        treatmentPlanId: item.planId,
-        baseCost: item.cost,
-        discountPercent: item.discountPercent,
-        finalPrice: item.finalPrice,
-        paidAmount: item.paidAmount,
-        payingAmount: payingCents / 100,
-        appliedAmount: payingCents / 100,
-        itemDebt: item.itemDebt,
-        name: item.name,
-        procedureName: item.procedureName,
-        planName: item.planName,
-        toothLabel: item.toothLabel,
-        tooth: item.tooth,
-      }
-    })
-
-    if (remainingCents !== 0) {
-      window.alert("El monto excede el saldo de las prestaciones seleccionadas.")
+    const amountToCharge = totalToPay
+    if (!Number.isFinite(amountToCharge) || amountToCharge <= 0 || amountToCharge > selectedTotal + 0.005) {
+      toast({ title: "Importe inválido", description: "El cobro debe estar dentro del saldo seleccionado.", variant: "destructive" })
       return
     }
-
+    submittingRef.current = true
+    if (!receiptRef.current) receiptRef.current = `REC-${crypto.randomUUID().replace(/-/g, "").slice(0,16).toUpperCase()}`
+    setConfirmedAmount(amountToCharge)
     setIsProcessing(true)
+    
     try {
+      const selectedItemsData = pendingItems
+        .filter((item: any) => selectedItemIds.includes(item.id))
+        .map((item: any) => ({
+          id: item.id,
+          treatmentPlanId: item.planId,
+          baseCost: item.cost,
+          discountPercent: item.discountPercent,
+          finalPrice: item.finalPrice,
+          paidAmount: item.paidAmount,
+          payingAmount: item.itemDebt,
+          itemDebt: item.itemDebt,
+          name: item.name,
+          procedureName: item.procedureName,
+          planName: item.planName,
+          toothLabel: item.toothLabel,
+          tooth: item.tooth
+        }))
+        
+      setPaidItems(selectedItemsData)
+      
       const res = await fetch("/api/payments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           patientId: patient?.id,
-          amount: totalToPay,
+          destination: "PLAN",
+          amount: amountToCharge,
           paymentMethod,
-          reference: requiresReference ? reference.trim() : null,
+          status: "COMPLETED",
+          receiptNumber: receiptRef.current,
+          reference: requiresReference ? reference : null,
           receiptImage: receiptImage || null,
-          itemIds: selected.map((item: any) => item.id),
-          itemsBreakdown: selectedItemsData,
-          treatmentPlanId: selected[0].planId,
-        }),
+          itemIds: selectedItemIds,
+          treatmentPlanId: planIds[0]
+        })
       })
-
-      const data = await res.json().catch(() => null)
-      if (!res.ok) {
-        throw new Error(data?.error || `El servidor rechazó el pago (HTTP ${res.status}).`)
+      
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.success !== true || !data?.payment?.id) {
+        throw new Error(data?.error || `No se pudo registrar el cobro (HTTP ${res.status})`)
       }
-      if (typeof data?.payment?.id !== "string" || !data.payment.id) {
-        throw new Error("La API no confirmó un identificador de pago válido.")
-      }
-
-      setConfirmedAmount(totalToPay)
-      setPaidItems(selectedItemsData.filter((item: any) => item.payingAmount > 0))
       setGeneratedInvoiceId(data.payment.id)
       setStep("SUCCESS")
-      onPaymentSuccess?.()
-    } catch (error) {
-      console.error("No se pudo confirmar el cobro:", error)
-      window.alert(error instanceof Error ? error.message : "No se pudo confirmar el pago.")
+      if (onPaymentSuccess) onPaymentSuccess()
+    } catch (e) {
+      toast({ title: "No se registró el cobro", description: e instanceof Error ? e.message : "Comprueba el estado antes de reintentar.", variant: "destructive" })
     } finally {
+      submittingRef.current = false
       setIsProcessing(false)
     }
   }
 
   const handleReset = () => {
+    receiptRef.current = ""
     setStep("SELECT")
     setSelectedItemIds([])
     setPaymentMethod("EFECTIVO")
@@ -215,6 +215,7 @@ export function PaymentReceiptModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleReset()}>
+      {/* CAMBIO VISUAL AQUÍ: Se utiliza cn() para encoger el ancho dinámicamente cuando step === "SUCCESS" */}
       <DialogContent className={cn(
         "bg-card text-foreground border border-border/80 shadow-2xl rounded-2xl p-0 overflow-hidden font-sans antialiased transition-all duration-300",
         step === "SUCCESS" 

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useRef } from "react"
 import { DollarSign, Loader2, AlertCircle, Banknote, ArrowLeftRight, CreditCard } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,7 +19,7 @@ interface PaymentModalProps {
   prefilledData?: { patientId: string; planId: string; amount: number } | null
   patients: any[]
   isSaving: boolean
-  onSave: (data: PaymentFormData & { treatmentPlanId?: string, reference?: string, receiptImage?: string | null }) => Promise<boolean>
+  onSave: (data: PaymentFormData) => Promise<boolean>
 }
 
 const PAYMENT_METHODS: { id: PaymentMethod; label: string; icon: any }[] = [
@@ -43,8 +43,10 @@ export function PaymentModal({
   const isEditing = Boolean(editingPayment)
   
   const [patientSearchQuery, setPatientSearchQuery] = useState("")
-  const [isLoadingReceipt, setIsLoadingReceipt] = useState(false)
+  const [isLoadingReceipt] = useState(false)
   const [isManualReceipt, setIsManualReceipt] = useState(false)
+  const submitLock = useRef(false)
+  const [localSubmitting, setLocalSubmitting] = useState(false)
   const [autoReceiptNumber, setAutoReceiptNumber] = useState("")
   
   const [reference, setReference] = useState("")
@@ -53,7 +55,7 @@ export function PaymentModal({
   const [receiptImage, setReceiptImage] = useState<string | null>(null)
   
   const [showErrors, setShowErrors] = useState(false)
-  const [paymentType, setPaymentType] = useState<"GENERAL" | "PLAN">("PLAN")
+  const [paymentType, setPaymentType] = useState<"GENERAL" | "PLAN">("GENERAL")
   const [patientPlans, setPatientPlans] = useState<any[]>([])
   const [selectedPatientObj, setSelectedPatientObj] = useState<any>(null)
   const [isLoadingPlans, setIsLoadingPlans] = useState(false)
@@ -126,32 +128,23 @@ export function PaymentModal({
       setReceiptImage(null)
       setPatientSearchQuery("")
       setIsManualReceipt(false)
-      setPaymentType("PLAN")
+      setPaymentType("GENERAL")
     }
-  }, [editingPayment, prefilledData, isOpen, patients])
+  }, [editingPayment, prefilledData, isOpen])
 
+  // Una referencia única por apertura: PostgreSQL evita reintentos duplicados.
   useEffect(() => {
-    if (isOpen && !editingPayment) {
-      setIsLoadingReceipt(true)
-      fetch("/api/payments/next-receipt")
-        .then((res) => res.json())
-        .then((data) => {
-          const nextVal = data.nextReceipt || data.nextReceiptNumber
-          if (nextVal) {
-            setAutoReceiptNumber(nextVal)
-            if (!isManualReceipt) {
-              setFormData((prev) => ({ ...prev, receiptNumber: nextVal }))
-            }
-          }
-        })
-        .catch(() => console.error("No se pudo obtener correlativo"))
-        .finally(() => setIsLoadingReceipt(false))
-    }
-  }, [isOpen, editingPayment, isManualReceipt])
+    if (!isOpen || editingPayment) return
+    const number = `REC-${crypto.randomUUID().replace(/-/g, "").slice(0, 16).toUpperCase()}`
+    setAutoReceiptNumber(number)
+    setFormData(prev => ({ ...prev, receiptNumber: number }))
+    submitLock.current = false
+    setLocalSubmitting(false)
+  }, [isOpen, editingPayment])
 
   useEffect(() => {
     if (!editingPayment && !isManualReceipt) {
-      setFormData((prev) => ({ ...prev, receiptNumber: autoReceiptNumber }))
+      setFormData(prev => ({ ...prev, receiptNumber: autoReceiptNumber }))
     }
   }, [isManualReceipt, autoReceiptNumber, editingPayment])
 
@@ -164,31 +157,27 @@ export function PaymentModal({
     const foundPatient = patients.find((p) => p.id === formData.patientId)
     setSelectedPatientObj(foundPatient || null)
     let isMounted = true
+    setPatientPlans([])
     setIsLoadingPlans(true)
     
     fetch(`/api/treatments?patientId=${formData.patientId}`)
       .then((res) => (res.ok ? res.json() : []))
       .then((data) => {
         if (!isMounted) return
-        const list = Array.isArray(data) ? data : data.plans || []
+        const list = Array.isArray(data) ? data : (Array.isArray(data?.plans) ? data.plans : [])
         const activeWithDebt = list.filter((p: any) => {
-          const debt = Number(p.pendingBalance || Math.max(0, Number(p.totalCost || 0) - Number(p.totalPaid || 0)))
-          return debt > 0.01 && p.status !== "CANCELLED"
+          const debt = Number(p.pendingBalance ?? Math.max(0, Number(p.totalCost || 0) - Number(p.totalPaid || 0)))
+          return debt > 0.01 && p.status === "ACTIVE"
         })
         setPatientPlans(activeWithDebt)
         
-        if (activeWithDebt.length > 0 && !formData.treatmentPlanId && !editingPayment && !prefilledData) {
-          setPaymentType("PLAN")
-          const firstPlan = activeWithDebt[0]
-          const debt = Number(firstPlan.pendingBalance || Math.max(0, Number(firstPlan.totalCost || 0) - Number(firstPlan.totalPaid || 0)))
-          setFormData((prev) => ({
-            ...prev,
-            treatmentPlanId: firstPlan.id,
-            amount: debt > 0 ? debt.toFixed(2) : prev.amount,
-          }))
-        }
+        // Nunca seleccionamos un plan automáticamente al elegir un paciente.
+        // Mostrador sigue siendo la opción explícita por defecto.
       })
-      .catch((err) => console.error("Error al cargar planes:", err))
+      .catch((err) => {
+        console.error("Error al cargar planes:", err)
+        if (isMounted) setPatientPlans([])
+      })
       .finally(() => {
         if (isMounted) setIsLoadingPlans(false)
       })
@@ -202,12 +191,26 @@ export function PaymentModal({
   const isTransfer = formData.method === "TRANSFER"
   const needsReference = isCard || isTransfer
   const isPatientMissing = !formData.patientId
-  const isAmountMissing = !formData.amount || Number(formData.amount) <= 0
+  const amountValue = Number(formData.amount)
+  const isAmountMissing = !Number.isFinite(amountValue) || amountValue <= 0 ||
+    Math.abs(amountValue * 100 - Math.round(amountValue * 100)) > 0.00001
+  const isPlanMissing = !isEditing && paymentType === "PLAN" && !formData.treatmentPlanId
+  const isConceptMissing = !isEditing && paymentType === "GENERAL" && !formData.notes?.trim()
   const isReferenceMissing = needsReference && !reference.trim()
+  const selectedPlanBalance = selectedPlanData
+    ? Number(selectedPlanData.pendingBalance ?? Math.max(0,
+        Number(selectedPlanData.totalCost || 0) - Number(selectedPlanData.totalPaid || 0)))
+    : 0
+  const isPlanUnavailable = !isEditing && paymentType === "PLAN" && (
+    isLoadingPlans || !selectedPlanData || !Number.isFinite(selectedPlanBalance) || selectedPlanBalance <= 0
+  )
+  const isOverPlanBalance = !isEditing && paymentType === "PLAN" &&
+    Boolean(selectedPlanData) && amountValue > selectedPlanBalance + 0.00001
 
   const handleSubmit = async () => {
     setShowErrors(true)
-    if (isPatientMissing || isAmountMissing || isReferenceMissing) return
+    if (submitLock.current || isSaving || localSubmitting) return
+    if (isPatientMissing || isAmountMissing || isReferenceMissing || isPlanMissing || isConceptMissing || isPlanUnavailable || isOverPlanBalance) return
 
     let structuredNotes = formData.notes || ""
     if (formData.method === "CREDIT_CARD") {
@@ -219,16 +222,23 @@ export function PaymentModal({
       structuredNotes = structuredNotes ? `[TARJETA DÉBITO] ${structuredNotes}` : `[TARJETA DÉBITO]`
     }
 
-    const payload = {
+    const payload: PaymentFormData = {
       ...formData,
-      treatmentPlanId: formData.treatmentPlanId || undefined,
+      destination: paymentType === "PLAN" ? "PLAN" : "COUNTER",
+      treatmentPlanId: paymentType === "PLAN" ? formData.treatmentPlanId : undefined,
       notes: structuredNotes,
       reference: reference.trim() || undefined,
       receiptImage: receiptImage || undefined,
     }
-
-    const success = await onSave(payload)
-    if (success) onClose()
+    submitLock.current = true
+    setLocalSubmitting(true)
+    try {
+      const success = await onSave(payload)
+      if (success) onClose()
+    } finally {
+      submitLock.current = false
+      setLocalSubmitting(false)
+    }
   }
 
   return (
@@ -290,6 +300,7 @@ export function PaymentModal({
                     <Input
                       type="number"
                       step="0.01"
+                      readOnly={isEditing}
                       value={formData.amount}
                       onChange={(e) => setFormData((prev: any) => ({ ...prev, amount: e.target.value }))}
                       placeholder="0.00"
@@ -304,6 +315,7 @@ export function PaymentModal({
                   </Label>
                   <select
                     value={formData.status}
+                    disabled={isEditing || (paymentType === "PLAN" && !isEditing)}
                     onChange={(e) => setFormData((prev) => ({ ...prev, status: e.target.value as PaymentState }))}
                     className="w-full h-10 px-2 rounded-lg border border-border bg-background text-foreground text-xs font-bold outline-none cursor-pointer"
                   >
@@ -312,6 +324,13 @@ export function PaymentModal({
                   </select>
                 </div>
               </div>
+
+              {paymentType === "PLAN" && !isEditing && (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300" role="status">
+                  Los planes activos se muestran por saldo. La autorización B2 y la integridad del presupuesto
+                  se verifican en el servidor al procesar el cobro. Si falta autorización, no se registra el pago.
+                </p>
+              )}
 
               {/* MÉTODOS DE PAGO EN GRID COMPACTO */}
               <div className="bg-muted/10 border border-border/60 rounded-xl p-3.5">
@@ -366,10 +385,10 @@ export function PaymentModal({
         {/* PIE DEL MODAL */}
         <DialogFooter className="px-6 py-4 border-t border-border/60 bg-muted/20 flex flex-row items-center justify-between shrink-0">
           <div className="text-[11px] font-medium hidden sm:block">
-            {showErrors && (isPatientMissing || isAmountMissing || isReferenceMissing) ? (
+            {showErrors && (isPatientMissing || isAmountMissing || isReferenceMissing || isPlanMissing || isConceptMissing || isPlanUnavailable || isOverPlanBalance) ? (
               <span className="text-rose-500 font-bold flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                Complete los campos obligatorios en rojo.
+                {isPlanMissing ? "Selecciona un plan aprobado." : isConceptMissing ? "Indica el concepto del cobro de Mostrador." : "Complete los campos obligatorios en rojo."}
               </span>
             ) : (
               <p className="text-muted-foreground">Verifique la información antes de procesar.</p>
@@ -379,8 +398,8 @@ export function PaymentModal({
             <Button variant="outline" onClick={onClose} className="rounded-lg text-xs font-bold h-9 px-4 border-border hover:bg-muted w-full sm:w-auto cursor-pointer">
               Cancelar
             </Button>
-            <Button type="button" onClick={handleSubmit} disabled={isSaving} className="bg-[#008bcd] hover:bg-[#0073ab] text-white rounded-lg text-xs font-bold h-9 px-5 shadow-xs transition-all active:scale-95 w-full sm:w-auto cursor-pointer">
-              {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <DollarSign className="w-3.5 h-3.5 mr-1 stroke-[2.5]" />}
+            <Button type="button" onClick={handleSubmit} disabled={isSaving || localSubmitting || (paymentType === "PLAN" && !isEditing && (isPlanUnavailable || isOverPlanBalance))} className="bg-[#008bcd] hover:bg-[#0073ab] text-white rounded-lg text-xs font-bold h-9 px-5 shadow-xs transition-all active:scale-95 w-full sm:w-auto cursor-pointer">
+              {(isSaving || localSubmitting) ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <DollarSign className="w-3.5 h-3.5 mr-1 stroke-[2.5]" />}
               {editingPayment ? "Guardar Cambios" : "Procesar Cobro"}
             </Button>
           </div>
