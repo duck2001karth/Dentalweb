@@ -1,6 +1,7 @@
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
+import { patientAdministrativeSelect } from "./patient-select"
 
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
@@ -27,13 +28,12 @@ export const GET = createApiHandler(
       where: whereClause,
       orderBy: { createdAt: "desc" },
       take: search ? 20 : 50,
+      select: patientAdministrativeSelect,
     })
 
     return { patients }
   }
 )
-
-// POST original conservado: registro de pacientes sin cambios.
 export const POST = createApiHandler(
   {
     roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],
@@ -86,7 +86,8 @@ export const POST = createApiHandler(
         data: patientDataToSave,
       })
 
-      return { patient: newPatient }
+      const { medicalAlerts, observaciones, ...patientForResponse } = newPatient
+      return { patient: patientForResponse }
     } catch (error: any) {
       if (error.code === "P2002") {
         throw new Error("Ya existe un paciente registrado con ese CI/Identificación.")

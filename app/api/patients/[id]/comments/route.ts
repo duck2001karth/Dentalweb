@@ -5,6 +5,10 @@ export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
   async (req, { params }) => {
     const id = params.id as string
+    const patient = await prisma.patient.findFirst({
+      where: { id, isDeleted: false }, select: { id: true },
+    })
+    if (!patient) throw new Error("NOT_FOUND")
     return await prisma.patientComment.findMany({
       where: { patientId: id },
       include: { author: { select: { name: true } } },
@@ -17,11 +21,18 @@ export const POST = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
   async (req, { params, user, data, audit }) => {
     const id = params.id as string
-    if (!data.text) throw new Error("El texto es obligatorio")
+    const patient = await prisma.patient.findFirst({
+      where: { id, isDeleted: false }, select: { id: true },
+    })
+    if (!patient) throw new Error("NOT_FOUND")
+    if (typeof data?.text !== "string" || !data.text.trim() || data.text.length > 5000) {
+      throw new Error("El comentario debe tener entre 1 y 5000 caracteres")
+    }
 
-    const currentAuthorId = data.authorId || user.id
+    // La identidad del autor proviene siempre de la sesión, nunca del navegador.
+    const currentAuthorId = user.id
     const comment = await prisma.patientComment.create({
-      data: { text: data.text, authorId: currentAuthorId, patientId: id },
+      data: { text: data.text.trim(), authorId: currentAuthorId, patientId: id },
       include: { author: { select: { name: true } } }
     })
 
@@ -45,10 +56,20 @@ export const DELETE = createApiHandler(
 
     if (!commentId) throw new Error("Falta el ID del comentario")
 
-    const previousComment = await prisma.patientComment.findUnique({ where: { id: commentId } })
+    const patient = await prisma.patient.findFirst({
+      where: { id: patientId, isDeleted: false }, select: { id: true },
+    })
+    if (!patient) throw new Error("NOT_FOUND")
+    const previousComment = await prisma.patientComment.findFirst({
+      where: { id: commentId, patientId },
+      select: { id: true },
+    })
     if (!previousComment) throw new Error("NOT_FOUND")
 
-    await prisma.patientComment.delete({ where: { id: commentId } })
+    const deleted = await prisma.patientComment.deleteMany({
+      where: { id: commentId, patientId },
+    })
+    if (deleted.count !== 1) throw new Error("NOT_FOUND")
 
     await audit({
       action: "DELETE_PATIENT_COMMENT",
@@ -56,7 +77,7 @@ export const DELETE = createApiHandler(
       entityId: commentId,
       patientId: patientId,
       details: `Eliminó un comentario del expediente del paciente.`,
-      oldData: { text: previousComment.text }
+      oldData: { commentId }
     })
 
     return { success: true, message: "Comentario eliminado correctamente" }

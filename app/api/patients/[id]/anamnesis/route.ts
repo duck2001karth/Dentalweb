@@ -2,9 +2,14 @@ import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 
 export const GET = createApiHandler(
-  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  { roles: ["ADMIN", "DOCTOR"] },
   async (req, { params }) => {
     const patientId = params.id as string
+    const patient = await prisma.patient.findFirst({
+      where: { id: patientId, isDeleted: false },
+      select: { id: true },
+    })
+    if (!patient) throw new Error("NOT_FOUND")
     const anamnesis = await prisma.anamnesis.findUnique({ where: { patientId } })
     
     if (!anamnesis || !anamnesis.data) return { data: null }
@@ -21,6 +26,12 @@ export const POST = createApiHandler(
   { roles: ["ADMIN", "DOCTOR"] }, // RBAC aplicado directamente
   async (req, { params, data, audit }) => {
     const patientId = params.id as string
+
+    const patient = await prisma.patient.findFirst({
+      where: { id: patientId, isDeleted: false },
+      select: { id: true },
+    })
+    if (!patient) throw new Error("NOT_FOUND")
 
     const anamnesisPayload = {
       motivo: data.motivo || { tags: [], notes: "" },

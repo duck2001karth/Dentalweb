@@ -2,12 +2,21 @@ import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
 import { headers } from "next/headers"
+import { patientAdministrativeSelect } from "@/app/api/patients/patient-select"
 
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
-  async (req, { params }) => {
+  async (_req, { params, user }) => {
     const id = params.id as string
-    const patient = await prisma.patient.findUnique({ where: { id } })
+    if (user.role === "RECEPTIONIST") {
+      const patient = await prisma.patient.findFirst({
+        where: { id, isDeleted: false },
+        select: patientAdministrativeSelect,
+      })
+      if (!patient) throw new Error("NOT_FOUND")
+      return { patient }
+    }
+    const patient = await prisma.patient.findFirst({ where: { id, isDeleted: false } })
     if (!patient) throw new Error("NOT_FOUND")
     return { patient }
   }
@@ -56,19 +65,29 @@ export const PATCH = createApiHandler(
       ...(input.observaciones !== undefined && { observaciones: input.observaciones }),
     }
 
+    if (user.role === "RECEPTIONIST") {
+      delete safeData.medicalAlerts
+      delete safeData.observaciones
+    }
+    if (Object.keys(safeData).length === 0) {
+      throw new Error("No hay campos permitidos para actualizar")
+    }
+
     const headersList = await headers()
     const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
     const userAgent = headersList.get("user-agent") || "Desconocido"
 
     const updatedPatient = await prisma.$transaction(async (tx) => {
-      const previousPatient = await tx.patient.findUnique({ where: { id } })
+      const previousPatient = await tx.patient.findFirst({ where: { id, isDeleted: false } })
       if (!previousPatient) throw new Error("NOT_FOUND")
 
       const res = await tx.patient.update({
         where: { id },
         data: safeData,
       })
-
+      const changedFields = Object.keys(safeData).filter((field) =>
+        JSON.stringify((previousPatient as any)[field]) !== JSON.stringify((res as any)[field])
+      )
       await tx.auditLog.create({
         data: {
           userId: user.id,
@@ -77,8 +96,8 @@ export const PATCH = createApiHandler(
           entityId: id,
           patientId: id,
           details: `Modificación de datos demográficos del paciente: ${res.firstName} ${res.lastName}`,
-          oldData: previousPatient,
-          newData: res,
+          oldData: { changedFields },
+          newData: { changedFields },
           ipAddress,
           userAgent,
         },
@@ -86,6 +105,10 @@ export const PATCH = createApiHandler(
       return res
     })
 
+    if (user.role === "RECEPTIONIST") {
+      const { medicalAlerts, observaciones, ...administrativePatient } = updatedPatient
+      return { patient: administrativePatient }
+    }
     return { patient: updatedPatient }
   }
 )
@@ -100,7 +123,7 @@ export const DELETE = createApiHandler(
     const userAgent = headersList.get("user-agent") || "Desconocido"
 
     await prisma.$transaction(async (tx) => {
-      const previous = await tx.patient.findUnique({ where: { id } })
+      const previous = await tx.patient.findFirst({ where: { id, isDeleted: false } })
       if (!previous) throw new Error("NOT_FOUND")
 
       const deletedPatient = await tx.patient.update({
@@ -116,7 +139,7 @@ export const DELETE = createApiHandler(
           entityId: id,
           patientId: id,
           details: `Eliminación lógica de paciente: ${deletedPatient.firstName} ${deletedPatient.lastName}`,
-          oldData: { isDeleted: previous.isDeleted, ci: previous.ci },
+          oldData: { isDeleted: previous.isDeleted },
           newData: { isDeleted: true },
           ipAddress,
           userAgent,

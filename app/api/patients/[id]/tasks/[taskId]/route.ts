@@ -7,18 +7,31 @@ export const PATCH = createApiHandler(
     const taskId = params.taskId as string
     const patientId = params.id as string
 
-    const task = await prisma.patientTask.update({
-      where: { id: taskId },
-      data: { isCompleted: Boolean(data.isCompleted) },
-      include: { assignedTo: { select: { name: true } } }
+    if (typeof data?.isCompleted !== "boolean") {
+      throw new Error("El campo isCompleted debe ser booleano")
+    }
+    const patient = await prisma.patient.findFirst({
+      where: { id: patientId, isDeleted: false }, select: { id: true },
     })
+    if (!patient) throw new Error("NOT_FOUND")
+    // Limitar la escritura al paciente de la URL (evita IDOR/BOLA).
+    const result = await prisma.patientTask.updateMany({
+      where: { id: taskId, patientId },
+      data: { isCompleted: data.isCompleted },
+    })
+    if (result.count !== 1) throw new Error("NOT_FOUND")
+    const task = await prisma.patientTask.findFirst({
+      where: { id: taskId, patientId },
+      include: { assignedTo: { select: { name: true } } },
+    })
+    if (!task) throw new Error("NOT_FOUND")
 
     await audit({
       action: "UPDATE_PATIENT_TASK",
       entity: "PATIENT_TASK",
       entityId: taskId,
       patientId: patientId,
-      details: `Tarea "${task.title}" marcada como ${data.isCompleted ? "completada" : "pendiente"}.`,
+      details: `Estado de tarea actualizado a ${data.isCompleted ? "completada" : "pendiente"}.`,
     })
 
     return task
@@ -31,18 +44,28 @@ export const DELETE = createApiHandler(
     const taskId = params.taskId as string
     const patientId = params.id as string
 
-    const existingTask = await prisma.patientTask.findUnique({ where: { id: taskId } })
+    const patient = await prisma.patient.findFirst({
+      where: { id: patientId, isDeleted: false }, select: { id: true },
+    })
+    if (!patient) throw new Error("NOT_FOUND")
+    const existingTask = await prisma.patientTask.findFirst({
+      where: { id: taskId, patientId },
+      select: { id: true },
+    })
     if (!existingTask) throw new Error("NOT_FOUND")
 
-    await prisma.patientTask.delete({ where: { id: taskId } })
+    const result = await prisma.patientTask.deleteMany({
+      where: { id: taskId, patientId },
+    })
+    if (result.count !== 1) throw new Error("NOT_FOUND")
 
     await audit({
       action: "DELETE_PATIENT_TASK",
       entity: "PATIENT_TASK",
       entityId: taskId,
       patientId: patientId,
-      details: `Tarea eliminada: "${existingTask.title}".`,
-      oldData: { title: existingTask.title }
+      details: "Tarea de paciente eliminada",
+      oldData: { taskId }
     })
 
     return { success: true, message: "Tarea eliminada correctamente" }

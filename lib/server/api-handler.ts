@@ -4,7 +4,7 @@ import { getSessionUser } from "@/lib/server/get-session-user"
 import { logAuditEvent } from "@/lib/audit"
 import { z, ZodSchema } from "zod"
 
-type Role = keyof typeof UserRole // "ADMIN" | "DOCTOR" | "RECEPTIONIST"
+type Role = keyof typeof UserRole
 
 interface HandlerContext<T> {
   user: Awaited<ReturnType<typeof getSessionUser>>
@@ -18,6 +18,20 @@ interface HandlerOptions<T> {
   roles?: Role[]
   schema?: ZodSchema<T>
 }
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number = 400) {
+    super(message)
+    this.name = "ApiError"
+  }
+}
+
+const AUTH_ERRORS = new Set([
+  "No se encontró una sesión activa",
+  "Usuario no encontrado en la base de datos",
+  "Cuenta de usuario desactivada",
+])
+
+const NOT_FOUND_ERRORS = new Set(["NOT_FOUND", "DOCUMENT_NOT_FOUND"])
 
 export function createApiHandler<T = any>(
   options: HandlerOptions<T>,
@@ -27,7 +41,7 @@ export function createApiHandler<T = any>(
     try {
       const user = await getSessionUser()
 
-      if (options.roles && options.roles.length > 0 && !options.roles.includes(user.role as Role)) {
+      if (options.roles?.length && !options.roles.includes(user.role as Role)) {
         await logAuditEvent({
           userId: user.id,
           action: "UNAUTHORIZED_ACCESS_ATTEMPT",
@@ -41,7 +55,7 @@ export function createApiHandler<T = any>(
 
       let data: any = undefined
       if (["POST", "PUT", "PATCH"].includes(req.method)) {
-        let body: any = null
+        let body: any
         try {
           body = await req.json()
         } catch {
@@ -51,21 +65,16 @@ export function createApiHandler<T = any>(
           )
         }
 
-        if (options.schema) {
-          data = options.schema.parse(body)
-        } else {
-          data = body
-        }
+        data = options.schema ? options.schema.parse(body) : body
       }
 
       const params = routeContext?.params ? await routeContext.params : {}
       const searchParams = req.nextUrl.searchParams
 
-      const auditHelper = async (auditParams: Omit<Parameters<typeof logAuditEvent>[0], "userId">) => {
-        await logAuditEvent({
-          userId: user.id,
-          ...auditParams,
-        })
+      const auditHelper = async (
+        auditParams: Omit<Parameters<typeof logAuditEvent>[0], "userId">
+      ) => {
+        await logAuditEvent({ userId: user.id, ...auditParams })
       }
 
       const result = await handler(req, {
@@ -77,8 +86,7 @@ export function createApiHandler<T = any>(
       })
 
       return result instanceof NextResponse ? result : NextResponse.json(result)
-
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof z.ZodError) {
         return NextResponse.json(
           { error: "Datos de entrada inválidos", details: error.flatten() },
@@ -86,20 +94,27 @@ export function createApiHandler<T = any>(
         )
       }
 
-      if (
-        error.message === "No se encontró una sesión activa" ||
-        error.message === "Usuario no encontrado en la base de datos"
-      ) {
-        return NextResponse.json({ error: "Sesión inválida o no autenticada" }, { status: 401 })
+      if (error instanceof ApiError) {
+        const status = Number.isInteger(error.status) && error.status >= 400 && error.status <= 499
+          ? error.status
+          : 400
+        return NextResponse.json({ error: error.message }, { status })
       }
 
-      if (error.message === "NOT_FOUND" || error.message === "DOCUMENT_NOT_FOUND") {
+      const message = error instanceof Error ? error.message : ""
+      if (AUTH_ERRORS.has(message)) {
+        return NextResponse.json(
+          { error: "Sesión inválida o no autenticada" },
+          { status: 401 }
+        )
+      }
+
+      if (NOT_FOUND_ERRORS.has(message)) {
         return NextResponse.json({ error: "Recurso no encontrado" }, { status: 404 })
       }
-
       console.error(`[API Error] ${req.nextUrl.pathname}:`, error)
       return NextResponse.json(
-        { error: error?.message || "Error interno del servidor" },
+        { error: "Error interno del servidor" },
         { status: 500 }
       )
     }

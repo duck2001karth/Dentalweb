@@ -327,8 +327,8 @@ export function PaymentModal({
 
               {paymentType === "PLAN" && !isEditing && (
                 <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300" role="status">
-                  Los planes activos se muestran por saldo. La autorización B2 y la integridad del presupuesto
-                  se verifican en el servidor al procesar el cobro. Si falta autorización, no se registra el pago.
+                  Se muestran los planes activos con saldo pendiente. Antes de registrar un abono, el sistema comprobará automáticamente que el presupuesto esté aprobado.
+                  Si falta alguna autorización, te indicará qué debes revisar.
                 </p>
               )}
 
