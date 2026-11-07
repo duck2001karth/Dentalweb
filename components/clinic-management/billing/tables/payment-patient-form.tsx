@@ -53,9 +53,73 @@ export function PaymentPatientTargetForm({
     return () => document.removeEventListener("mousedown", handleOutside)
   }, [])
 
-  const filteredPatients = (patients || [])
-    .filter((pt: any) => `${pt.firstName} ${pt.lastName} ${pt.ci || ""}`.toLowerCase().includes(patientSearchQuery.toLowerCase()))
-    .slice(0, 5)
+  const [remotePatients, setRemotePatients] = useState<any[]>([])
+  const [isSearchingPatients, setIsSearchingPatients] = useState(false)
+  const [patientSearchError, setPatientSearchError] = useState(false)
+  const query = patientSearchQuery.trim()
+  const useRemoteSearch = query.length >= 2 && !formData.patientId && !isEditing
+
+  useEffect(() => {
+    if (!showDropdown || !useRemoteSearch) {
+      setRemotePatients([])
+      setIsSearchingPatients(false)
+      setPatientSearchError(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setIsSearchingPatients(true)
+    setPatientSearchError(false)
+    setRemotePatients([])
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const response = await fetch(
+          `/api/patients?search=${encodeURIComponent(query)}`,
+          { signal: controller.signal, cache: "no-store" }
+        )
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+        const result = await response.json()
+        if (!controller.signal.aborted) {
+          setRemotePatients(Array.isArray(result?.patients) ? result.patients : [])
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          console.error("Error al buscar pacientes desde Caja:", error)
+          setPatientSearchError(true)
+          setRemotePatients([])
+        }
+      } finally {
+        if (!controller.signal.aborted) setIsSearchingPatients(false)
+      }
+    }, 300)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+      controller.abort()
+    }
+  }, [query, showDropdown, useRemoteSearch])
+
+  const normalizeSearch = (value: unknown) =>
+    String(value ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ")
+
+  const localTerms = normalizeSearch(query).split(" ").filter(Boolean)
+  const filteredPatients = useRemoteSearch
+    ? remotePatients.slice(0, 10)
+    : (patients || [])
+        .filter((pt: any) => {
+          const searchable = normalizeSearch(
+            [pt.firstName, pt.lastName, pt.ci].filter(Boolean).join(" ")
+          )
+          return localTerms.every((term) => searchable.includes(term))
+        })
+        .slice(0, 5)
 
   const handleTypeChange = (type: "GENERAL" | "PLAN") => {
     setPaymentType(type)
@@ -82,7 +146,6 @@ export function PaymentPatientTargetForm({
 
   return (
     <div className="space-y-4">
-      {/* 1. BÚSQUEDA DE PACIENTE COMPACTA */}
       <div ref={dropdownRef} className={cn("bg-muted/10 border rounded-xl p-3 relative transition-colors", showErrors && isPatientMissing ? "border-rose-500/80 bg-rose-500/5" : "border-border/60")}>
         <div className="flex items-center justify-between mb-2">
           <Label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
@@ -115,7 +178,15 @@ export function PaymentPatientTargetForm({
         {/* DROPDOWN FLOTANTE */}
         {showDropdown && !isEditing && patientSearchQuery.length > 0 && (
           <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-popover border border-border rounded-xl shadow-xl z-50 max-h-44 overflow-y-auto divide-y divide-border/40">
-            {filteredPatients.length > 0 ? (
+            {isSearchingPatients && useRemoteSearch ? (
+              <div className="p-3 text-xs text-muted-foreground text-center" role="status">
+                Buscando pacientes...
+              </div>
+            ) : patientSearchError && useRemoteSearch ? (
+              <div className="p-3 text-xs text-rose-500 text-center" role="alert">
+                No se pudo consultar pacientes. Intenta nuevamente.
+              </div>
+            ) : filteredPatients.length > 0 ? (
               filteredPatients.map((pt: any) => (
                 <button
                   type="button"

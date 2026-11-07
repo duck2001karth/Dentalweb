@@ -4,36 +4,40 @@ import { z } from "zod"
 
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
-  async (req, { searchParams }) => {
-    const search = searchParams.get("search")
-    
-    let whereClause: any = { isDeleted: false }
+  async (_req, { searchParams }) => {
+    const search = (searchParams.get("search") || "").trim().slice(0, 120)
+    const terms = search.split(/\s+/).filter(Boolean)
 
-    if (search) {
-      whereClause = {
-        ...whereClause,
-        OR: [
-          { firstName: { contains: search, mode: 'insensitive' } },
-          { lastName: { contains: search, mode: 'insensitive' } },
-          { ci: { contains: search, mode: 'insensitive' } },
-        ],
-      }
+    const whereClause = {
+      isDeleted: false,
+      ...(terms.length > 0
+        ? {
+            AND: terms.map((term) => ({
+              OR: [
+                { firstName: { contains: term, mode: "insensitive" as const } },
+                { lastName: { contains: term, mode: "insensitive" as const } },
+                { ci: { contains: term, mode: "insensitive" as const } },
+              ],
+            })),
+          }
+        : {}),
     }
 
     const patients = await prisma.patient.findMany({
       where: whereClause,
-      orderBy: { createdAt: 'desc' },
-      take: 50,
+      orderBy: { createdAt: "desc" },
+      take: search ? 20 : 50,
     })
 
     return { patients }
   }
 )
 
+// POST original conservado: registro de pacientes sin cambios.
 export const POST = createApiHandler(
   {
     roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],
-    schema: z.any(), 
+    schema: z.any(),
   },
   async (req, { data }) => {
     const input = data.input || data
@@ -47,7 +51,7 @@ export const POST = createApiHandler(
       lastName: input.lastName,
       ci: input.ci || input.rut,
       birthDate: input.birthDate ? new Date(input.birthDate) : null,
-      
+
       tipoRegistro: input.tipoRegistro || undefined,
       cedulaAcudiente: input.cedulaAcudiente || undefined,
       tipoIdentificacion: input.tipoIdentificacion || undefined,
@@ -73,7 +77,7 @@ export const POST = createApiHandler(
       convenio: input.convenio || undefined,
       gestante: input.gestante === true,
       observaciones: input.observaciones || undefined,
-      
+
       medicalAlerts: input.medicalAlerts || undefined,
     }
 
@@ -81,14 +85,13 @@ export const POST = createApiHandler(
       const newPatient = await prisma.patient.create({
         data: patientDataToSave,
       })
-      
+
       return { patient: newPatient }
-      
     } catch (error: any) {
-      if (error.code === 'P2002') {
-        throw new Error("Ya existe un paciente registrado con ese CI/Identificación.") 
+      if (error.code === "P2002") {
+        throw new Error("Ya existe un paciente registrado con ese CI/Identificación.")
       }
-      throw error 
+      throw error
     }
   }
 )
