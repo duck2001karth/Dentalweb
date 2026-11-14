@@ -1,179 +1,226 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Search, CheckCircle2, User, X, Loader2 } from "lucide-react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
+import type { CSSProperties, KeyboardEvent } from "react"
+import { Check, Loader2, Search, UserRound, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+
+type PatientOption = {
+  id: string
+  firstName?: string | null
+  lastName?: string | null
+  ci?: string | null
+  phone?: string | null
+}
 
 interface PatientSelectorProps {
   patientId: string
   setPatientId: (id: string) => void
-  patients: any[]
+  patients: PatientOption[]
   isLoading: boolean
-  themeColor?: string 
+  themeColor?: string
 }
 
-export function PatientSelector({ 
-  patientId, 
-  setPatientId, 
-  patients = [], 
-  isLoading, 
-  themeColor = "#008bcd" 
+const fullName = (patient: PatientOption) =>
+  [patient.firstName, patient.lastName].filter(Boolean).join(" ").trim() || "Paciente sin nombre"
+
+export function PatientSelector({
+  patientId,
+  setPatientId,
+  patients = [],
+  isLoading: _isLoading,
+  themeColor: _themeColor = "#008bcd",
 }: PatientSelectorProps) {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [isOpen, setIsOpen] = useState(false)
+  const [query, setQuery] = useState("")
+  const [open, setOpen] = useState(false)
+  const [results, setResults] = useState<PatientOption[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [activeIndex, setActiveIndex] = useState(-1)
+  const [rememberedPatient, setRememberedPatient] = useState<PatientOption | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listId = useId()
+  const hintId = useId()
 
-  const selectedPatient = patients?.find((p: any) => p.id === patientId)
-
-  const filteredPatients = (patients || []).filter((p: any) => {
-    const term = searchTerm.trim().toLowerCase()
-    if (!term) return false
-    
-    const fullName = `${p.firstName || ""} ${p.lastName || ""}`.toLowerCase()
-    const ci = (p.ci || "").toLowerCase()
-    const phone = (p.phone || "").toLowerCase()
-    
-    return fullName.includes(term) || ci.includes(term) || phone.includes(term)
-  })
+  const selectedPatient = useMemo(
+    () =>
+      (rememberedPatient?.id === patientId ? rememberedPatient : null) ??
+      patients.find((patient) => String(patient.id) === String(patientId)) ??
+      null,
+    [patientId, patients, rememberedPatient]
+  )
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
+    if (!open || query.trim().length < 2 || patientId) {
+      setLoading(false)
+      return
     }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
+
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      setLoading(true)
+      setError("")
+      try {
+        const url = `/api/patients?search=${encodeURIComponent(query.trim())}&page=1&limit=20`
+        const response = await fetch(url, {
+          signal: controller.signal,
+          cache: "no-store",
+          credentials: "same-origin",
+        })
+        if (!response.ok) throw new Error("No fue posible consultar los pacientes")
+        const json: unknown = await response.json()
+        const list =
+          json && typeof json === "object" && "patients" in json
+            ? (json as { patients?: unknown }).patients
+            : undefined
+        if (!Array.isArray(list)) throw new Error("Respuesta de pacientes inválida")
+        setResults(list.filter((item): item is PatientOption =>
+          !!item && typeof item === "object" && typeof item.id === "string"
+        ))
+        setActiveIndex(-1)
+      } catch (err) {
+        if (controller.signal.aborted) return
+        setResults([])
+        setError(err instanceof Error ? err.message : "Error de conexión")
+      } finally {
+        if (!controller.signal.aborted) setLoading(false)
+      }
+    }, 300)
+
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [open, query, patientId])
+
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener("pointerdown", onPointerDown)
+    return () => document.removeEventListener("pointerdown", onPointerDown)
   }, [])
 
-  const styleVars = {
-    "--theme-color": themeColor,
-    "--theme-light": `${themeColor}15`,
-    "--theme-border": `${themeColor}40`,
-  } as React.CSSProperties
+  const selectPatient = (patient: PatientOption) => {
+    setRememberedPatient(patient)
+    setPatientId(patient.id)
+    setQuery("")
+    setResults([])
+    setOpen(false)
+    setActiveIndex(-1)
+  }
 
-  if (selectedPatient) {
+  const clearPatient = () => {
+    setPatientId("")
+    setRememberedPatient(null)
+    setQuery("")
+    setResults([])
+    setOpen(false)
+    setActiveIndex(-1)
+    window.requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  const handleKeys = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      setOpen(false)
+      setActiveIndex(-1)
+    } else if (open && results.length > 0 && event.key === "ArrowDown") {
+      event.preventDefault()
+      setActiveIndex((prev) => Math.min(prev + 1, results.length - 1))
+    } else if (open && results.length > 0 && event.key === "ArrowUp") {
+      event.preventDefault()
+      setActiveIndex((prev) => Math.max(prev - 1, 0))
+    } else if (open && event.key === "Enter" && activeIndex >= 0 && results[activeIndex]) {
+      event.preventDefault()
+      selectPatient(results[activeIndex])
+    }
+  }
+
+  if (patientId) {
     return (
-      <div 
-        className="flex items-center justify-between px-3.5 py-2 border rounded-xl h-11 shadow-xs animate-in fade-in duration-200"
-        style={{ backgroundColor: `${themeColor}12`, borderColor: `${themeColor}30` }}
-      >
-        <div className="flex items-center gap-2.5 overflow-hidden">
-          <div 
-            className="w-7 h-7 rounded-lg text-white flex items-center justify-center font-black text-xs shrink-0 shadow-xs"
-            style={{ backgroundColor: themeColor }}
-          >
-            {selectedPatient.firstName?.charAt(0) || "P"}
+      <div className="flex min-h-11 items-center justify-between gap-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 font-sans">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <UserRound className="h-4 w-4" aria-hidden="true" />
           </div>
-          <div className="flex flex-col min-w-0">
-            <span 
-              className="font-bold text-xs truncate leading-tight"
-              style={{ color: themeColor }}
-            >
-              {selectedPatient.firstName} {selectedPatient.lastName}
-            </span>
-            <span className="text-[10px] text-muted-foreground font-mono font-medium leading-none mt-0.5">
-              CI: {selectedPatient.ci || "S/N"}
-            </span>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-foreground">
+              {selectedPatient ? fullName(selectedPatient) : "Paciente seleccionado"}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">
+              {selectedPatient ? `CI: ${selectedPatient.ci || "Sin documento"}` : "Selección conservada"}
+            </p>
           </div>
         </div>
-        
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2.5 font-bold text-xs rounded-lg transition-colors cursor-pointer"
-          style={{ color: themeColor, backgroundColor: "transparent" }}
-          onClick={() => {
-            setPatientId("")
-            setSearchTerm("")
-            setIsOpen(false)
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${themeColor}20`}
-          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-        >
-          <X className="w-3.5 h-3.5 mr-1" />
-          Cambiar
+        <Button type="button" variant="ghost" size="sm" onClick={clearPatient} className="h-9 shrink-0 rounded-lg px-2.5 text-xs text-foreground hover:bg-muted" aria-label="Cambiar paciente">
+          <X className="mr-1 h-3.5 w-3.5" aria-hidden="true" /> Cambiar
         </Button>
       </div>
     )
   }
 
   return (
-    <div ref={containerRef} className="relative w-full" style={styleVars}>
-      
-      <style>{`
-        .patient-input-dynamic:focus {
-          border-color: var(--theme-color) !important;
-          box-shadow: 0 0 0 2px var(--theme-light) !important;
-        }
-        .patient-item-dynamic:hover {
-          background-color: var(--theme-light) !important;
-        }
-        .patient-item-dynamic:hover .patient-text-dynamic {
-          color: var(--theme-color) !important;
-        }
-        .patient-item-dynamic:hover .patient-icon-dynamic {
-          background-color: var(--theme-light) !important;
-          color: var(--theme-color) !important;
-        }
-        .patient-item-dynamic:hover .patient-check-dynamic {
-          color: var(--theme-color) !important;
-          opacity: 1 !important;
-        }
-      `}</style>
-
+    <div ref={containerRef} className="relative w-full font-sans" style={{ "--patient-selector-accent": "var(--color-primary)" } as CSSProperties}>
       <div className="relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Search aria-hidden="true" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          type="text"
-          placeholder={isLoading ? "Cargando lista de pacientes..." : "Buscar por nombre, apellido o CI..."}
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value)
-            setIsOpen(e.target.value.trim().length > 0)
+          ref={inputRef}
+          type="search"
+          autoComplete="off"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={open && query.trim().length >= 2}
+          aria-controls={listId}
+          aria-activedescendant={activeIndex >= 0 ? `${listId}-${activeIndex}` : undefined}
+          aria-describedby={hintId}
+          placeholder="Buscar paciente por nombre, apellido o CI..."
+          value={query}
+          onChange={(event) => {
+            setQuery(event.target.value)
+            setResults([])
+            setError("")
+            setActiveIndex(-1)
+            setOpen(true)
           }}
-          disabled={isLoading}
-          className="patient-input-dynamic pl-9.5 pr-8 bg-background border-border/80 h-11 text-foreground placeholder:text-muted-foreground font-medium text-xs rounded-xl shadow-xs transition-all outline-none"
+          onFocus={() => query.trim().length >= 2 && setOpen(true)}
+          onKeyDown={handleKeys}
+          className="h-11 w-full rounded-xl border-border bg-background pl-10 pr-10 text-sm text-foreground shadow-none outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/30"
         />
-        {isLoading && (
-          <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
-        )}
+        {loading && <Loader2 aria-label="Buscando" className="absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-primary" />}
       </div>
+      <p id={hintId} className="sr-only">Escribe al menos dos caracteres. Usa las flechas para elegir y Enter para seleccionar.</p>
 
-      {isOpen && searchTerm.trim().length > 0 && !isLoading && (
-        <div className="absolute top-full left-0 w-full mt-1.5 bg-popover border border-border/80 shadow-2xl rounded-2xl z-[130] max-h-56 overflow-y-auto custom-scrollbar p-1 divide-y divide-border/30 animate-in fade-in slide-in-from-top-1 duration-150">
-          {filteredPatients.length === 0 ? (
-            <div className="py-6 px-4 text-center text-xs text-muted-foreground font-medium">
-              <User className="w-6 h-6 mx-auto mb-1.5 opacity-40 text-muted-foreground" />
-              No se encontraron pacientes para "{searchTerm}"
-            </div>
+      {open && query.trim().length >= 2 && (
+        <div id={listId} role="listbox" aria-label="Resultados de pacientes" className="absolute left-0 right-0 top-full z-[130] mt-2 max-h-64 overflow-y-auto rounded-xl border border-border bg-popover p-1.5 text-popover-foreground shadow-xl">
+          {loading ? (
+            <p className="px-3 py-5 text-center text-xs text-muted-foreground">Buscando pacientes…</p>
+          ) : error ? (
+            <p role="alert" className="px-3 py-5 text-center text-xs text-destructive">{error}. Intenta nuevamente.</p>
+          ) : results.length === 0 ? (
+            <p className="px-3 py-5 text-center text-xs text-muted-foreground">No hay coincidencias. Comprueba el nombre o CI.</p>
           ) : (
-            filteredPatients.map((patient: any) => (              <div
+            results.map((patient, index) => (
+              <button
                 key={patient.id}
-                className="patient-item-dynamic flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer transition-colors text-left"
-                onClick={() => {
-                  setPatientId(patient.id)
-                  setIsOpen(false)
-                  setSearchTerm("")
-                }}
+                id={`${listId}-${index}`}
+                type="button"
+                role="option"
+                aria-selected={index === activeIndex}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => selectPatient(patient)}
+                className={`flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none ${index === activeIndex ? "bg-accent" : ""}`}
               >
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="patient-icon-dynamic w-8 h-8 rounded-lg bg-muted/60 text-muted-foreground flex items-center justify-center font-bold text-xs transition-colors shrink-0">
-                    {patient.firstName?.charAt(0) || "P"}
-                  </div>
-                  <div className="flex flex-col truncate">
-                    <span className="patient-text-dynamic font-bold text-xs text-foreground transition-colors truncate">
-                      {patient.firstName} {patient.lastName}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground font-mono">
-                      C.I: {patient.ci || "Sin documento"} {patient.phone ? ` • Tel: ${patient.phone}` : ""}
-                    </span>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"><UserRound className="h-4 w-4" aria-hidden="true" /></div>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-popover-foreground">{fullName(patient)}</p>
+                    <p className="truncate text-xs text-muted-foreground">CI: {patient.ci || "Sin documento"}</p>
                   </div>
                 </div>
-                <CheckCircle2 className="patient-check-dynamic w-4 h-4 text-muted-foreground/30 shrink-0 opacity-0 transition-all" />
-              </div>
+                <Check className="h-4 w-4 shrink-0 text-primary opacity-0" aria-hidden="true" />
+              </button>
             ))
           )}
         </div>

@@ -3,10 +3,7 @@
 import React, { useEffect, useMemo } from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { 
-  CalendarIcon, Clock, User, 
-  MapPin, AlignLeft
-} from "lucide-react"
+import { CalendarDays, Clock3, UserRound, MapPin, AlignLeft, Stethoscope } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
@@ -30,6 +27,9 @@ interface AppointmentFormProps {
   validInitialStatuses: any[]
 }
 
+const fieldClass = "h-11 w-full rounded-xl border-border bg-background text-sm font-medium text-foreground shadow-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/25"
+const labelClass = "flex items-center gap-1.5 text-xs font-medium text-foreground"
+
 export function AppointmentForm({
   formData,
   setFormData,
@@ -39,13 +39,14 @@ export function AppointmentForm({
   isLoadingDoctors,
   isAdminOrStaff,
   currentUser,
-  validInitialStatuses
+  validInitialStatuses,
 }: AppointmentFormProps) {
   const { settings, isLoading: isLoadingSettings } = useClinicSettings()
 
-  const availableBoxes = settings?.availableBoxes && settings.availableBoxes.length > 0 
-    ? settings.availableBoxes 
-    : ["Box 1"]
+  const availableBoxes = useMemo(
+    () => settings?.availableBoxes?.length ? settings.availableBoxes : ["Box 1"],
+    [settings?.availableBoxes]
+  )
 
   useEffect(() => {
     if (!formData.box && availableBoxes.length > 0) {
@@ -54,13 +55,9 @@ export function AppointmentForm({
   }, [availableBoxes, formData.box, setFormData])
 
   const activeDoctorColor = useMemo(() => {
-    const selectedDocId = formData.doctorId
-    if (selectedDocId) {
-      const found = doctorsList?.find((d: any) => d.id === selectedDocId)
-      if (found?.calendarColor) return found.calendarColor
-    }
-    return currentUser?.calendarColor || "#008bcd"
-  }, [formData.doctorId, doctorsList, currentUser])
+    const selected = doctorsList?.find((d: any) => d.id === formData.doctorId)
+    return selected?.calendarColor || currentUser?.calendarColor || "#008bcd"
+  }, [formData.doctorId, doctorsList, currentUser?.calendarColor])
 
   const handleStartTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedTime = e.target.value
@@ -69,250 +66,204 @@ export function AppointmentForm({
       return
     }
 
-    const [h, m] = selectedTime.split(':').map(Number)
+    // Conserva el comportamiento original: duración inicial de 30 minutos.
+    const [h, m] = selectedTime.split(":").map(Number)
     const d = new Date()
-    d.setHours(h, m + 30, 0)
-    const endTime = `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
-    
+    d.setHours(h, m + 30, 0, 0)
+    const endTime = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
     setFormData({ ...formData, startTime: selectedTime, endTime })
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 px-6 py-5">
-      <div className="space-y-5">
-        <h3 
-          style={{ color: activeDoctorColor }}
-          className="text-[11px] font-black uppercase tracking-widest border-b border-border/80 pb-2 flex items-center gap-2 transition-colors"
-        >
-          <User className="w-3.5 h-3.5" /> 1. Detalles Clínicos
-        </h3>
-        
-        <div className="space-y-2">
-          <Label className="text-foreground font-bold text-xs flex items-center justify-between">
-            <span>Paciente <span className="text-destructive font-black">*</span></span>
-            {!formData.patientId && (
-              <span className="text-[10px] text-muted-foreground font-normal">Requerido</span>
-            )}
-          </Label>
-          <PatientSelector 
-             patientId={formData.patientId} 
-             setPatientId={(id) => setFormData({ ...formData, patientId: id })} 
-             patients={patients} 
-             isLoading={isLoadingPatients}
-             themeColor={activeDoctorColor} 
-           />
+    <div className="grid grid-cols-1 gap-7 px-5 py-6 font-sans sm:px-6 lg:grid-cols-2 lg:gap-8 lg:px-7">
+      {/* Identificación y contexto clínico */}
+      <section className="min-w-0 space-y-5" aria-labelledby="appointment-clinical-heading">
+        <div className="flex items-center gap-2.5 border-b border-border/70 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <UserRound className="h-4 w-4" aria-hidden="true" />
+          </div>
+          <div>
+            <h3 id="appointment-clinical-heading" className="text-sm font-semibold tracking-tight text-foreground">Paciente y atención</h3>
+            <p className="text-[11px] text-muted-foreground">Información para identificar la cita</p>
+          </div>
         </div>
 
         <div className="space-y-2">
-          <Label className="text-foreground font-bold text-xs flex items-center justify-between">
-            <span>Especialista Asignado <span className="text-destructive font-black">*</span></span>
-            {!formData.doctorId && (
-              <span className="text-[10px] text-muted-foreground font-normal">Requerido</span>
-            )}
+          <Label className={labelClass}>
+            Paciente <span className="text-destructive" aria-hidden="true">*</span>
           </Label>
-          <Select 
-            value={formData.doctorId || ""} 
-            onValueChange={(id) => setFormData({ ...formData, doctorId: id })} 
+          <PatientSelector
+            patientId={formData.patientId}
+            setPatientId={(id) => setFormData({ ...formData, patientId: id })}
+            patients={patients}
+            isLoading={isLoadingPatients}
+            themeColor={activeDoctorColor}
+          />
+          <p className="text-[11px] text-muted-foreground">Busca por nombre, apellido o CI.</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label className={labelClass}>
+            <Stethoscope className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+            Especialista asignado <span className="text-destructive" aria-hidden="true">*</span>
+          </Label>
+          <Select
+            value={formData.doctorId || ""}
+            onValueChange={(id) => setFormData({ ...formData, doctorId: id })}
             disabled={isLoadingDoctors}
           >
-            <SelectTrigger className={cn(
-              "bg-background border-border/80 h-11 font-semibold text-xs text-foreground rounded-xl transition-colors",
-              !formData.doctorId && "border-amber-500/50"
-            )}>
-              <SelectValue placeholder={isLoadingDoctors ? "Cargando especialistas..." : "Seleccione el especialista"} />
+            <SelectTrigger className={fieldClass}>
+              <SelectValue placeholder={isLoadingDoctors ? "Cargando especialistas..." : "Seleccionar especialista"} />
             </SelectTrigger>
-            <SelectContent className="rounded-xl border-border/80 shadow-xl">
+            <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground shadow-lg">
               {isAdminOrStaff ? (
                 doctorsList.length > 0 ? (
-                  doctorsList.map(doc => {
-                    const docColor = doc.calendarColor || "#008bcd"
-                    return (
-                      <SelectItem key={doc.id} value={doc.id} className="font-semibold text-xs cursor-pointer">
-                        <div className="flex items-center gap-2">
-                          <span 
-                            className="w-2.5 h-2.5 rounded-full inline-block shrink-0 shadow-xs" 
-                            style={{ backgroundColor: docColor }} 
-                          />
-                          <span>{doc.name} {doc.specialty ? `(${doc.specialty})` : ""}</span>
-                        </div>
-                      </SelectItem>
-                    )
-                  })
+                  doctorsList.map((doc: any) => (
+                    <SelectItem key={doc.id} value={doc.id} className="text-sm">
+                      <span className="flex items-center gap-2">
+                        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: doc.calendarColor || "#008bcd" }} />
+                        <span>{doc.name}{doc.specialty ? ` (${doc.specialty})` : ""}</span>
+                      </span>
+                    </SelectItem>
+                  ))
                 ) : (
-                  <SelectItem value="empty" disabled className="text-xs">No hay médicos registrados</SelectItem>
+                  <SelectItem value="empty" disabled>No hay especialistas registrados</SelectItem>
                 )
               ) : (
-                <SelectItem value={currentUser?.id || "doctor_default"} className="font-semibold text-xs">
-                  <div className="flex items-center gap-2">
-                    <span 
-                      className="w-2.5 h-2.5 rounded-full inline-block shrink-0" 
-                      style={{ backgroundColor: activeDoctorColor }} 
-                    />
-                    <span>{currentUser?.name || "Dr. Asignado"} (Tú)</span>
-                  </div>
+                <SelectItem value={currentUser?.id || "doctor_default"}>
+                  <span className="flex items-center gap-2">
+                    <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: activeDoctorColor }} />
+                    {currentUser?.name || "Dr. Asignado"} (Tú)
+                  </span>
                 </SelectItem>
               )}
             </SelectContent>
           </Select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3.5">
-          <div className="space-y-2">
-            <Label className="text-foreground font-bold text-xs">Estado Inicial</Label>
-            <Select value={formData.status} onValueChange={(val) => setFormData({ ...formData, status: val })}>
-              <SelectTrigger className="bg-background border-border/80 h-11 font-semibold text-xs text-foreground rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/80 shadow-xl p-1">
-                {validInitialStatuses.map((s) => {
-                  const Icon = s.icon;
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="min-w-0 space-y-2">
+            <Label className={labelClass}>Estado inicial</Label>
+            <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+              <SelectTrigger className={fieldClass}><SelectValue /></SelectTrigger>
+              <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground shadow-lg">
+                {validInitialStatuses.map((status) => {
+                  const StatusIcon = status.icon
                   return (
-                    <SelectItem key={s.value} value={s.value} className="rounded-lg my-0.5 cursor-pointer">
-                      <div className="flex items-center gap-2 py-0.5">
-                        <Icon className="w-4 h-4" style={{ color: activeDoctorColor }} />
-                        <span className={cn("px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider border", s.badgeClass || s.bg)}>
-                          {s.label}
-                        </span>
-                      </div>
+                    <SelectItem key={status.value} value={status.value} className="text-sm">
+                      <span className="flex items-center gap-2">
+                        {StatusIcon ? <StatusIcon className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" /> : null}
+                        {status.label}
+                      </span>
                     </SelectItem>
                   )
                 })}
               </SelectContent>
             </Select>
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-foreground font-bold text-xs">Situación</Label>
-            <Select value={formData.situation} onValueChange={(val) => setFormData({ ...formData, situation: val })}>
-              <SelectTrigger className="bg-background border-border/80 h-11 font-semibold text-xs text-foreground rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/80 shadow-xl">
-                <SelectItem value="Primera Consulta" className="text-xs font-semibold">Primera Consulta</SelectItem>
-                <SelectItem value="Control Regular" className="text-xs font-semibold">Control Regular</SelectItem>
-                <SelectItem value="Emergencia" className="text-xs font-semibold">Emergencia</SelectItem>
-                <SelectItem value="Tratamiento" className="text-xs font-semibold">Tratamiento</SelectItem>
+          <div className="min-w-0 space-y-2">
+            <Label className={labelClass}>Situación</Label>
+            <Select value={formData.situation} onValueChange={(value) => setFormData({ ...formData, situation: value })}>
+              <SelectTrigger className={fieldClass}><SelectValue /></SelectTrigger>
+              <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground shadow-lg">
+                <SelectItem value="Primera Consulta">Primera consulta</SelectItem>
+                <SelectItem value="Control Regular">Control regular</SelectItem>
+                <SelectItem value="Emergencia">Emergencia</SelectItem>
+                <SelectItem value="Tratamiento">Tratamiento</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* SECCIÓN 2: HORARIO Y UBICACIÓN */}
-      <div className="space-y-5">
-        <h3 
-          style={{ color: activeDoctorColor }}
-          className="text-[11px] font-black uppercase tracking-widest border-b border-border/80 pb-2 flex items-center gap-2 transition-colors"
-        >
-          <CalendarIcon className="w-3.5 h-3.5" /> 2. Horario y Ubicación
-        </h3>
+      {/* Fecha, horario y ubicación */}
+      <section className="min-w-0 space-y-5" aria-labelledby="appointment-schedule-heading">
+        <div className="flex items-center gap-2.5 border-b border-border/70 pb-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <CalendarDays className="h-4 w-4" aria-hidden="true" />
+          </div>
+          <div>
+            <h3 id="appointment-schedule-heading" className="text-sm font-semibold tracking-tight text-foreground">Fecha y horario</h3>
+            <p className="text-[11px] text-muted-foreground">Disponibilidad y ubicación de atención</p>
+          </div>
+        </div>
+
         <div className="space-y-2">
-          <Label className="text-foreground font-bold text-xs">
-            Fecha de la Cita <span className="text-destructive font-black">*</span>
-          </Label>
+          <Label className={labelClass}>Fecha de la cita <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Popover>
             <PopoverTrigger asChild>
-              <Button 
-                variant="outline" 
-                className={cn(
-                  "w-full justify-start text-left font-bold bg-background border-border/80 hover:bg-muted/50 h-11 rounded-xl text-xs text-foreground shadow-xs cursor-pointer",
-                  !formData.date && "text-muted-foreground border-destructive/50"
-                )}
-              >
-                {formData.date ? format(formData.date, "EEEE, d 'de' MMMM yyyy", { locale: es }) : <span>Elegir fecha *</span>}
+              <Button type="button" variant="outline" className={cn(fieldClass, "justify-between px-3 text-left font-medium hover:bg-accent hover:text-accent-foreground", !formData.date && "text-muted-foreground")}>
+                <span className="truncate">
+                  {formData.date ? format(formData.date, "EEEE, d 'de' MMMM yyyy", { locale: es }) : "Seleccionar fecha"}
+                </span>
+                <CalendarDays className="ml-2 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-0 z-[120] rounded-2xl shadow-xl border-border/80" align="start">
-              <div 
-                style={{ "--calendar-accent": activeDoctorColor } as React.CSSProperties}
-                className="[&_.rdp-day_selected]:bg-[var(--calendar-accent)] [&_.rdp-day_selected]:text-white [&_.rdp-day_selected:hover]:opacity-90"
-              >
-                <Calendar 
-                  mode="single" 
-                  selected={formData.date} 
-                  onSelect={(d) => d && setFormData({ ...formData, date: d })} 
-                  disabled={(d) => d < new Date(new Date().setHours(0, 0, 0, 0))} 
-                />
-              </div>
+            <PopoverContent align="start" className="z-[120] w-auto rounded-xl border-border bg-popover p-2 text-popover-foreground shadow-xl">
+              <Calendar
+                mode="single"
+                selected={formData.date}
+                onSelect={(day) => day && setFormData({ ...formData, date: day })}
+                disabled={(day) => day < new Date(new Date().setHours(0, 0, 0, 0))}
+                className="bg-transparent"
+              />
             </PopoverContent>
           </Popover>
         </div>
-        <div className="grid grid-cols-2 gap-3.5 bg-muted/20 p-4 rounded-xl border border-border/80 relative overflow-hidden">
-          <div 
-            className="absolute left-0 top-0 bottom-0 w-1 transition-colors duration-300" 
-            style={{ backgroundColor: activeDoctorColor }} 
-          />
-          <div className="space-y-2">
-            <Label className="text-foreground font-bold text-xs flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" style={{ color: activeDoctorColor }} /> 
-              Hora Inicio <span className="text-destructive font-black">*</span>
-            </Label>
-            <Input 
-              type="time" 
-              value={formData.startTime} 
-              onChange={handleStartTimeChange} 
-              className="bg-background border-border/80 h-10 text-foreground font-bold rounded-lg text-xs shadow-xs" 
-              required 
-            />
+
+        <div className="space-y-3 rounded-2xl border border-border/70 bg-muted/25 p-3.5 sm:p-4">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-xs font-semibold text-foreground">
+              <Clock3 className="h-4 w-4 text-primary" aria-hidden="true" /> Horario
+            </p>
+            <span className="text-[11px] text-muted-foreground">Duración inicial: 30 min</span>
           </div>
-          <div className="space-y-2">
-            <Label className="text-foreground font-bold text-xs flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-muted-foreground" /> 
-              Hora Fin <span className="text-destructive font-black">*</span>
-            </Label>
-            <Input 
-              type="time" 
-              value={formData.endTime} 
-              onChange={(e) => setFormData({ ...formData, endTime: e.target.value })} 
-              min={formData.startTime} 
-              className="bg-background border-border/80 h-10 text-foreground font-bold rounded-lg text-xs shadow-xs" 
-              required 
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="min-w-0 space-y-2">
+              <Label htmlFor="appointment-start-time" className={labelClass}>Inicio <span className="text-destructive" aria-hidden="true">*</span></Label>
+              <Input id="appointment-start-time" type="time" value={formData.startTime} onChange={handleStartTimeChange} className={fieldClass} required />
+            </div>
+            <div className="min-w-0 space-y-2">
+              <Label htmlFor="appointment-end-time" className={labelClass}>Fin <span className="text-destructive" aria-hidden="true">*</span></Label>
+              <Input id="appointment-end-time" type="time" value={formData.endTime} onChange={(e) => setFormData({ ...formData, endTime: e.target.value })} min={formData.startTime} className={fieldClass} required />
+            </div>
           </div>
+          <p className="text-[11px] leading-relaxed text-muted-foreground">Puedes ajustar manualmente la hora de finalización.</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-3.5">
-          <div className="space-y-2">
-            <Label className="text-foreground font-bold text-xs flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5" style={{ color: activeDoctorColor }} /> 
-              Sillón / Box <span className="text-destructive font-black">*</span>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="min-w-0 space-y-2">
+            <Label className={labelClass}>
+              <MapPin className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              Sillón / Box <span className="text-destructive" aria-hidden="true">*</span>
             </Label>
-            <Select 
-              value={formData.box || (availableBoxes.length > 0 ? availableBoxes[0] : "")} 
-              onValueChange={(val) => setFormData({ ...formData, box: val })}
-              disabled={isLoadingSettings}
-            >
-              <SelectTrigger className="bg-background border-border/80 h-11 font-semibold text-xs text-foreground rounded-xl">
-                <SelectValue placeholder={isLoadingSettings ? "Cargando sillones..." : "Seleccionar Box..."} />
+            <Select value={formData.box || availableBoxes[0] || ""} onValueChange={(value) => setFormData({ ...formData, box: value })} disabled={isLoadingSettings}>
+              <SelectTrigger className={fieldClass}>
+                <SelectValue placeholder={isLoadingSettings ? "Cargando sillones..." : "Seleccionar box"} />
               </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/80 shadow-xl">
-                {availableBoxes.map((boxName: string, index: number) => (
-                  <SelectItem key={index} value={boxName} className="text-xs font-semibold cursor-pointer">
-                    {boxName}
-                  </SelectItem>
+              <SelectContent className="rounded-xl border-border bg-popover text-popover-foreground shadow-lg">
+                {availableBoxes.map((name: string) => (
+                  <SelectItem key={name} value={name}>{name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-
-          <div className="space-y-2">
-            <Label className="text-foreground font-bold text-xs flex items-center gap-1.5">
-              <AlignLeft className="w-3.5 h-3.5 text-muted-foreground" /> 
-              Detalle Corto <span className="text-destructive font-black">*</span>
+          <div className="min-w-0 space-y-2">
+            <Label htmlFor="appointment-reason" className={labelClass}>
+              <AlignLeft className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />
+              Detalle corto <span className="text-destructive" aria-hidden="true">*</span>
             </Label>
-            <Input 
-              value={formData.reason} 
-              onChange={(e) => setFormData({ ...formData, reason: e.target.value })} 
-              placeholder="Ej: Evaluación inicial..." 
-              className={cn(
-                "bg-background border-border/80 h-11 text-foreground font-semibold rounded-xl text-xs shadow-xs",
-                !formData.reason?.trim() && "focus-visible:ring-amber-500"
-              )} 
-              required 
+            <Input
+              id="appointment-reason"
+              value={formData.reason}
+              onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+              placeholder="Ej. Evaluación inicial"
+              className={fieldClass}
+              required
             />
           </div>
         </div>
-      </div>
+      </section>
     </div>
   )
 }

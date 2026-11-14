@@ -14,7 +14,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { cn } from "@/lib/utils"
 import { useToast } from "@/hooks/use-toast"
 import { useGetPatients } from "@/hooks/patients"
 import { useGetAppointments, useCreateAppointment } from "@/hooks/appointments"
@@ -397,54 +396,39 @@ export function NewAppointmentModal({
             customTrigger
           ) : (
             <Button
-              variant="ghost"
+              variant="outline"
               onMouseEnter={() => setIsTriggerHovered(true)}
               onMouseLeave={() => setIsTriggerHovered(false)}
               style={{
                 color: isTriggerHovered ? defaultUserColor : undefined,
-                backgroundColor: isTriggerHovered ? `${defaultUserColor}15` : undefined,
-                borderColor: isTriggerHovered ? `${defaultUserColor}40` : undefined,
+                borderColor: isTriggerHovered ? `${defaultUserColor}60` : undefined,
               }}
-              className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 shadow-none group cursor-pointer"
+              className="h-10 gap-2 rounded-xl border-border bg-card px-4 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent"
             >
-              <Plus
-                className="h-5 w-5 mr-1.5 text-muted-foreground transition-colors stroke-[2.5]"
-                style={{ color: isTriggerHovered ? defaultUserColor : undefined }}
-              />
-              <span>Dar cita</span>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Dar cita
             </Button>
           )}
         </DialogTrigger>
 
-        <DialogContent className="sm:max-w-[850px] p-0 bg-card border-border/80 overflow-hidden rounded-[24px] shadow-2xl">
-          <div
-            className="px-6 py-5 border-b border-border/80 transition-all duration-300"
-            style={{
-              background: `linear-gradient(to right, ${activeDoctorColor}18, transparent)`,
-            }}
-          >
-            <DialogHeader>
-              <DialogTitle className="text-xl md:text-2xl font-black text-foreground flex items-center gap-3 tracking-tight">
-                <div
-                  className="p-2.5 border shadow-xs rounded-xl shrink-0 transition-colors duration-300"
-                  style={{
-                    backgroundColor: `${activeDoctorColor}18`,
-                    borderColor: `${activeDoctorColor}35`,
-                    color: activeDoctorColor,
-                  }}
-                >
-                  <CalendarIcon className="w-5 h-5 stroke-[2.5]" />
-                </div>
-                Agendar Nueva Cita
+        {/* Se mantiene AppointmentForm y la lógica original de validación y guardado. */}
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] flex-col gap-0 overflow-y-auto rounded-2xl border border-border bg-card p-0 shadow-xl sm:max-w-[820px]">
+          <div className="border-b border-border/70 bg-card px-5 py-5 sm:px-7 sm:py-6">
+            <DialogHeader className="space-y-1.5 text-left">
+              <DialogTitle className="flex items-center gap-3 text-xl font-semibold tracking-tight text-foreground sm:text-[22px]">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-primary/15 bg-primary/10 text-primary">
+                  <CalendarIcon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                Agendar nueva cita
               </DialogTitle>
-              <DialogDescription className="text-muted-foreground text-xs font-semibold mt-1 ml-14">
-                Todos los campos marcados con (*) son obligatorios para reservar el horario.
+              <DialogDescription className="pl-[52px] text-xs leading-relaxed text-muted-foreground sm:text-sm">
+                Completa los datos de la atención. Los campos con <span className="font-semibold text-destructive">*</span> son obligatorios.
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="flex flex-col">
+          <form onSubmit={handleSubmit} className="min-w-0">
+            <div className="min-w-0 py-2 sm:py-3">
               <AppointmentForm
                 formData={formData}
                 setFormData={setFormData}
@@ -458,14 +442,14 @@ export function NewAppointmentModal({
               />
 
               {collision && (
-                <div className="px-6 pb-4">
+                <div className="px-5 pb-4 sm:px-7">
                   <AppointmentCollisionAlert conflict={collision} />
                 </div>
               )}
               {duplicateAppointmentInDay && (
-                <div className="px-6 pb-4">
-                  <div className="flex items-center gap-2.5 p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs">
-                    <ShieldAlert className="w-4 h-4 shrink-0" />
+                <div className="px-5 pb-4 sm:px-7">
+                  <div role="alert" className="flex items-start gap-2.5 rounded-xl border border-destructive/25 bg-destructive/5 p-3 text-xs leading-relaxed text-destructive">
+                    <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                     <span>
                       <strong>{patientDisplayName}</strong> ya tiene una cita reservada a las{" "}
                       <strong>{duplicateAppointmentInDay.startTime}</strong> en esta misma fecha.
@@ -475,66 +459,48 @@ export function NewAppointmentModal({
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-border/80 bg-muted/10 flex justify-end items-center gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setOpen(false)}
-                className="hover:bg-muted text-muted-foreground font-bold rounded-xl h-10 px-5 text-xs transition-colors cursor-pointer"
-              >
-                Cancelar
-              </Button>
-
-              <Button
-                type="submit"
-                disabled={isSaving || hasAnyConflict || !isFormValid}
-                style={{
-                  backgroundColor: hasAnyConflict || !isFormValid 
-                    ? `${activeDoctorColor}15` 
-                    : activeDoctorColor,
-                  borderColor: hasAnyConflict || !isFormValid 
-                    ? `${activeDoctorColor}40` 
-                    : "transparent",
-                  color: hasAnyConflict || !isFormValid 
-                    ? activeDoctorColor 
-                    : "#ffffff",
-                  boxShadow: (!hasAnyConflict && isFormValid)
-                    ? `0 8px 16px -4px ${activeDoctorColor}40` 
-                    : "none",
-                }}
-                className={cn(
-                  "font-bold h-10 px-6 rounded-xl text-xs transition-all duration-200 border",
-                  (hasAnyConflict || !isFormValid)
-                    ? "cursor-not-allowed opacity-100! shadow-none"
-                    : "cursor-pointer hover:opacity-90 active:scale-[0.99]"
-                )}
-              >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-white" /> Guardando...
-                  </>
-                ) : duplicateAppointmentInDay ? (
-                  <>
-                    <ShieldAlert
-                      className="w-4 h-4 mr-2 shrink-0 stroke-[2.2]"
-                      style={{ color: activeDoctorColor }}
-                    />
-                    Paciente Ya Agendado
-                  </>
-                ) : collision ? (
-                  <>
-                    <ShieldAlert
-                      className="w-4 h-4 mr-2 shrink-0 stroke-[2.2]"
-                      style={{ color: activeDoctorColor }}
-                    />
-                    Horario No Disponible
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-4 h-4 mr-2 stroke-[2.5] text-white" /> Confirmar Cita
-                  </>
-                )}
-              </Button>
+            <div className="flex flex-col gap-3 border-t border-border/70 bg-muted/20 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+              <p className="hidden text-xs text-muted-foreground sm:block">
+                Revisa los datos antes de confirmar.
+              </p>
+              <div className="flex items-center justify-end gap-2.5">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setOpen(false)}
+                  disabled={isSaving}
+                  className="h-10 rounded-xl px-4 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSaving || hasAnyConflict || !isFormValid}
+                  className="h-10 min-w-[164px] rounded-xl bg-sky-600 px-5 text-sm font-semibold text-white shadow-none transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 dark:bg-sky-500 dark:text-slate-950 dark:hover:bg-sky-400 dark:disabled:bg-muted dark:disabled:text-muted-foreground"
+                >
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                      Guardando...
+                    </>
+                  ) : duplicateAppointmentInDay ? (
+                    <>
+                      <ShieldAlert className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Paciente ya agendado
+                    </>
+                  ) : collision ? (
+                    <>
+                      <ShieldAlert className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Horario no disponible
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="mr-2 h-4 w-4" aria-hidden="true" />
+                      Confirmar cita
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </form>
         </DialogContent>
