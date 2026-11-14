@@ -1,193 +1,235 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import dayjs from "dayjs"
-import isBetween from "dayjs/plugin/isBetween"
 import "dayjs/locale/es"
 import { useSession } from "next-auth/react"
-import { Calendar, Sparkles, Users, Clock, ArrowRight, Activity, Loader2 } from "lucide-react"
+import {
+  Activity, ArrowRight, Calendar, Clock, Loader2, Sparkles, Users,
+} from "lucide-react"
 import Link from "next/link"
-
 import { useGetAppointments } from "@/hooks/appointments"
-import { useGetPatients } from "@/hooks/patients"
 
-dayjs.extend(isBetween)
-dayjs.locale("es")
+const PHRASES = [
+  "Cada sonrisa merece una atención cercana, cuidadosa y profesional.",
+  "La confianza se construye escuchando a cada paciente.",
+  "Los pequeños detalles hacen grande la experiencia de atención.",
+  "Un buen día comienza con empatía, precisión y trabajo en equipo.",
+  "Cuidamos personas, acompañamos historias y creamos sonrisas.",
+] as const
+
+type GreetingUser = {
+  name?: string | null
+  gender?: string
+  role?: string
+}
+
+type PatientStats = {
+  totalPatients: number
+  newPatientsThisWeek: number
+}
+
+function appointmentDate(appointment: any): dayjs.Dayjs {
+  return dayjs(appointment.date || appointment.startTime)
+}
 
 export const Greeting = () => {
-  const { data, status } = useSession()
+  const { data: session, status } = useSession()
+  const { appointments, isLoading: loadingAppointments } = useGetAppointments({
+    fecha: new Date(),
+  })
+
   const [mounted, setMounted] = useState(false)
-  
-  const { appointments, isLoading: isLoadingAppointments } = useGetAppointments({ fecha: new Date() })
-  const { patients, isLoading: isLoadingPatients } = useGetPatients({})
+  const [phraseIndex, setPhraseIndex] = useState(0)
+  const [stats, setStats] = useState<PatientStats | null>(null)
+  const [loadingStats, setLoadingStats] = useState(true)
+  const [statsError, setStatsError] = useState(false)
+  const lastRefresh = useRef(0)
+  const requestController = useRef<AbortController | null>(null)
+
+  const loadStats = useCallback(async () => {
+    requestController.current?.abort()
+    const controller = new AbortController()
+    requestController.current = controller
+    setLoadingStats(true)
+    try {
+      const response = await fetch("/api/patients/stats", {
+        cache: "no-store",
+        credentials: "same-origin",
+        signal: controller.signal,
+      })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const value: unknown = await response.json()
+      if (
+        typeof value !== "object" || value === null ||
+        !("totalPatients" in value) || !("newPatientsThisWeek" in value) ||
+        typeof value.totalPatients !== "number" ||
+        typeof value.newPatientsThisWeek !== "number"
+      ) {
+        throw new Error("Respuesta de estadísticas inválida")
+      }
+      if (!controller.signal.aborted) {
+        setStats({
+          totalPatients: value.totalPatients,
+          newPatientsThisWeek: value.newPatientsThisWeek,
+        })
+        setStatsError(false)
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        console.error("No se pudieron actualizar los contadores:", error)
+        setStatsError(true)
+      }
+    } finally {
+      if (!controller.signal.aborted) setLoadingStats(false)
+    }
+  }, [])
 
   useEffect(() => {
     setMounted(true)
-  }, [])
+    setPhraseIndex(Math.floor(Math.random() * PHRASES.length))
+    void loadStats()
+
+    const refreshOnReturn = () => {
+      if (document.visibilityState !== "visible") return
+      const now = Date.now()
+      if (now - lastRefresh.current < 800) return
+      lastRefresh.current = now
+      setPhraseIndex((previous) => (previous + 1) % PHRASES.length)
+      void loadStats()
+    }
+
+    document.addEventListener("visibilitychange", refreshOnReturn)
+    window.addEventListener("focus", refreshOnReturn)
+    return () => {
+      document.removeEventListener("visibilitychange", refreshOnReturn)
+      window.removeEventListener("focus", refreshOnReturn)
+      requestController.current?.abort()
+    }
+  }, [loadStats])
 
   if (!mounted || status === "loading") {
-    return <div className="h-64 w-full bg-slate-100 dark:bg-card/60 animate-pulse rounded-3xl" />
+    return <div className="h-64 w-full animate-pulse rounded-3xl bg-muted" />
   }
 
-  const hour = dayjs().hour()
-  let greetingText = ""
-  let emoji = ""
-
-  if (hour < 12) {
-    greetingText = "Buenos Días"
-    emoji = "☀️"
-  } else if (hour < 18) {
-    greetingText = "Buenas Tardes"
-    emoji = "🌞"
-  } else {
-    greetingText = "Buenas Noches"
-    emoji = "🌙"
-  }
-
-  const user = data?.user as any
-  const rawFirstName = user?.name?.split(" ")[0] || "Patricio"
-  const isDoctor = user?.role === "DOCTOR"
-  const prefix = isDoctor ? (user?.gender === "female" ? "Dra." : "Dr.") : ""
-  const displayName = prefix ? `${prefix} ${rawFirstName}` : rawFirstName
-  const doctorColor = user?.calendarColor || "#008bcd"
-
-  const currentDate = dayjs().format("dddd, D [de] MMMM")
-  const capitalizedDate = currentDate.charAt(0).toUpperCase() + currentDate.slice(1)
+  dayjs.locale("es")
+  const currentHour = dayjs().hour()
+  const greetingText = currentHour < 12 ? "Buenos días" : currentHour < 18 ? "Buenas tardes" : "Buenas noches"
+  const emoji = currentHour < 12 ? "☀️" : currentHour < 18 ? "🌤️" : "🌙"
+  const user = session?.user as GreetingUser | undefined
+  const firstName = user?.name?.trim().split(/\s+/)[0] || "equipo"
+  const prefix = user?.role === "DOCTOR" ? (user.gender === "female" ? "Dra." : "Dr.") : ""
+  const displayName = prefix ? `${prefix} ${firstName}` : firstName
+  const dateLabel = dayjs().format("dddd, D [de] MMMM")
+  const capitalizedDate = dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1)
   const now = dayjs()
-  
-  const upcomingAppointments = appointments
-    ?.filter((app: any) => dayjs(app.date || app.startTime).isAfter(now))
-    ?.sort((a: any, b: any) => dayjs(a.date || a.startTime).diff(dayjs(b.date || b.startTime)))
-  
-  const nextAppointment = upcomingAppointments?.[0]
-  const oneWeekAgo = dayjs().subtract(7, 'day')
-  const newPatientsThisWeek = patients?.filter((p: any) => dayjs(p.createdAt).isAfter(oneWeekAgo)).length || 0
-  const totalPatients = patients?.length || 0
+
+  const todayAppointments = (appointments ?? []).filter((appointment: any) =>
+    appointmentDate(appointment).isSame(now, "day"),
+  )
+  const nextAppointment = todayAppointments
+    .filter((appointment: any) => appointmentDate(appointment).isAfter(now))
+    .sort((a: any, b: any) => appointmentDate(a).valueOf() - appointmentDate(b).valueOf())[0]
+
+  const numberOrPlaceholder = (value: number | undefined) =>
+    loadingStats && !stats ? "…" : statsError && !stats ? "—" : value ?? "—"
+
+  const cardClass = "flex min-w-0 flex-col justify-between rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-sm transition-colors hover:border-sky-300 dark:border-slate-700 dark:bg-slate-800/65 dark:hover:border-sky-700 sm:p-5"
+  const labelClass = "text-xs font-semibold text-slate-600 dark:text-slate-300 sm:text-sm"
+  const valueClass = "mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl"
+  const subtitleClass = "mt-1 text-xs text-slate-600 dark:text-slate-300"
 
   return (
-    <div 
-      className="w-full rounded-3xl border border-sky-200/90 dark:border-border/80 bg-[var(--greeting-bg,#e0f2fe)] dark:bg-card p-6 md:p-8 lg:p-10 shadow-sm dark:shadow-none overflow-hidden relative transition-all duration-300"
-      style={{
-        backgroundImage: "var(--greeting-gradient)",
-      }}
+    <section
+      aria-label="Resumen de inicio"
+      className="relative w-full overflow-hidden rounded-3xl border border-sky-200 bg-sky-50 p-5 shadow-sm dark:border-slate-700 dark:bg-slate-900 md:p-7 lg:p-8"
     >
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center relative z-10">
-        
-        <div className="space-y-6">
-          <div className="inline-flex items-center gap-2 bg-white/95 dark:bg-muted/80 backdrop-blur-md px-4 py-1.5 rounded-full text-xs md:text-sm font-bold text-sky-900 dark:text-foreground/90 shadow-xs border border-sky-300/60 dark:border-border/80">
-            <Calendar className="w-4 h-4 text-[var(--doctor-accent,#008bcd)]" />
+      <div className="relative grid grid-cols-1 items-center gap-6 lg:grid-cols-2 lg:gap-10">
+        <div className="space-y-5">
+          <div className="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 sm:text-sm">
+            <Calendar className="h-4 w-4 text-sky-700 dark:text-sky-300" />
             <span>{capitalizedDate}</span>
           </div>
-          
-          <div>
-            <h1 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight leading-tight text-slate-900 dark:text-foreground">
-              {greetingText}, <br />
-              <span className="text-[var(--doctor-accent,#008bcd)] dark:text-foreground">
-                {displayName}
-              </span>{" "}
-              <span className="inline-block animate-bounce">{emoji}</span>
-            </h1>
-          </div>
 
-          <div className="flex items-start gap-3.5 pt-1">
-            <div className="bg-sky-200/60 dark:bg-muted/80 p-2.5 rounded-xl backdrop-blur-md border border-sky-300/50 dark:border-border/80 shrink-0 shadow-inner">
-              <Sparkles className="w-5 h-5 text-[var(--doctor-accent,#008bcd)]" />
-            </div>
-            <p className="text-xs md:text-sm font-medium text-slate-700 dark:text-muted-foreground max-w-md leading-relaxed italic">
-              "Cuidando sonrisas y transformando vidas, un paciente a la vez. ¡Que tengas un excelente turno!"
+          <h1 className="text-3xl font-bold leading-tight tracking-tight text-slate-900 dark:text-white sm:text-4xl">
+            {greetingText}, <span className="whitespace-nowrap">{emoji}</span>
+            <span className="mt-1 block break-words text-sky-800 dark:text-sky-300">{displayName}</span>
+          </h1>
+
+          <div className="flex items-start gap-3 rounded-2xl border border-sky-100 bg-white/75 p-3 dark:border-slate-700 dark:bg-slate-800/65">
+            <Sparkles className="mt-0.5 h-5 w-5 shrink-0 text-sky-700 dark:text-sky-300" aria-hidden="true" />
+            <p className="max-w-lg text-sm leading-relaxed text-slate-700 dark:text-slate-200" aria-live="polite">
+              {PHRASES[phraseIndex]}
             </p>
           </div>
-        </div> 
+        </div>
 
-        {/* LADO DERECHO: TARJETAS MÉTRICAS */}
-        <div className="grid grid-cols-2 gap-3 lg:gap-4 w-full content-center">
-          
-          {/* TARJETA 1: CITAS HOY */}
-          <div className="bg-white/95 dark:bg-muted/40 backdrop-blur-xl border border-sky-200/70 dark:border-border/80 hover:border-[var(--doctor-accent,#008bcd)]/60 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-xs dark:shadow-none hover:shadow-md transition-all duration-200 cursor-default group">
-            <div className="flex items-center justify-between text-slate-600 dark:text-muted-foreground mb-2">
-              <span className="text-xs sm:text-sm font-bold tracking-wide group-hover:text-slate-900 dark:group-hover:text-foreground transition-colors">Citas Hoy</span>
-              <Calendar className="h-4 w-4 text-[var(--doctor-accent,#008bcd)] opacity-90 group-hover:opacity-100 transition-all" />
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
+          <div className={cardClass}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={labelClass}>Citas hoy</span>
+              <Calendar className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" />
             </div>
-            <div>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-foreground">
-                {isLoadingAppointments ? <Loader2 className="w-6 h-6 animate-spin mt-2" /> : appointments?.length || 0}
-              </div>
-              <p className="text-[10px] md:text-xs text-slate-500 dark:text-muted-foreground mt-1 font-medium">Programadas en tu agenda</p>
+            <div className={valueClass}>
+              {loadingAppointments ? <Loader2 className="h-6 w-6 animate-spin" /> : todayAppointments.length}
             </div>
+            <p className={subtitleClass}>Programadas para hoy</p>
           </div>
 
-          {/* TARJETA 2: NUEVOS PACIENTES */}
-          <div className="bg-white/95 dark:bg-muted/40 backdrop-blur-xl border border-sky-200/70 dark:border-border/80 hover:border-[var(--doctor-accent,#008bcd)]/60 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-xs dark:shadow-none hover:shadow-md transition-all duration-200 cursor-default group">
-            <div className="flex items-center justify-between text-slate-600 dark:text-muted-foreground mb-2">
-              <span className="text-xs sm:text-sm font-bold tracking-wide group-hover:text-slate-900 dark:group-hover:text-foreground transition-colors">Nuevos Sem.</span>
-              <Users className="h-4 w-4 text-[var(--doctor-accent,#008bcd)] opacity-90 group-hover:opacity-100 transition-all" />
+          <div className={cardClass}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={labelClass}>Nuevos esta semana</span>
+              <Users className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" />
             </div>
-            <div>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-foreground">
-                {isLoadingPatients ? <Loader2 className="w-6 h-6 animate-spin mt-2" /> : `+${newPatientsThisWeek}`}
-              </div>
-              <p className="text-[10px] md:text-xs text-slate-500 dark:text-muted-foreground mt-1 font-medium">
-                Registrados últimos 7 días
-              </p>
+            <div className={valueClass}>
+              {loadingStats && !stats ? <Loader2 className="h-6 w-6 animate-spin" /> : statsError && !stats ? "—" : `+${numberOrPlaceholder(stats?.newPatientsThisWeek)}`}
             </div>
+            <p className={subtitleClass}>Últimos 7 días</p>
           </div>
 
-          {/* TARJETA 3: PRÓXIMO PACIENTE */}
-          <div className="bg-white/95 dark:bg-muted/40 backdrop-blur-xl border border-sky-200/70 dark:border-border/80 hover:border-[var(--doctor-accent,#008bcd)]/60 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-xs dark:shadow-none hover:shadow-md transition-all duration-200 cursor-default relative overflow-hidden group">
-            <div 
-              className="absolute left-0 top-0 bottom-0 w-1.5 transition-colors duration-300"
-              style={{ backgroundColor: doctorColor }}
-            />
-            <div className="flex items-center justify-between text-slate-600 dark:text-muted-foreground mb-2 pl-2">
-              <span className="text-xs sm:text-sm font-bold tracking-wide group-hover:text-slate-900 dark:group-hover:text-foreground transition-colors">Próximo Paciente</span>
-              <Clock className="h-4 w-4 text-[var(--doctor-accent,#008bcd)]" />
+          <div className={cardClass}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={labelClass}>Próximo paciente</span>
+              <Clock className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" />
             </div>
-            <div className="pl-2">
-              {isLoadingAppointments ? (
-                <Loader2 className="w-6 h-6 animate-spin mt-2" />
-              ) : nextAppointment ? (
-                <>
-                  <div className="text-lg sm:text-xl lg:text-2xl font-black text-slate-900 dark:text-foreground tracking-tight">
-                    {dayjs(nextAppointment.date || nextAppointment.startTime).format("hh:mm A")}
-                  </div>
-                  <p className="text-[10px] md:text-xs text-[var(--doctor-accent,#008bcd)] font-bold mt-1 truncate">
-                    {nextAppointment.patient?.firstName} {nextAppointment.patient?.lastName}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <div className="text-base sm:text-lg font-bold text-slate-800 dark:text-foreground/90 tracking-tight mt-1">
-                    Agenda Libre
-                  </div>
-                  <p className="text-[10px] md:text-xs text-slate-500 dark:text-muted-foreground mt-1 font-medium">
-                    No hay más citas hoy
-                  </p>
-                </>
-              )}
-            </div>
+            {loadingAppointments ? (
+              <Loader2 className="mt-3 h-6 w-6 animate-spin text-sky-700" />
+            ) : nextAppointment ? (
+              <>
+                <p className="mt-2 text-xl font-bold text-slate-900 dark:text-slate-50">
+                  {appointmentDate(nextAppointment).format("hh:mm A")}
+                </p>
+                <p className="mt-1 truncate text-xs font-medium text-slate-600 dark:text-slate-300">
+                  {nextAppointment.patient?.firstName} {nextAppointment.patient?.lastName}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-50">Agenda libre</p>
+                <p className={subtitleClass}>Sin próximas citas hoy</p>
+              </>
+            )}
           </div>
 
-          {/* TARJETA 4: EXPEDIENTES / DIRECTORIO */}
-          <Link 
-            href="/pacientes" 
-            className="bg-white/95 dark:bg-muted/40 backdrop-blur-xl border border-sky-200/70 dark:border-border/80 hover:border-[var(--doctor-accent,#008bcd)]/60 rounded-2xl p-4 sm:p-5 flex flex-col justify-between shadow-xs dark:shadow-none hover:shadow-md transition-all duration-200 cursor-pointer group"
-          >
-            <div className="flex items-center justify-between text-slate-600 dark:text-muted-foreground mb-2">
-              <span className="text-xs sm:text-sm font-bold tracking-wide group-hover:text-slate-900 dark:group-hover:text-foreground transition-colors">Expedientes</span>
-              <Activity className="h-4 w-4 text-[var(--doctor-accent,#008bcd)] opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all" />
+          <Link href="/pacientes" className={`${cardClass} group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-600`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className={labelClass}>Expedientes</span>
+              <Activity className="h-4 w-4 shrink-0 text-sky-700 dark:text-sky-300" />
             </div>
-            <div>
-              <div className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-foreground">
-                {isLoadingPatients ? <Loader2 className="w-6 h-6 animate-spin mt-2" /> : totalPatients}
-              </div>
-              <p className="text-[10px] md:text-xs text-[var(--doctor-accent,#008bcd)] font-bold group-hover:underline transition-colors mt-1 flex items-center gap-1">
-                Ver directorio <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
-              </p>
-            </div>
+            <p className={valueClass}>{numberOrPlaceholder(stats?.totalPatients)}</p>
+            <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-sky-800 dark:text-sky-300">
+              Ver directorio <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
+            </span>
           </Link>
-
         </div>
       </div>
-    </div>
+      {statsError && (
+        <p role="status" className="mt-3 text-xs text-amber-800 dark:text-amber-300">
+          No se pudieron actualizar los contadores de pacientes. Se muestran los últimos valores disponibles.
+        </p>
+      )}
+    </section>
   )
 }
+
+export default Greeting
