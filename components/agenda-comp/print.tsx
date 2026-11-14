@@ -3,9 +3,9 @@
 import React, { useState, useRef } from "react"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
-import { Eye, Printer } from "lucide-react"
+import { Eye, Printer, CalendarDays, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from "@/components/ui/dialog"
 import { useClinicSettings } from "@/config/clinic-settings"
 
 export interface PrintAgendaModalProps {
@@ -104,7 +104,6 @@ export function PrintAgendaModal({
   const clinicBrandColor = (settings as any)?.primaryColor || "#008bcd"
 
   const [internalOpen, setInternalOpen] = useState(false)
-  const [isTriggerHovered, setIsTriggerHovered] = useState(false)
 
   const isControlled = controlledIsOpen !== undefined
   const open = isControlled ? controlledIsOpen : internalOpen
@@ -119,101 +118,114 @@ export function PrintAgendaModal({
 
   const rawList = appointments.length > 0 ? appointments : citas
   const validDate = date instanceof Date && !isNaN(date.getTime()) ? date : new Date()
-  const filteredAppointments = rawList.filter((cita: any) => cita.status !== "CANCELLED")
+  const filteredAppointments = rawList
+    .filter((cita: any) => cita.status !== "CANCELLED")
+    .slice()
+    .sort((a: any, b: any) => String(a.startTime || "").localeCompare(String(b.startTime || "")))
 
   const handlePrint = () => {
-    if (!printSheetRef.current) return
+    if (!printSheetRef.current || typeof document === "undefined") return
 
-    const printFrame = document.createElement("iframe")
-    printFrame.style.position = "fixed"
-    printFrame.style.right = "0"
-    printFrame.style.bottom = "0"
-    printFrame.style.width = "0"
-    printFrame.style.height = "0"
-    printFrame.style.border = "0"
-    document.body.appendChild(printFrame)
+    // La vista previa contiene datos clínicos: el marco solo vive durante la impresión.
+    const frame = document.createElement("iframe")
+    frame.setAttribute("title", "Impresión de agenda clínica")
+    frame.setAttribute("aria-hidden", "true")
+    Object.assign(frame.style, {
+      position: "fixed",
+      width: "0",
+      height: "0",
+      right: "0",
+      bottom: "0",
+      border: "0",
+      visibility: "hidden",
+    })
+    document.body.appendChild(frame)
 
-    const frameDoc = printFrame.contentWindow?.document
-    if (!frameDoc) return
+    const frameWindow = frame.contentWindow
+    const frameDocument = frameWindow?.document
+    if (!frameWindow || !frameDocument) {
+      frame.remove()
+      return
+    }
 
-    const styleTags = Array.from(document.querySelectorAll("link[rel='stylesheet'], style"))
-      .map((tag) => tag.outerHTML)
-      .join("")
+    // Reutilizar los estilos ya cargados de Tailwind permite imprimir las clases de la hoja.
+    const styles = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map((element) => element.outerHTML)
+      .join("\n")
 
-    frameDoc.open()
-    frameDoc.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Agenda - ${format(validDate, "dd-MM-yyyy")}</title>
-          ${styleTags}
-          <style>
-            @page {
-              size: A4 portrait;
-              margin: 0;
-            }
-            *, *::before, *::after {
-              box-sizing: border-box !important;
-            }
-            html {
-              background: #ffffff !important;
-              margin: 0 !important;
-              padding: 0 !important;
-            }
-            body {
-              background: #ffffff !important;
-              color: #000000 !important;
-              margin: 0 !important;
-              padding: 13mm 15mm 13mm 15mm !important;
-              font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-            #printable-agenda-sheet {
-              border: none !important;
-              box-shadow: none !important;
-              width: 100% !important;
-              max-width: 100% !important;
-              min-height: calc(297mm - 26mm) !important;
-              padding: 0 !important;
-              margin: 0 !important;
-              position: relative !important;
-              display: flex !important;
-              flex-direction: column !important;
-              justify-content: space-between !important;
-              background: transparent !important;
-            }
-            thead {
-              display: table-header-group !important;
-            }
-            tr {
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-            }
-            .print-footer-block {
-              page-break-inside: avoid !important;
-              break-inside: avoid !important;
-              margin-top: auto !important;
-              padding-top: 16px !important;
-            }
-          </style>
-        </head>
-        <body>
-          ${printSheetRef.current.outerHTML}
-        </body>
-      </html>
-    `)
-    frameDoc.close()
+    frameDocument.open()
+    frameDocument.write(`<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <base href="${document.baseURI.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}" />
+  <title>Agenda ${format(validDate, "dd-MM-yyyy")}</title>
+  ${styles}
+  <style>
+    @page { size: A4 portrait; margin: 12mm 12mm; }
+    *, *::before, *::after { box-sizing: border-box !important; }
+    html, body { margin: 0 !important; padding: 0 !important; background: white !important; color: #0f172a !important; }
+    body { font-family: Inter, ui-sans-serif, system-ui, sans-serif !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    #printable-agenda-sheet {
+      width: 100% !important; max-width: 100% !important;
+      background: #fff !important; color: #0f172a !important;
+      border: 0 !important; border-radius: 0 !important;
+      padding: 0 !important; margin: 0 !important; box-shadow: none !important;
+      min-height: 0 !important; display: block !important;
+      overflow: visible !important;
+    }
+    #printable-agenda-sheet table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    #printable-agenda-sheet thead { display: table-header-group; }
+    #printable-agenda-sheet tr { page-break-inside: avoid; break-inside: avoid; }
+    #printable-agenda-sheet th, #printable-agenda-sheet td { overflow-wrap: anywhere; }
+    #printable-agenda-sheet .print-footer-block {
+      page-break-inside: avoid; break-inside: avoid;
+      margin-top: 20mm !important;
+    }
+  </style>
+</head>
+<body>${printSheetRef.current.outerHTML}</body>
+</html>`)
+    frameDocument.close()
 
-    printFrame.contentWindow?.focus()
-    setTimeout(() => {
-      printFrame.contentWindow?.print()
-      setTimeout(() => {
-        if (document.body.contains(printFrame)) {
-          document.body.removeChild(printFrame)
-        }
-      }, 500)
-    }, 300)
+    let cleaned = false
+    const cleanup = () => {
+      if (cleaned) return
+      cleaned = true
+      frameWindow.removeEventListener("afterprint", cleanup)
+      frame.remove()
+    }
+    frameWindow.addEventListener("afterprint", cleanup)
+
+    // Aguardar fuentes, CSS e imágenes antes de abrir el diálogo de impresión.
+    const ready = async () => {
+      const links = Array.from(frameDocument.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'))
+      await Promise.all(links.map((link) => new Promise<void>((resolve) => {
+        if (link.sheet) { resolve(); return }
+        link.addEventListener("load", () => resolve(), { once: true })
+        link.addEventListener("error", () => resolve(), { once: true })
+      })))
+      await Promise.all(Array.from(frameDocument.images).map((img) => {
+        if (img.complete) return Promise.resolve()
+        return new Promise<void>((resolve) => {
+          img.addEventListener("load", () => resolve(), { once: true })
+          img.addEventListener("error", () => resolve(), { once: true })
+        })
+      }))
+      try { await frameDocument.fonts?.ready } catch { /* Fuente de respaldo disponible */ }
+    }
+
+    // Fallback para hojas de estilo que no responden y para navegadores sin afterprint.
+    const maxWait = new Promise<void>((resolve) => window.setTimeout(resolve, 1800))
+    void Promise.race([ready(), maxWait]).then(() => {
+      try {
+        frameWindow.focus()
+        frameWindow.print()
+      } catch {
+        cleanup()
+      }
+    })
+    window.setTimeout(cleanup, 60000)
   }
 
   return (
@@ -222,52 +234,37 @@ export function PrintAgendaModal({
         <DialogTrigger asChild>{trigger}</DialogTrigger>
       ) : !isControlled ? (
         <DialogTrigger asChild>
-          <Button 
-            variant="ghost" 
-            onMouseEnter={() => setIsTriggerHovered(true)}
-            onMouseLeave={() => setIsTriggerHovered(false)}
-            style={{
-              color: isTriggerHovered ? clinicBrandColor : undefined,
-              backgroundColor: isTriggerHovered ? `${clinicBrandColor}15` : undefined,
-              borderColor: isTriggerHovered ? `${clinicBrandColor}40` : undefined,
-            }}
-            className="flex-1 md:flex-none bg-transparent border border-border/80 text-foreground font-bold text-sm h-11 px-4 rounded-xl transition-all duration-200 cursor-pointer shadow-none group"
-          >
-            <Printer 
-              className="h-5 w-5 mr-2 text-muted-foreground transition-colors" 
-              style={{ color: isTriggerHovered ? clinicBrandColor : undefined }}
-            />
-            <span>Imprimir</span>
+          <Button variant="outline" className="h-10 gap-2 rounded-xl border-border bg-card px-4 text-sm font-medium text-foreground shadow-none hover:bg-muted">
+            <Printer className="h-4 w-4 text-muted-foreground" />
+            Imprimir
           </Button>
         </DialogTrigger>
       ) : null}
 
-      <DialogContent className="sm:max-w-[1000px] h-[92vh] flex flex-col p-0 gap-0 overflow-hidden bg-background border-border/80">
-        
-        <div className="px-6 py-4 border-b border-border/70 flex items-center justify-between bg-card shrink-0">
-          <div className="flex items-center gap-2.5">
-            <div 
-              className="p-2 rounded-xl border transition-colors"
-              style={{
-                backgroundColor: `${clinicBrandColor}18`,
-                borderColor: `${clinicBrandColor}35`,
-                color: clinicBrandColor,
-              }}
-            >
-              <Eye className="w-5 h-5 stroke-[2.2]" />
+      <DialogContent className="flex h-[min(90dvh,940px)] w-[calc(100vw-24px)] max-w-[1050px] flex-col gap-0 overflow-hidden rounded-2xl border-border bg-background p-0 font-sans shadow-xl sm:max-w-[1050px]">
+        <DialogHeader className="shrink-0 border-b border-border bg-card px-5 py-4 text-left sm:px-6">
+          <div className="flex items-center gap-3 pr-8">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/60 text-primary">
+              <Eye className="h-5 w-5" />
             </div>
-            <div>
-              <DialogTitle className="text-base font-black text-foreground">
-                Visualización y Exportación de Agenda
+            <div className="min-w-0">
+              <DialogTitle className="text-base font-semibold tracking-tight text-foreground sm:text-lg">
+                Vista previa de la agenda
               </DialogTitle>
-              <p className="text-xs text-muted-foreground">
-                Vista previa con el formato institucional configurado.
-              </p>
+              <DialogDescription className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Revisa las citas antes de imprimir el documento institucional.
+              </DialogDescription>
             </div>
           </div>
-        </div>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-3.5 w-3.5" />{format(validDate, "EEEE, d 'de' MMMM yyyy", { locale: es })}</span>
+            <span className="rounded-full bg-muted px-2.5 py-1 font-medium text-foreground">{filteredAppointments.length} cita{filteredAppointments.length === 1 ? "" : "s"}</span>
+            <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5" />Documento interno</span>
+          </div>
+        </DialogHeader>
 
-        <div className="flex-1 bg-muted/40 p-4 sm:p-6 overflow-y-auto flex justify-center [scrollbar-width:thin]">
+        <div className="min-h-0 flex-1 overflow-auto bg-muted/35 p-3 sm:p-6 [scrollbar-width:thin]">
+          <div className="mx-auto w-max min-w-full max-w-fit">
           <div
             ref={printSheetRef}
             id="printable-agenda-sheet"
@@ -275,7 +272,7 @@ export function PrintAgendaModal({
               WebkitPrintColorAdjust: "exact",
               printColorAdjust: "exact",
             }}
-            className="w-full max-w-[800px] bg-white text-black p-8 rounded-lg shadow-sm border border-neutral-200 relative flex flex-col justify-between"
+            className="relative mx-auto flex min-h-[270mm] w-[210mm] flex-col justify-between border border-neutral-200 bg-white p-[13mm] text-slate-950 shadow-sm"
           >
             {settings?.watermarkUrl && (
               <div 
@@ -293,7 +290,7 @@ export function PrintAgendaModal({
 
             <div className="relative z-10">
               <div 
-                className="flex items-center justify-between pb-3 mb-3 border-b-[3px]"
+                className="flex items-center justify-between gap-4 pb-3 mb-3 border-b-2"
                 style={{ borderBottomColor: clinicBrandColor }}
               >
                 <div className="flex items-center gap-3.5">
@@ -334,7 +331,7 @@ export function PrintAgendaModal({
                     </span>
                   </div>
                   <p className="text-[10px] text-neutral-600 font-medium">
-                    Emisión: <strong className="text-neutral-900 font-bold">{format(validDate, "d 'de' MMMM yyyy", { locale: es })}</strong>
+                    Fecha: <strong className="text-neutral-900 font-semibold">{format(validDate, "d 'de' MMMM yyyy", { locale: es })}</strong>
                   </p>
                 </div>
               </div>
@@ -425,7 +422,7 @@ export function PrintAgendaModal({
                 <div className="p-2 bg-neutral-50 border border-neutral-200 rounded-lg text-right">
                   <p className="text-[8.5px] font-bold text-neutral-500 uppercase">Resumen Operativo</p>
                   <p className="text-xs font-black text-neutral-900 mt-0.5">
-                    Total Pacientes: {filteredAppointments.length}
+                    Total citas: {filteredAppointments.length}
                   </p>
                 </div>
               </div>
@@ -434,21 +431,15 @@ export function PrintAgendaModal({
               </p>
             </div>
           </div>
+          </div>
         </div>
 
-        <DialogFooter className="px-6 py-3 border-t border-border/70 bg-card sm:justify-between shrink-0">
-          <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl text-xs font-bold cursor-pointer">
+        <DialogFooter className="shrink-0 flex-col-reverse gap-2 border-t border-border bg-card px-5 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <Button type="button" variant="outline" onClick={() => setOpen(false)} className="h-10 rounded-xl px-5 text-sm font-medium">
             Cerrar
           </Button>
-          <Button 
-            onClick={handlePrint}
-            style={{
-              backgroundColor: clinicBrandColor,
-              boxShadow: `0 8px 16px -4px ${clinicBrandColor}40`,
-            }}
-            className="text-white rounded-xl text-xs font-bold px-6 cursor-pointer hover:opacity-90 transition-opacity"
-          >
-            <Printer className="w-4 h-4 mr-2" /> Imprimir Documento
+          <Button type="button" onClick={handlePrint} className="h-10 rounded-xl bg-primary px-5 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+            <Printer className="mr-2 h-4 w-4" /> Imprimir agenda
           </Button>
         </DialogFooter>
 

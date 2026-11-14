@@ -1,228 +1,226 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
-import { 
-  Search, FileText, ArrowRight, Loader2, User, 
-  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, 
-  Phone, AlertTriangle, CheckCircle2, Pill, Droplet 
-} from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
 import Link from "next/link"
-
+import {
+  AlertTriangle, ArrowRight, ChevronLeft, ChevronRight, ChevronsLeft,
+  ChevronsRight, FileText, Loader2, Phone, RefreshCw, Search,
+  ShieldCheck, UserRound, Users, X,
+} from "lucide-react"
 import { AppLayout } from "@/components/layouts/app-layout"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
 
-import { useGetPatients } from "@/hooks/patients"
+type PatientSummary = {
+  id: string
+  firstName: string | null
+  lastName: string | null
+  ci?: string | null
+  phone?: string | null
+  birthDate?: string | Date | null
+  eps?: string | null
+  grupoSanguineo?: string | null
+  medicalAlerts?: unknown
+}
 
-const calculateAge = (birthDateString?: string | Date | null) => {
-  if (!birthDateString) return "--"
+type PatientPageResponse = {
+  patients: PatientSummary[]
+  total: number
+  totalPatients: number
+  pagination: { page: number; limit: number; totalPages: number; hasNextPage: boolean }
+}
+
+const PAGE_SIZE = 12
+
+function hasMedicalAlert(value: unknown): boolean {
+  if (typeof value === "string") return value.trim().length > 0
+  if (Array.isArray(value)) return value.length > 0
+  if (value !== null && typeof value === "object") return Object.keys(value).length > 0
+  return Boolean(value)
+}
+
+function calculateAge(value?: string | Date | null): string {
+  if (!value) return "—"
+  const datePart = typeof value === "string" ? value.match(/^\d{4}-\d{2}-\d{2}/)?.[0] : null
+  const birth = datePart
+    ? new Date(`${datePart}T12:00:00`)
+    : new Date(value)
+  if (Number.isNaN(birth.getTime())) return "—"
   const today = new Date()
-  const birthDate = new Date(birthDateString)
-  let age = today.getFullYear() - birthDate.getFullYear()
-  const m = today.getMonth() - birthDate.getMonth()
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--
-  return age
+  let years = today.getFullYear() - birth.getFullYear()
+  const month = today.getMonth() - birth.getMonth()
+  if (month < 0 || (month === 0 && today.getDate() < birth.getDate())) years--
+  return years >= 0 && years < 130 ? String(years) : "—"
 }
 
 export default function HistoriaClinicaHubPage() {
-  const router = useRouter()
-  const [searchTerm, setSearchTerm] = useState("")
-  
-  const [currentPage, setCurrentPage] = useState(1)
-  const itemsPerPage = 12 
-
-  const { patients, isLoading } = useGetPatients({ search: searchTerm })
-
-  const totalItems = patients?.length || 0
-  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1
-  const startIndex = (currentPage - 1) * itemsPerPage
-  const endIndex = startIndex + itemsPerPage
-  const currentPatients = patients?.slice(startIndex, endIndex) || []
+  const [search, setSearch] = useState("")
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [page, setPage] = useState(1)
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [patients, setPatients] = useState<PatientSummary[]>([])
+  const [total, setTotal] = useState(0)
+  const [totalPatients, setTotalPatients] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    setCurrentPage(1)
-  }, [searchTerm])
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function load() {
+      setIsLoading(true)
+      setError(null)
+      try {
+        const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) })
+        if (debouncedSearch) params.set("search", debouncedSearch)
+        const response = await fetch(`/api/patients?${params.toString()}`, {
+          method: "GET",
+          cache: "no-store",
+          credentials: "same-origin",
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new Error(`No se pudo consultar el archivo clínico (HTTP ${response.status}).`)
+        const data = (await response.json()) as PatientPageResponse
+        if (!Array.isArray(data.patients) || typeof data.total !== "number" ||
+            typeof data.totalPatients !== "number" || !data.pagination) {
+          throw new Error("La API de pacientes no devuelve el total y la paginación requeridos.")
+        }
+        if (controller.signal.aborted) return
+        const lastPage = Math.max(1, Math.ceil(data.total / PAGE_SIZE))
+        setPatients(data.patients)
+        setTotal(data.total)
+        setTotalPatients(data.totalPatients)
+        if (page > lastPage) setPage(lastPage)
+      } catch (cause: unknown) {
+        if (controller.signal.aborted) return
+        setError(cause instanceof Error ? cause.message : "No se pudo cargar el directorio.")
+        setPatients([])
+      } finally {
+        if (!controller.signal.aborted) setIsLoading(false)
+      }
+    }
+
+    void load()
+    return () => controller.abort()
+  }, [page, debouncedSearch, refreshKey])
+
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const first = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const last = Math.min(page * PAGE_SIZE, total)
+
+  function handleSearch(value: string) {
+    setSearch(value)
+    setPage(1)
+  }
 
   return (
     <AppLayout>
-      <div className="w-full px-4 md:px-6 py-6 lg:py-8 animate-in fade-in duration-500 flex flex-col min-h-[calc(100vh-70px)]">
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-8 mb-10 bg-card p-6 md:p-8 rounded-2xl border border-border shadow-sm relative overflow-hidden">
-          <div className="absolute -top-24 -right-24 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
-          
-          <div className="flex items-center gap-6 relative z-10 w-full lg:w-auto">
-            <div className="w-16 h-16 md:w-20 md:h-20 bg-gradient-to-tr from-emerald-600 to-emerald-400 text-white rounded-2xl flex items-center justify-center shadow-lg shrink-0 rotate-3 transition-transform hover:rotate-0">
-              <FileText className="w-8 h-8 md:w-10 md:h-10" />
+      <main className="mx-auto w-full max-w-[1480px] space-y-6 px-4 py-6 font-sans md:px-6 lg:px-8">
+        <header className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-sky-500/15 bg-sky-500/10 text-sky-700 dark:text-sky-300">
+              <FileText className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-black text-foreground tracking-tight">
-                Archivo Clínico Central
-              </h1>
-              <p className="text-muted-foreground mt-1.5 text-sm md:text-base max-w-md">
-                Accede al expediente médico completo. Escribe el nombre o documento para abrir la ficha clínica.
-              </p>
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground md:text-[28px]">Archivo clínico</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Consulta y accede a los expedientes de los pacientes registrados.</p>
             </div>
           </div>
+          <Button type="button" variant="outline" className="h-10 gap-2 rounded-xl" onClick={() => setRefreshKey(value => value + 1)} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} aria-hidden="true" /> Actualizar
+          </Button>
+        </header>
 
-          <div className="w-full lg:w-[400px] xl:w-[500px] relative z-10">
-            <div className="relative group">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-                <Search className="w-5 h-5 text-muted-foreground group-focus-within:text-emerald-500 transition-colors" />
-              </div>
-              <Input 
-                type="text" 
-                placeholder="Buscar por cédula o apellidos..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-6 text-base rounded-xl border-2 border-border focus-visible:ring-0 focus-visible:border-emerald-500 bg-background shadow-sm transition-all"
-              />
-            </div>
+        <section className="grid gap-3 sm:grid-cols-2" aria-label="Resumen del archivo clínico">
+          <div className="flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
+            <div className="rounded-xl bg-primary/10 p-3 text-primary"><Users className="h-5 w-5" aria-hidden="true" /></div>
+            <div><p className="text-xs text-muted-foreground">Expedientes activos</p><p className="text-2xl font-semibold tabular-nums text-foreground">{totalPatients === null ? "—" : totalPatients}</p></div>
           </div>
-        </div>
+          <div className="flex items-center gap-3 rounded-2xl border border-border/80 bg-card p-4 shadow-sm">
+            <div className="rounded-xl bg-emerald-500/10 p-3 text-emerald-700 dark:text-emerald-300"><ShieldCheck className="h-5 w-5" aria-hidden="true" /></div>
+            <div><p className="text-xs text-muted-foreground">{debouncedSearch ? "Coincidencias encontradas" : "Expedientes disponibles"}</p><p className="text-2xl font-semibold tabular-nums text-foreground">{total}</p></div>
+          </div>
+        </section>
 
-        <div className="flex-1 flex flex-col">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center flex-1 py-20 text-emerald-600">
-              <Loader2 className="w-12 h-12 animate-spin mb-4" />
-              <p className="font-medium animate-pulse">Cargando archivo clínico...</p>
+        <section className="overflow-hidden rounded-2xl border border-border/80 bg-card shadow-sm" aria-label="Directorio de expedientes">
+          <div className="flex flex-col gap-3 border-b border-border/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="relative w-full sm:max-w-md">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+              <Input aria-label="Buscar paciente por nombre, apellido o CI" type="search" autoComplete="off" placeholder="Buscar por nombre, apellido o CI..." value={search} onChange={event => handleSearch(event.target.value)} className="h-11 rounded-xl bg-background pl-10 pr-9 text-sm" />
+              {search && <button type="button" onClick={() => handleSearch("")} aria-label="Limpiar búsqueda" className="absolute right-3 top-1/2 -translate-y-1/2 rounded text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>}
             </div>
-          ) : currentPatients.length === 0 ? (
-            <div className="flex flex-col items-center justify-center flex-1 py-20 bg-card rounded-2xl border border-dashed border-border shadow-sm">
-              <User className="w-16 h-16 text-muted-foreground opacity-20 mb-4" />
-              <h3 className="text-xl font-bold text-foreground mb-1">No se encontraron expedientes</h3>
-              <p className="text-muted-foreground text-sm max-w-sm text-center">
-                {searchTerm ? `No hay resultados para "${searchTerm}". Intenta con otro nombre o documento.` : "Aún no hay pacientes registrados en el sistema."}
-              </p>
-              {searchTerm && (
-                <Button variant="outline" onClick={() => setSearchTerm("")} className="mt-6 text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700">
-                  Limpiar búsqueda
-                </Button>
-              )}
+            <p aria-live="polite" className="text-xs text-muted-foreground">{isLoading ? "Buscando expedientes..." : `${total} expediente${total === 1 ? "" : "s"} ${debouncedSearch ? "encontrados" : "disponibles"}`}</p>
+          </div>
+
+          {error ? (
+            <div role="alert" className="flex min-h-60 flex-col items-center justify-center gap-3 px-4 py-10 text-center">
+              <AlertTriangle className="h-7 w-7 text-destructive" aria-hidden="true" />
+              <p className="text-sm font-medium text-foreground">No se pudo cargar el archivo clínico</p>
+              <p className="max-w-md text-xs text-muted-foreground">{error}</p>
+              <Button type="button" variant="outline" onClick={() => setRefreshKey(value => value + 1)}>Reintentar</Button>
+            </div>
+          ) : isLoading ? (
+            <div role="status" className="flex min-h-60 flex-col items-center justify-center gap-3 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin text-primary" /><span className="text-sm">Cargando expedientes...</span></div>
+          ) : patients.length === 0 ? (
+            <div className="flex min-h-60 flex-col items-center justify-center gap-3 px-4 text-center">
+              <UserRound className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
+              <p className="text-sm font-semibold text-foreground">No se encontraron expedientes</p>
+              <p className="text-xs text-muted-foreground">{debouncedSearch ? "Intenta con otro nombre, apellido o CI." : "Todavía no hay pacientes activos registrados."}</p>
+              {search && <Button variant="outline" type="button" onClick={() => handleSearch("")}>Limpiar búsqueda</Button>}
             </div>
           ) : (
-            <>
-              {/* CUADRÍCULA DE PACIENTES*/}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6 mb-8">
-                {currentPatients.map((patient: any) => (
-                  <div key={patient.id} className="bg-card rounded-2xl border border-border p-5 hover:shadow-md hover:border-emerald-500/40 transition-all group flex flex-col h-full relative overflow-hidden">
-                    
-                    {patient.medicalAlerts && (
-                      <div className="absolute top-0 left-0 w-full h-1 bg-red-500/80"></div>
-                    )}
-
-                    <div className="flex items-start justify-between gap-2 mb-5 mt-1">
-                      
-                      <div className="flex items-start gap-4 min-w-0">
-                        <div className={cn(
-                          "w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg border shrink-0",
-                          patient.medicalAlerts 
-                            ? "bg-red-500/10 text-red-600 border-red-500/20" 
-                            : "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-                        )}>
-                          {patient.firstName?.charAt(0)}{patient.lastName?.charAt(0)}
-                        </div>
-                        <div className="overflow-hidden">
-                          <h3 className="font-bold text-foreground text-lg truncate">
-                            {patient.firstName} {patient.lastName}
-                          </h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs font-semibold bg-muted px-2 py-0.5 rounded border border-border text-foreground">
-                              CI: {patient.ci}
-                            </span>
-                          </div>
-                        </div>
+            <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
+              {patients.map(patient => {
+                const medicalAlert = hasMedicalAlert(patient.medicalAlerts)
+                const name = `${patient.firstName || ""} ${patient.lastName || ""}`.trim() || "Paciente sin nombre"
+                const initials = `${patient.firstName?.charAt(0) || "P"}${patient.lastName?.charAt(0) || ""}`.toUpperCase()
+                return (
+                  <article key={patient.id} className="flex min-w-0 flex-col rounded-2xl border border-border/80 bg-background p-4 transition-colors hover:border-primary/30">
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-sm font-semibold ${medicalAlert ? "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300" : "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300"}`} aria-hidden="true">{initials}</div>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="truncate text-sm font-semibold text-foreground" title={name}>{name}</h2>
+                        <p className="mt-1 truncate text-xs text-muted-foreground">CI: {patient.ci || "No registrado"}</p>
                       </div>
-
-                      <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/60 px-2 py-1 rounded-md">
-                          {calculateAge(patient.birthDate)} años
-                        </span>
-                        {patient.grupoSanguineo && (
-                          <span className="inline-flex items-center text-[10px] font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 px-2 py-1 rounded-md border border-red-100 dark:border-red-900">
-                            <Droplet className="w-3 h-3 mr-1 fill-current" /> {patient.grupoSanguineo}
-                          </span>
-                        )}
-                      </div>
-
+                      {patient.birthDate && <span className="shrink-0 rounded-lg bg-muted px-2 py-1 text-[11px] text-muted-foreground">{calculateAge(patient.birthDate)} años</span>}
                     </div>
-
-                    <div className="flex flex-col gap-2.5 mb-6 flex-1">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Phone className="w-4 h-4 opacity-70 shrink-0" />
-                        <span className="truncate">{patient.phone || "Sin contacto registrado"}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Pill className="w-4 h-4 opacity-70 text-emerald-600 shrink-0" />
-                        <span className="truncate font-medium">{patient.eps || "Sin seguro (Particular)"}</span>
-                      </div>
-
-                      {patient.medicalAlerts ? (
-                        <div className="mt-1 flex items-start gap-2 text-xs font-medium text-red-700 dark:text-red-400 bg-red-500/10 p-2.5 rounded-lg border border-red-500/20">
-                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                          <span className="line-clamp-2" title={patient.medicalAlerts}>
-                            {patient.medicalAlerts}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="mt-1 flex items-center gap-2 text-xs font-medium text-muted-foreground bg-muted/40 p-2.5 rounded-lg border border-transparent">
-                          <CheckCircle2 className="w-4 h-4 shrink-0 opacity-40 text-emerald-600" />
-                          <span>Sin alertas médicas</span>
-                        </div>
-                      )}
+                    <div className="mt-4 space-y-2 text-xs text-muted-foreground">
+                      <p className="flex min-w-0 items-center gap-2"><Phone className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span className="truncate">{patient.phone || "Sin teléfono registrado"}</span></p>
+                      <p className="truncate">Cobertura: {patient.eps || "Particular / sin seguro registrado"}</p>
+                      {patient.grupoSanguineo && <p>Grupo sanguíneo: <span className="font-medium text-foreground">{patient.grupoSanguineo}</span></p>}
                     </div>
-
-                    <div className="mt-auto pt-4 border-t border-border flex justify-between items-center">
-                      <span className="text-xs font-medium text-muted-foreground group-hover:text-emerald-600 transition-colors">
-                        Módulo Historia
-                      </span>
-                      <Link href={`/paciente/${patient.id}?tab=historial`}>
-                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm rounded-lg px-4">
-                          Abrir Ficha <ArrowRight className="w-4 h-4 ml-1.5" />
-                        </Button>
-                      </Link>
+                    <div className={`mt-4 flex items-center gap-2 rounded-lg px-3 py-2 text-xs ${medicalAlert ? "bg-rose-500/10 text-rose-700 dark:text-rose-300" : "bg-muted/60 text-muted-foreground"}`}>
+                      {medicalAlert ? <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" /> : <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />}
+                      <span>{medicalAlert ? "Alerta médica registrada: revisar la ficha" : "Sin alertas médicas registradas"}</span>
                     </div>
-
-                  </div>
-                ))}
-              </div>
-              {totalItems > 0 && (
-                <div className="mt-auto border-t border-border bg-card px-6 py-4 rounded-2xl shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-                  <div className="text-sm text-muted-foreground font-medium">
-                    Mostrando del <span className="text-foreground">{startIndex + 1}</span> al <span className="text-foreground">{Math.min(endIndex, totalItems)}</span> de <span className="text-foreground">{totalItems}</span> expedientes
-                  </div>
-                  
-                  <div className="flex items-center gap-4">
-                    <div className="text-sm text-foreground font-medium">
-                      Página {currentPage} de {totalPages}
-                    </div>
-                    
-                    <div className="flex items-center gap-1.5">
-                      <Button variant="outline" size="icon" className="h-8 w-8 bg-background border-border"
-                        onClick={() => setCurrentPage(1)} disabled={currentPage === 1}>
-                        <ChevronsLeft className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="icon" className="h-8 w-8 bg-background border-border"
-                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>
-                        <ChevronLeft className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="icon" className="h-8 w-8 bg-background border-border"
-                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>
-                        <ChevronRight className="h-4 w-4" />
-                      </Button>
-                      <Button variant="outline" size="icon" className="h-8 w-8 bg-background border-border"
-                        onClick={() => setCurrentPage(totalPages)} disabled={currentPage === totalPages}>
-                        <ChevronsRight className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </>
+                    <Link href={`/paciente/${encodeURIComponent(patient.id)}?tab=historial`} className="mt-4 inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-border bg-card px-4 text-xs font-semibold text-foreground transition-colors hover:border-primary/30 hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">
+                      Abrir ficha clínica <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Link>
+                  </article>
+                )
+              })}
+            </div>
           )}
-        </div>
-      </div>
+
+          {!error && !isLoading && total > 0 && (
+            <footer className="flex flex-col items-center justify-between gap-3 border-t border-border/70 px-4 py-3 sm:flex-row">
+              <p className="text-xs text-muted-foreground">Mostrando {first}–{last} de {total} expedientes</p>
+              <nav aria-label="Paginación de expedientes" className="flex items-center gap-2">
+                <span className="mr-1 text-xs text-muted-foreground">Página {page} de {pages}</span>
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => setPage(1)} disabled={page === 1} aria-label="Primera página"><ChevronsLeft className="h-4 w-4" /></Button>
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => setPage(value => Math.max(1, value - 1))} disabled={page === 1} aria-label="Página anterior"><ChevronLeft className="h-4 w-4" /></Button>
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => setPage(value => Math.min(pages, value + 1))} disabled={page >= pages} aria-label="Página siguiente"><ChevronRight className="h-4 w-4" /></Button>
+                <Button type="button" variant="outline" size="icon" className="h-9 w-9" onClick={() => setPage(pages)} disabled={page >= pages} aria-label="Última página"><ChevronsRight className="h-4 w-4" /></Button>
+              </nav>
+            </footer>
+          )}
+        </section>
+      </main>
     </AppLayout>
   )
 }
