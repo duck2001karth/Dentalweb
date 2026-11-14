@@ -7,7 +7,7 @@ import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
   CalendarCheck, RefreshCcw, Phone, AlertCircle, Clock, 
-  MapPin, User, CheckCircle2, Tags, HelpCircle 
+  MapPin, User, CheckCircle2, Tags, HelpCircle, ChevronLeft, ChevronRight, RotateCcw 
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -48,6 +48,14 @@ export function DashboardAgenda() {
   const { settings } = useClinicSettings()
 
   const [date, setDate] = useState<Date | undefined>(new Date())
+  const [visibleMonth, setVisibleMonth] = useState<Date>(new Date())
+  useEffect(() => { if (date) setVisibleMonth(date) }, [date])
+  const changeDay = (days: number) => setDate(current => {
+    const next = new Date(current ?? new Date())
+    next.setDate(next.getDate() + days)
+    return next
+  })
+  const goToToday = () => setDate(new Date())
   const [selectedDoctor, setSelectedDoctor] = useState("all")
   const [doctorsList, setDoctorsList] = useState<any[]>([])
   const [isRescheduleOpen, setIsRescheduleOpen] = useState(false)
@@ -95,37 +103,57 @@ export function DashboardAgenda() {
 
   const citasActivas = appointments.filter((cita: any) => cita.status !== "CANCELLED")
   const anulacionesCount = appointments.filter((cita: any) => cita.status === "CANCELLED").length
+  const isToday = date ? new Date(date).toDateString() === new Date().toDateString() : false
 
   return (
     <div className="flex-1 w-full animate-in fade-in duration-500">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4 border-b border-border/80 pb-4">
-        <div>
-          <h3 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-            <CalendarCheck className="h-6 w-6" style={{ color: defaultUserColor }} />
-            Agenda Diaria
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1 font-medium">
-            Planificación para el{" "}
-            <span className="font-bold" style={{ color: defaultUserColor }}>
-              {date ? format(date, "EEEE, d 'de' MMMM yyyy", { locale: es }) : "día seleccionado"}
-            </span>
-          </p>
-          {isAdminOrStaff && (
-            <div className="mt-3 flex items-center gap-3 bg-card p-1.5 px-3 rounded-xl border border-border/80 shadow-xs w-max">
-              <span className="text-xs font-black text-muted-foreground uppercase tracking-wider">Filtro Médico:</span>
+      {/* Encabezado clínico, sencillo y legible */}
+      <div className="mb-5 flex flex-col gap-4 border-b border-border/70 pb-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <CalendarCheck className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Agenda diaria</h2>
+              {!isLoading && !isError && (
+                <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+                  {citasActivas.length} {citasActivas.length === 1 ? "cita" : "citas"}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {date ? format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }) : "Selecciona una fecha"}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => changeDay(-1)} aria-label="Día anterior" title="Día anterior" className="h-9 w-9 px-0">
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={goToToday} disabled={isToday} className="h-9 px-3 font-medium">Hoy</Button>
+            <Button variant="outline" size="sm" onClick={() => changeDay(1)} aria-label="Día siguiente" title="Día siguiente" className="h-9 w-9 px-0">
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+            <span className="mx-1 hidden h-6 w-px bg-border sm:block" aria-hidden="true" />
+            <Button variant="ghost" size="sm" onClick={() => void refetch()} className="h-9 px-3 font-medium" title="Actualizar citas">
+              <RotateCcw className="h-4 w-4" /> Actualizar
+            </Button>
+          </div>
+        </div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {isAdminOrStaff ? (
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 text-xs font-medium text-muted-foreground">Especialista</span>
               <Select value={selectedDoctor} onValueChange={setSelectedDoctor}>
-                <SelectTrigger className="w-[230px] h-8 text-xs font-bold bg-background border-border/80 rounded-lg focus:ring-1 focus:ring-[var(--doctor-accent,#008bcd)]">
+                <SelectTrigger aria-label="Filtrar por especialista" className="h-9 w-full min-w-0 rounded-xl bg-card text-xs font-medium sm:w-[235px]">
                   <SelectValue placeholder="Todos los especialistas" />
                 </SelectTrigger>
-                <SelectContent className="rounded-xl border-border/80 shadow-xl bg-card">
-                  <SelectItem value="all" className="font-bold text-xs">👥 Todos los especialistas</SelectItem>
+                <SelectContent>
+                  <SelectItem value="all">Todos los especialistas</SelectItem>
                   {doctorsList.map((doc) => (
-                    <SelectItem key={doc.id} value={doc.id} className="font-medium text-xs">
+                    <SelectItem key={doc.id} value={doc.id}>
                       <span className="flex items-center gap-2">
-                        <span 
-                          className="w-2.5 h-2.5 rounded-full inline-block shrink-0" 
-                          style={{ backgroundColor: doc.calendarColor || "#008bcd" }} 
-                        />
+                        <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: doc.calendarColor || "#008bcd" }} />
                         {doc.name} {doc.specialty ? `(${doc.specialty})` : ""}
                       </span>
                     </SelectItem>
@@ -133,112 +161,54 @@ export function DashboardAgenda() {
                 </SelectContent>
               </Select>
             </div>
-          )}
-        </div>
-        
-        {/* BARRA DE ACCIONES */}
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              setSelectedAppointment(null) 
-              setIsRescheduleOpen(true)
-            }}
-            className="flex-1 md:flex-none bg-card border-border/80 text-foreground hover:bg-muted hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] font-bold text-sm h-11 px-4 rounded-xl transition-all shadow-2xs cursor-pointer group focus-visible:ring-[var(--doctor-accent,#008bcd)]"
-          >
-            <RefreshCcw className="h-4 w-4 mr-2 text-muted-foreground transition-colors group-hover:text-[var(--doctor-accent,#008bcd)]" /> 
-            <span>Reprogramar</span>
-          </Button>
-          
-          <Link href="/agenda-global" className="flex-1 md:flex-none">
-            <Button 
-              variant="outline" 
-              className="w-full bg-card border-border/80 text-foreground hover:bg-muted hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] font-bold text-sm h-11 px-4 rounded-xl transition-all shadow-2xs cursor-pointer group focus-visible:ring-[var(--doctor-accent,#008bcd)]"
-            >
-              <CalendarCheck className="h-4 w-4 mr-2 text-muted-foreground transition-colors group-hover:text-[var(--doctor-accent,#008bcd)]" /> 
-              <span>Agenda Global</span>
+          ) : <span />}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" className="h-9 font-medium" onClick={() => { setSelectedAppointment(null); setIsRescheduleOpen(true) }}>
+              <RefreshCcw className="h-4 w-4" /> Reprogramar
             </Button>
-          </Link>
-
-          <div className="hidden sm:block w-[1px] h-6 bg-border/80 mx-1" />
-
-          {/* COMPONENTE DE IMPRESIÓN */}
-          <PrintAgendaModal 
-            date={date || new Date()} 
-            appointments={citasActivas}
-            citas={citasActivas}
-            doctors={doctorsList}
-          />
-          
-          <NewAppointmentModal />
+            <Button asChild variant="outline" size="sm" className="h-9 font-medium">
+              <Link href="/agenda-global"><CalendarCheck className="h-4 w-4" /> Agenda global</Link>
+            </Button>
+            <PrintAgendaModal date={date || new Date()} appointments={citasActivas} citas={citasActivas} doctors={doctorsList} />
+            <NewAppointmentModal />
+          </div>
         </div>
       </div>
 
       {/* --- CONTENIDO DE LA AGENDA --- */}
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
-        <div className="xl:col-span-1 space-y-6">
-          <div className="bg-card rounded-2xl border border-border/80 shadow-xs overflow-hidden">
-            <div className="bg-muted/30 px-5 py-3 border-b border-border/80">
-              <h4 className="font-extrabold text-xs text-muted-foreground uppercase tracking-wider">Navegador</h4>
+      <div className="grid grid-cols-1 gap-5 items-start xl:grid-cols-[minmax(255px,305px)_minmax(0,1fr)]">
+        <aside className="xl:col-span-1 min-w-0">
+          <section className="rounded-2xl border border-border/70 bg-card p-3 shadow-sm sm:p-4" aria-label="Navegador de fechas">
+            <div className="mb-3 flex items-center justify-between px-1">
+              <h3 className="text-sm font-semibold text-foreground">Calendario</h3>
+              <button type="button" onClick={goToToday} className="rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-primary/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary">Ir a hoy</button>
             </div>
-            <div className="p-3 flex flex-col items-center justify-center">
-              {/* Calendario con contraste y tipografía nítida en modo claro y oscuro */}
-              <div 
-                style={{ "--calendar-accent": defaultUserColor } as React.CSSProperties}
-                className="w-full flex justify-center 
-                  [&_.rdp]:w-full 
-                  [&_.rdp-months]:w-full 
-                  [&_.rdp-month]:w-full 
-                  [&_.rdp-table]:w-full 
-                  [&_.rdp-caption]:text-slate-900 
-                  dark:[&_.rdp-caption]:text-slate-100 
-                  [&_.rdp-caption_label]:text-sm 
-                  [&_.rdp-caption_label]:font-black 
-                  [&_.rdp-caption_label]:capitalize 
-                  [&_.rdp-head_cell]:text-slate-500 
-                  dark:[&_.rdp-head_cell]:text-slate-400 
-                  [&_.rdp-head_cell]:font-bold 
-                  [&_.rdp-head_cell]:text-xs 
-                  [&_.rdp-button]:text-slate-800 
-                  dark:[&_.rdp-button]:text-slate-200 
-                  [&_.rdp-day]:font-bold 
-                  [&_.rdp-day]:text-xs 
-                  [&_.rdp-day]:text-slate-800 
-                  dark:[&_.rdp-day]:text-slate-200 
-                  [&_.rdp-day_outside]:text-slate-300 
-                  dark:[&_.rdp-day_outside]:text-slate-600 
-                  [&_.rdp-day_outside]:opacity-40 
-                  [&_.rdp-day_selected]:bg-[var(--calendar-accent)]! 
-                  [&_.rdp-day_selected]:text-white! 
-                  [&_.rdp-day_selected:hover]:opacity-90 
-                  [&_.rdp-day]:rounded-xl 
-                  [&_.rdp-nav_button]:text-slate-700 
-                  dark:[&_.rdp-nav_button]:text-slate-200 
-                  [&_.rdp-nav_button]:hover:bg-slate-100 
-                  dark:[&_.rdp-nav_button]:hover:bg-slate-800"
-              >
-                <Calendar mode="single" selected={date} onSelect={setDate} className="bg-transparent" />
+            {/* El estilo de selección vive en ui/calendar.tsx; no sobrescribir .rdp-day */}
+            <Calendar
+              mode="single"
+              selected={date}
+              month={visibleMonth}
+              onMonthChange={setVisibleMonth}
+              onSelect={(day) => { if (day) setDate(day) }}
+              className="w-full rounded-xl bg-transparent p-0"
+              classNames={{
+                month_grid: "w-full border-collapse",
+                weekdays: "flex w-full justify-between mb-1",
+                week: "flex w-full justify-between mt-1",
+                day_button: "mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-sm font-medium text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-primary",
+              }}
+            />
+            {anulacionesCount > 0 && (
+              <div className="mt-4 flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200" role="note">
+                <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{anulacionesCount} {anulacionesCount === 1 ? "cita anulada" : "citas anuladas"} en la fecha seleccionada.</span>
               </div>
-              
-              {anulacionesCount > 0 && (
-                <div className="w-full pt-4 mt-2 border-t border-border/80 flex flex-col gap-3 animate-in fade-in">
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-start gap-2.5 shadow-xs">
-                    <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-bold text-amber-600 dark:text-amber-400">Atención</p>
-                      <p className="text-[10px] text-amber-600/90 dark:text-amber-400/80 mt-0.5 leading-tight font-medium">
-                        Tienes {anulacionesCount} anulación{anulacionesCount === 1 ? '' : 'es'} pendiente{anulacionesCount === 1 ? '' : 's'} de revisión hoy.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+            )}
+          </section>
+        </aside>
 
         {/* LISTADO DE CITAS */}
-        <div className="xl:col-span-3">
+        <div className="min-w-0">
           {isLoading && (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
@@ -256,7 +226,7 @@ export function DashboardAgenda() {
           )}
 
           {!isLoading && !isError && citasActivas.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 text-muted-foreground border border-dashed border-border/80 rounded-2xl bg-card/50 shadow-xs">
+            <div className="flex min-h-[290px] flex-col items-center justify-center rounded-2xl border border-dashed border-border/80 bg-card px-6 py-12 text-center text-muted-foreground">
               <div 
                 className="w-16 h-16 rounded-2xl flex items-center justify-center mb-3 border"
                 style={{
@@ -267,17 +237,17 @@ export function DashboardAgenda() {
               >
                 <CalendarCheck className="h-8 w-8" />
               </div>
-              <p className="text-base font-bold text-foreground">Sin citas asignadas</p>
+              <p className="text-base font-semibold text-foreground">Sin citas programadas</p>
               <p className="text-xs mt-1 max-w-xs text-center font-medium opacity-80">
                 {selectedDoctor !== "all" 
-                  ? "Este especialista no tiene citas programadas para hoy." 
+                  ? "Este especialista no tiene citas programadas para la fecha seleccionada." 
                   : `No hay citas activas programadas para ${date ? format(date, "d 'de' MMMM", { locale: es }) : "este día"}.`}
               </p>
             </div>
           )}
 
           {!isLoading && citasActivas.length > 0 && (
-            <div className="space-y-3.5 max-h-[calc(100vh-250px)] overflow-y-auto pr-2 pb-6 custom-scrollbar">
+            <div className="max-h-[calc(100vh-260px)] space-y-3 overflow-y-auto pb-3 pr-1">
               {citasActivas.map((cita: any) => {
                 const statusInfo = appointmentStatuses[cita.status] || {
                   label: cita.status,
@@ -293,18 +263,18 @@ export function DashboardAgenda() {
                 return (
                   <div 
                     key={cita.id} 
-                    className="group flex flex-col md:flex-row items-stretch md:items-center bg-card rounded-2xl border border-border/80 hover:shadow-lg transition-all duration-200 overflow-hidden relative"
+                    className="group relative flex flex-col overflow-hidden rounded-2xl border border-border/70 bg-card transition-colors hover:border-primary/30 md:flex-row md:items-stretch"
                   >
                     {/* BARRA LATERAL DE ESTADO */}
                     <div className={cn("absolute left-0 top-0 bottom-0 w-1.5", statusInfo.bg.split(" ")[0])} />
 
                     {/* HORARIO */}
-                    <div className="flex md:flex-col items-center justify-between md:justify-center px-5 py-3.5 md:py-5 bg-muted/20 md:w-32 md:border-r border-b md:border-b-0 border-border/80 shrink-0 ml-1.5">
+                    <div className="ml-1.5 flex shrink-0 items-center justify-between border-b border-border/60 bg-muted/20 px-4 py-3 md:w-28 md:flex-col md:justify-center md:border-b-0 md:border-r">
                       <div className="flex items-center gap-2 md:hidden text-muted-foreground font-bold text-[10px] uppercase tracking-wider mb-0.5">
                         <Clock className="w-3.5 h-3.5" style={{ color: appointmentDocColor }} /> Horario
                       </div>
                       <div className="text-center">
-                        <div className="text-lg font-black text-foreground tracking-tight">{cita.startTime}</div>
+                        <div className="text-lg font-semibold tracking-tight text-foreground">{cita.startTime}</div>
                         <div className="text-[10px] font-bold text-muted-foreground mt-0.5 bg-background px-2 py-0.5 rounded-md border border-border/80 inline-block uppercase tracking-wider">
                           HASTA {cita.endTime}
                         </div>
@@ -312,7 +282,7 @@ export function DashboardAgenda() {
                     </div>
 
                     {/* DETALLES */}
-                    <div className="flex-1 p-4 md:px-6 flex flex-col justify-center gap-2.5">
+                    <div className="flex flex-1 flex-col justify-center gap-2.5 p-4 md:px-5">
                       <div className="flex justify-between items-start gap-4">
                         <div className="flex gap-3.5 items-start">
                           <div 
@@ -328,7 +298,7 @@ export function DashboardAgenda() {
                           <div>
                             <Link 
                               href={`/paciente/${cita.patientId}`} 
-                              className="text-sm font-bold text-foreground transition-colors line-clamp-1 hover:underline"
+                              className="line-clamp-1 text-sm font-semibold text-foreground hover:text-primary hover:underline"
                             >
                               {cita.patient?.firstName} {cita.patient?.lastName}
                             </Link>
@@ -369,7 +339,7 @@ export function DashboardAgenda() {
                     </div>
 
                     {/* BOTONES DE ACCIÓN */}
-                    <div className="p-3 md:p-5 md:pl-0 flex flex-row md:flex-col justify-end gap-2 md:w-36 shrink-0 border-t md:border-t-0 border-border/80 bg-muted/10 md:bg-transparent">
+                    <div className="flex shrink-0 flex-row justify-end gap-2 border-t border-border/60 bg-muted/10 p-3 md:w-36 md:flex-col md:border-t-0 md:bg-transparent md:p-4 md:pl-0">
                       {cita.payment === 'DEBT' ? (
                         currentUser?.role === "RECEPTIONIST" || currentUser?.role === "ADMIN" ? (
                           <Link href={`/paciente/${cita.patientId}?tab=pagos`} className="w-full">
