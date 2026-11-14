@@ -1,63 +1,55 @@
-import { NextResponse } from "next/server"
+import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
-import os from "os"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/lib/auth"
+import { NextResponse } from "next/server"
 
 export const dynamic = "force-dynamic"
 
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-      return NextResponse.json({ error: "Acceso denegado a métricas del sistema." }, { status: 403 })
-    }
-
-    const start = performance.now()
-    await prisma.$queryRaw`SELECT 1`
-    const dbLatency = Math.round(performance.now() - start)
-
-    const totalMem = Math.round(os.totalmem() / 1024 / 1024)
-    const freeMem = Math.round(os.freemem() / 1024 / 1024)
-    const usedMem = totalMem - freeMem
-
-    const systemLogs = [
-      {
-        id: "sys-1",
-        level: "INFO",
-        message: `Servidor Node.js iniciado. Arquitectura: ${os.arch()} - Plataforma: ${os.platform()}`,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2) 
-      },
-      {
-        id: "sys-2",
-        level: dbLatency > 500 ? "WARN" : "INFO",
-        message: `Conexión a PostgreSQL operativa. Latencia actual: ${dbLatency}ms.`,
-        createdAt: new Date(Date.now() - 1000 * 60 * 15) 
-      },
-      {
-        id: "sys-3",
-        level: usedMem > (totalMem * 0.8) ? "WARN" : "INFO",
-        message: `Memoria del servidor estable. En uso: ${usedMem}MB libres de ${totalMem}MB.`,
-        createdAt: new Date(Date.now() - 1000 * 60 * 5) 
-      },
-      {
-        id: "sys-4",
-        level: "INFO",
-        message: `Escáner de seguridad completado. No se detectaron vulnerabilidades activas.`,
-        createdAt: new Date() 
-      }
-    ]
-
-    return NextResponse.json(systemLogs)
-  } catch (error) {
-    console.error("Fallo de sistema:", error)
-    return NextResponse.json([
-      {
-        id: "sys-err",
-        level: "ERROR",
-        message: "Fallo crítico al conectar con la base de datos principal.",
-        createdAt: new Date()
-      }
-    ])
-  }
+const privateHeaders = {
+  "Cache-Control": "private, no-store, no-cache, must-revalidate",
+  "X-Content-Type-Options": "nosniff",
 }
+
+// Se mantiene el contrato del frontend: array de { id, level, message, createdAt }.
+// Son diagnósticos del instante de la consulta, NO logs históricos ni un escaneo de seguridad.
+export const GET = createApiHandler(
+  { roles: ["ADMIN"] },
+  async () => {
+    const checkedAt = new Date()
+    const measuredHeap = process.memoryUsage()
+    const start = performance.now()
+
+    try {
+      await prisma.$queryRaw`SELECT 1`
+      const dbLatency = Math.round(performance.now() - start)
+      const usedHeapMB = Math.round(measuredHeap.heapUsed / 1024 / 1024)
+      const totalHeapMB = Math.round(measuredHeap.heapTotal / 1024 / 1024)
+
+      const measurements = [
+        {
+          id: `db-${checkedAt.getTime()}`,
+          level: dbLatency > 500 ? "WARN" : "INFO",
+          message: `PostgreSQL respondió a una consulta de comprobación en ${dbLatency} ms.`,
+          createdAt: checkedAt,
+        },
+        {
+          id: `node-${checkedAt.getTime()}`,
+          level: "INFO",
+          message: `Memoria heap del proceso Node.js: ${usedHeapMB} MB usados de ${totalHeapMB} MB asignados.`,
+          createdAt: checkedAt,
+        },
+      ]
+
+      return NextResponse.json(measurements, { status: 200, headers: privateHeaders })
+    } catch (error) {
+      console.error("No fue posible comprobar la conectividad con PostgreSQL", error)
+      return NextResponse.json([
+        {
+          id: `db-error-${checkedAt.getTime()}`,
+          level: "ERROR",
+          message: "No se pudo verificar la conexión a PostgreSQL en esta consulta.",
+          createdAt: checkedAt,
+        },
+      ], { status: 503, headers: privateHeaders })
+    }
+  }
+)

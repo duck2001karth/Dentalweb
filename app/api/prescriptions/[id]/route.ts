@@ -1,144 +1,330 @@
+
+import { Prisma } from "@prisma/client"
+import { NextResponse } from "next/server"
+import { headers } from "next/headers"
+import { z } from "zod"
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
-import { z } from "zod"
-import { headers } from "next/headers"
+const editableFields = z.object({
+  medications: z.string().trim().min(1).max(10000).optional(),
+  indications: z.string().trim().min(1).max(10000).optional(),
+  observations: z.string().max(10000).nullable().optional(),
+}).passthrough()
+const updateSchema = z.union([
+  editableFields,
+  z.object({ input: editableFields }).passthrough(),
+])
+
+async function requestMetadata() {
+  const h = await headers()
+
+  return {
+    ipAddress: (
+      h.get("x-forwarded-for")?.split(",")[0].trim() ||
+      h.get("x-real-ip") ||
+      "Desconocido"
+    ).slice(0, 128),
+
+    userAgent: (
+      h.get("user-agent") || "Desconocido"
+    ).slice(0, 512),
+  }
+}
+
+const notFound = () =>
+  NextResponse.json(
+    { error: "Receta no encontrada" },
+    { status: 404 }
+  )
+
+const forbidden = () =>
+  NextResponse.json(
+    { error: "No tiene permisos para modificar esta receta" },
+    { status: 403 }
+  )
+
+const locked = () =>
+  NextResponse.json(
+    {
+      error:
+        "La receta ya está firmada y no se puede modificar ni eliminar. Emita una nueva receta si necesita corregirla.",
+    },
+    { status: 409 }
+  )
 
 export const PUT = createApiHandler(
   {
     roles: ["ADMIN", "DOCTOR"],
-    schema: z.any(),
+    schema: updateSchema,
   },
-  async (req, { user, params, data: reqData }) => {
-    const id = params.id as string
-    const data = reqData.input || reqData
-    const { medications, indications, observations, doctorSignature } = data
+  async (_req, { user, params, data }) => {
+    const id =
+      typeof params.id === "string" ? params.id.trim() : ""
 
-    if (!id) throw new Error("Falta el ID de la receta")
+    if (!id || id.length > 128) {
+      return NextResponse.json(
+        { error: "ID de receta inválido" },
+        { status: 400 }
+      )
+    }
+    const parsed = updateSchema.parse(data)
 
-    const headersList = await headers()
-    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
+    const payload =
+      "input" in parsed ? parsed.input : parsed
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const previous = await tx.prescription.findUnique({
-        where: { id },
-      })
-      if (!previous) throw new Error("NOT_FOUND")
+    const input = editableFields.parse(payload)
 
-      const isAdmin = user.role === "ADMIN" 
-      const isAuthor = previous.authorId === user.id
+    const {
+      medications,
+      indications,
+      observations,
+    } = input
 
-      if (!isAdmin && !isAuthor) {
-        throw new Error("UNAUTHORIZED_ROLE") 
-      }
+    if (
+      medications === undefined &&
+      indications === undefined &&
+      observations === undefined
+    ) {
+      return NextResponse.json(
+        { error: "No hay campos editables para actualizar" },
+        { status: 400 }
+      )
+    }
 
-      const res = await tx.prescription.update({
-        where: { id },
-        data: {
-          ...(medications !== undefined && { medications }),
-          ...(indications !== undefined && { indications }),
-          observations: observations !== undefined ? observations : previous.observations,
-          ...(doctorSignature !== undefined && { doctorSignature }),
-        },
-        include: {
-          author: {
-            select: {
-              id: true,
-              name: true,
-              specialty: true,
-              signatureBase64: true,
-              professionalCard: true,
+    const metadata = await requestMetadata()
+
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const previous = await tx.prescription.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            patientId: true,
+            authorId: true,
+            doctorSignature: true,
+            medications: true,
+            indications: true,
+            observations: true,
+            patient: {
+              select: {
+                isDeleted: true,
+              },
             },
           },
-        },
-      })
+        })
 
-      await tx.auditLog.create({
-        data: {
-          userId: user.id,
-          action: "UPDATE_PRESCRIPTION",
-          entity: "PRESCRIPTION",
-          entityId: id,
-          patientId: previous.patientId,
-          details: "Modificación de fármacos o posología en receta médica",
-          oldData: {
-            medications: previous.medications,
-            indications: previous.indications,
-            observations: previous.observations,
-            hasDoctorSignature: Boolean(previous.doctorSignature),
+        if (!previous || previous.patient.isDeleted) {
+          return { kind: "not-found" as const }
+        }
+
+        const isAdmin = user.role === "ADMIN"
+        const isAuthor = previous.authorId === user.id
+
+        if (!isAdmin && !isAuthor) {
+          return { kind: "forbidden" as const }
+        }
+        if (previous.doctorSignature !== null) {
+          return { kind: "locked" as const }
+        }
+        const changed = await tx.prescription.updateMany({
+          where: {
+            id,
+            doctorSignature: null,
           },
-          newData: {
-            medications: res.medications,
-            indications: res.indications,
-            observations: res.observations,
-            hasDoctorSignature: Boolean(res.doctorSignature),
+          data: {
+            ...(medications !== undefined
+              ? { medications }
+              : {}),
+
+            ...(indications !== undefined
+              ? { indications }
+              : {}),
+
+            ...(observations !== undefined
+              ? { observations }
+              : {}),
           },
-          ipAddress,
-          userAgent,
-        },
-      })
+        })
 
-      return res
-    })
+        if (changed.count !== 1) {
+          return { kind: "locked" as const }
+        }
 
-    const authorLicense = updated.author?.professionalCard || ""
+        const updated =
+          await tx.prescription.findUniqueOrThrow({
+            where: { id },
+            select: {
+              id: true,
+              patientId: true,
+              authorId: true,
+              medications: true,
+              indications: true,
+              observations: true,
+              doctorSignature: true,
+              createdAt: true,
+              updatedAt: true,
+              author: {
+                select: {
+                  id: true,
+                  name: true,
+                  specialty: true,
+                  professionalCard: true,
+                },
+              },
+            },
+          })
+
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "UPDATE_PRESCRIPTION",
+            entity: "PRESCRIPTION",
+            entityId: id,
+            patientId: previous.patientId,
+            details: "Edición de receta sin firma",
+
+            oldData: {
+              authorId: previous.authorId,
+              hasDoctorSignature: false,
+            },
+
+            newData: {
+              changedFields: [
+                ...(medications !== undefined
+                  ? ["medications"]
+                  : []),
+
+                ...(indications !== undefined
+                  ? ["indications"]
+                  : []),
+
+                ...(observations !== undefined
+                  ? ["observations"]
+                  : []),
+              ],
+              hasDoctorSignature: false,
+            },
+
+            ...metadata,
+          },
+        })
+
+        return {
+          kind: "ok" as const,
+          prescription: updated,
+        }
+      },
+      {
+        isolationLevel:
+          Prisma.TransactionIsolationLevel.Serializable,
+      }
+    )
+
+    if (result.kind === "not-found") return notFound()
+    if (result.kind === "forbidden") return forbidden()
+    if (result.kind === "locked") return locked()
 
     return {
-      ...updated,
-      doctorSignature: updated.doctorSignature || updated.author?.signatureBase64 || null,
-      doctorLicense: authorLicense,
+      ...result.prescription,
+      doctorLicense:
+        result.prescription.author?.professionalCard || "",
     }
   }
 )
 
 export const DELETE = createApiHandler(
-  { roles: ["ADMIN", "DOCTOR"] },
-  async (req, { user, params }) => {
-    const id = params.id as string
-    if (!id) throw new Error("Falta el ID de la receta")
+  {
+    roles: ["ADMIN", "DOCTOR"],
+  },
+  async (_req, { user, params }) => {
+    const id =
+      typeof params.id === "string" ? params.id.trim() : ""
 
-    const headersList = await headers()
-    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
+    if (!id || id.length > 128) {
+      return NextResponse.json(
+        { error: "ID de receta inválido" },
+        { status: 400 }
+      )
+    }
 
-    await prisma.$transaction(async (tx) => {
-      const previous = await tx.prescription.findUnique({
-        where: { id },
-      })
-      if (!previous) throw new Error("NOT_FOUND")
+    const metadata = await requestMetadata()
 
-      const isAdmin = user.role === "ADMIN"
-      const isAuthor = previous.authorId === user.id
-
-      if (!isAdmin && !isAuthor) {
-        throw new Error("UNAUTHORIZED_ROLE")
-      }
-
-      await tx.prescription.delete({
-        where: { id },
-      })
-
-      await tx.auditLog.create({
-        data: {
-          userId: user.id,
-          action: "DELETE_PRESCRIPTION",
-          entity: "PRESCRIPTION",
-          entityId: id,
-          patientId: previous.patientId,
-          details: "Eliminación de receta médica del expediente",
-          oldData: {
-            medications: previous.medications,
-            indications: previous.indications,
-            observations: previous.observations,
-            authorId: previous.authorId,
-            createdAt: previous.createdAt,
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const previous = await tx.prescription.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            patientId: true,
+            authorId: true,
+            doctorSignature: true,
+            patient: {
+              select: {
+                isDeleted: true,
+              },
+            },
           },
-          ipAddress,
-          userAgent,
-        },
-      })
-    })
+        })
 
-    return { success: true, message: "Receta eliminada y auditada correctamente" }
+        if (!previous || previous.patient.isDeleted) {
+          return { kind: "not-found" as const }
+        }
+
+        const isAdmin = user.role === "ADMIN"
+        const isAuthor = previous.authorId === user.id
+
+        if (!isAdmin && !isAuthor) {
+          return { kind: "forbidden" as const }
+        }
+        if (previous.doctorSignature !== null) {
+          return { kind: "locked" as const }
+        }
+
+        const deleted = await tx.prescription.deleteMany({
+          where: {
+            id,
+            doctorSignature: null,
+          },
+        })
+
+        if (deleted.count !== 1) {
+          return { kind: "locked" as const }
+        }
+
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "DELETE_PRESCRIPTION",
+            entity: "PRESCRIPTION",
+            entityId: id,
+            patientId: previous.patientId,
+            details: "Eliminación de receta sin firma",
+
+            oldData: {
+              authorId: previous.authorId,
+              hasDoctorSignature: false,
+            },
+
+            ...metadata,
+          },
+        })
+
+        return { kind: "ok" as const }
+      },
+      {
+        isolationLevel:
+          Prisma.TransactionIsolationLevel.Serializable,
+      }
+    )
+
+    if (result.kind === "not-found") return notFound()
+    if (result.kind === "forbidden") return forbidden()
+    if (result.kind === "locked") return locked()
+
+    return {
+      success: true,
+      message:
+        "Receta sin firma eliminada y auditada correctamente",
+    }
   }
 )

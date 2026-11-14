@@ -72,9 +72,10 @@ function SortableItemRow({
   handleSaveItemDiscount,
   isSavingDiscount,
   globalDiscount, 
-  currencySymbol 
+  currencySymbol,
+  isStructureEditable = true,
 }: any) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id })
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.id, disabled: !isStructureEditable })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -169,7 +170,7 @@ function SortableItemRow({
       <td className="px-4 py-3 text-center font-medium">
         <Popover open={editingItemId === item.id} onOpenChange={(open) => !open && setEditingItemId(null)}>
           <PopoverTrigger asChild>
-            <button onClick={() => { setEditingItemId(item.id); setTempItemDiscount(itemDiscount.toString()) }} className="text-xs font-bold text-[#008bcd] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer">
+            <button disabled={!isStructureEditable} title={!isStructureEditable ? "El descuento no puede modificarse en un presupuesto aprobado" : "Editar descuento"} onClick={() => { setEditingItemId(item.id); setTempItemDiscount(itemDiscount.toString()) }} className="text-xs font-bold text-[#008bcd] hover:underline flex items-center justify-center gap-1 mx-auto cursor-pointer">
               {itemDiscount > 0 ? `${itemDiscount}%` : globalDiscount > 0 ? `${globalDiscount}% (Global)` : "0%"} <Edit2 className="w-3 h-3 stroke-[2] opacity-60 ml-0.5" />
             </button>
           </PopoverTrigger>
@@ -260,6 +261,8 @@ export function TreatmentTable({
   planItems = [],
   sections = [],
   planDiscountPercent = 0,
+  planStatus = "DRAFT",
+  onRequestCorrection,
   setIsSectionModalOpen,
   openCatalogModal,
   setIsDiagnosisModalOpen,
@@ -280,6 +283,8 @@ export function TreatmentTable({
   const [tempItemDiscount, setTempItemDiscount] = useState<string>("0")
   const [isMoving, setIsMoving] = useState(false)
   const [itemsList, setItemsList] = useState<any[]>(planItems)
+  const isStructureEditable = planStatus === "DRAFT"
+  const isApproved = planStatus === "ACTIVE" || planStatus === "COMPLETED"
   
   const [isSavingDiscount, setIsSavingDiscount] = useState(false)
 
@@ -331,6 +336,7 @@ export function TreatmentTable({
   )
 
   const handleDragEnd = async (event: DragEndEvent) => {
+    if (!isStructureEditable) return
     const { active, over } = event
     if (!over) return
 
@@ -364,6 +370,7 @@ export function TreatmentTable({
   }
 
   const moveSingleItemToSection = async (itemId: string, targetSectionId: string | null) => {
+    if (!isStructureEditable) return
     const previousItems = [...itemsList]
     setItemsList((prev) => prev.map((item) => (item.id === itemId ? { ...item, sectionId: targetSectionId } : item)))
     try {
@@ -385,6 +392,7 @@ export function TreatmentTable({
   }
 
   const handleBatchMoveSection = async (targetSectionId: string | null, sectionName: string) => {
+    if (!isStructureEditable) return
     if (selectedItemIds.length === 0) {
       toast({ title: "Selecciona prestaciones", description: "Marca al menos una casilla." })
       return
@@ -423,14 +431,16 @@ export function TreatmentTable({
   return (
     <div className="bg-card rounded-2xl border border-border shadow-xs overflow-hidden font-sans antialiased">
       <TreatmentActions
-        onOpenSectionModal={setIsSectionModalOpen ? () => setIsSectionModalOpen(true) : undefined}
-        onOpenCatalogModal={openCatalogModal ? () => openCatalogModal() : undefined}
+        onOpenSectionModal={isStructureEditable && setIsSectionModalOpen ? () => setIsSectionModalOpen(true) : undefined}
+        onOpenCatalogModal={isStructureEditable && openCatalogModal ? () => openCatalogModal() : undefined}
         onOpenDiagnosis={setIsDiagnosisModalOpen ? () => setIsDiagnosisModalOpen(true) : undefined}
         selectedCount={selectedItemIds.length}
         sections={sections}
         isMoving={isMoving}
-        onMoveToSection={handleBatchMoveSection}
-        onTrashClick={() => selectedItemIds.length > 0 ? onDeleteSelectedItems(selectedItemIds) : setIsConfirmClearOpen()}
+        onMoveToSection={isStructureEditable ? handleBatchMoveSection : undefined}
+        isApproved={isApproved}
+        onRequestCorrection={isApproved && onRequestCorrection ? () => onRequestCorrection(selectedItemIds) : undefined}
+        onTrashClick={isStructureEditable ? () => selectedItemIds.length > 0 ? onDeleteSelectedItems(selectedItemIds) : setIsConfirmClearOpen() : undefined}
         onTriggerPrint={onSelectPrintMode}
       />
 
@@ -458,7 +468,7 @@ export function TreatmentTable({
                   
                   {/* Ítems Sin Fase */}
                   {unassignedItems.map(item => (
-                     <SortableItemRow key={item.id} item={item} isSelected={selectedItemIds.includes(item.id)} toggleSelectItem={toggleSelectItem} openEvolutionModal={openEvolutionModal} editingItemId={editingItemId} setEditingItemId={setEditingItemId} tempItemDiscount={tempItemDiscount} setTempItemDiscount={setTempItemDiscount} handleSaveItemDiscount={handleValidatedItemDiscount} isSavingDiscount={isSavingDiscount} globalDiscount={planDiscountPercent} currencySymbol={currencySymbol} />
+                     <SortableItemRow isStructureEditable={isStructureEditable} key={item.id} item={item} isSelected={selectedItemIds.includes(item.id)} toggleSelectItem={toggleSelectItem} openEvolutionModal={openEvolutionModal} editingItemId={editingItemId} setEditingItemId={setEditingItemId} tempItemDiscount={tempItemDiscount} setTempItemDiscount={setTempItemDiscount} handleSaveItemDiscount={handleValidatedItemDiscount} isSavingDiscount={isSavingDiscount} globalDiscount={planDiscountPercent} currencySymbol={currencySymbol} />
                   ))}
 
                   {/* Fases y sus Prestaciones */}
@@ -485,7 +495,7 @@ export function TreatmentTable({
                                 <span className="text-[11px] font-medium text-muted-foreground">
                                   ({secItems.length} {secItems.length === 1 ? "prestación" : "prestaciones"})
                                 </span>
-                                {openCatalogModal && (
+                                {isStructureEditable && openCatalogModal && (
                                   <button type="button" onClick={() => openCatalogModal(undefined, sec.id)} className="ml-2 text-[10px] font-bold text-[#008bcd] hover:text-[#0070a8] flex items-center gap-1 bg-background px-2.5 py-1 rounded-lg border border-border hover:border-[#008bcd] shadow-2xs transition-colors">
                                     <Plus className="w-3 h-3 stroke-[2.5]" /> Añadir
                                   </button>
@@ -495,7 +505,7 @@ export function TreatmentTable({
                                 <span className="text-xs font-mono text-muted-foreground">
                                   Subtotal: <strong className="text-foreground font-bold text-xs">{currencySymbol} {secTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
                                 </span>
-                                {onRequestDeleteSection && (
+                                {isStructureEditable && onRequestDeleteSection && (
                                   <button type="button" onClick={() => onRequestDeleteSection({ id: sec.id, name: sec.name })} title="Eliminar fase" className="text-muted-foreground hover:text-red-500 hover:bg-red-500/10 p-1 rounded-md transition-colors">
                                     <X className="w-4 h-4 stroke-[2]" />
                                   </button>
@@ -508,7 +518,7 @@ export function TreatmentTable({
                         {/* Ítems o Espacio vacío Droppable */}
                         {secItems.length > 0 ? (
                           secItems.map((item: any) => (
-                            <SortableItemRow key={item.id} item={item} isSelected={selectedItemIds.includes(item.id)} toggleSelectItem={toggleSelectItem} openEvolutionModal={openEvolutionModal} editingItemId={editingItemId} setEditingItemId={setEditingItemId} tempItemDiscount={tempItemDiscount} setTempItemDiscount={setTempItemDiscount} handleSaveItemDiscount={handleValidatedItemDiscount} isSavingDiscount={isSavingDiscount} globalDiscount={planDiscountPercent} currencySymbol={currencySymbol} />
+                            <SortableItemRow isStructureEditable={isStructureEditable} key={item.id} item={item} isSelected={selectedItemIds.includes(item.id)} toggleSelectItem={toggleSelectItem} openEvolutionModal={openEvolutionModal} editingItemId={editingItemId} setEditingItemId={setEditingItemId} tempItemDiscount={tempItemDiscount} setTempItemDiscount={setTempItemDiscount} handleSaveItemDiscount={handleValidatedItemDiscount} isSavingDiscount={isSavingDiscount} globalDiscount={planDiscountPercent} currencySymbol={currencySymbol} />
                           ))
                         ) : (
                           <DroppableEmptyState sectionId={sec.id}>

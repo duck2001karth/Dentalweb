@@ -29,6 +29,8 @@ interface TreatmentActionsProps {
   onMoveToSection?: (sectionId: string | null, sectionName: string) => void
   onTriggerPrint?: (mode: "COMPLETO" | "SOLO_TOTAL" | "SIN_DETALLE" | "LABORATORIO") => void
   onTrashClick?: () => void
+  onRequestCorrection?: () => void
+  isApproved?: boolean
   onAssignRegion?: (regionName: string) => void
 }
 
@@ -42,6 +44,8 @@ export function TreatmentActions({
   onMoveToSection,
   onTriggerPrint,
   onTrashClick,
+  onRequestCorrection,
+  isApproved = false,
   onAssignRegion
 }: TreatmentActionsProps) {
   return (
@@ -87,6 +91,12 @@ export function TreatmentActions({
                 className="font-bold cursor-pointer py-2 rounded-lg flex items-center gap-2"
               >
                 <Stethoscope className="w-4 h-4 text-[#008bcd]" /> Ingresar Diagnóstico
+              </DropdownMenuItem>
+            )}
+
+            {isApproved && onRequestCorrection && (
+              <DropdownMenuItem onClick={onRequestCorrection} className="font-bold cursor-pointer py-2 rounded-lg">
+                <FileText className="w-4 h-4 text-amber-600" /> Solicitar corrección ({selectedCount})
               </DropdownMenuItem>
             )}
 

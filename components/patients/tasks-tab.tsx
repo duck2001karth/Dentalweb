@@ -42,7 +42,7 @@ export function TareasTab({ patientId, patient }: { patientId: string; patient?:
       {
         onSuccess: () => {
           setNuevaTarea("")
-          toast({ title: "Tarea registrada con éxito" })
+          toast({ title: "Tarea registrada con éxito", variant: "success" })
           if (refetch) refetch()
         },
         onError: () => toast({ title: "Error al crear la tarea", variant: "destructive" }),

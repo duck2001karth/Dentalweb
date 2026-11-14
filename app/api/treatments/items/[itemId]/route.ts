@@ -1,88 +1,198 @@
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
+import { Prisma } from "@prisma/client"
 import { z } from "zod"
 import { headers } from "next/headers"
 import { NextResponse } from "next/server"
 
+const updateSchema = z.object({
+  progress: z.number().int().min(0).max(100).optional(),
+  isCompleted: z.boolean().optional(),
+  discount: z.number().min(0).max(100).optional(),
+  paidAmount: z.unknown().optional(),
+  isPaid: z.unknown().optional(),
+  tooth: z.string().max(30).nullable().optional(),
+  region: z.string().max(30).nullable().optional(),
+  note: z.string().max(10000).nullable().optional(),
+  isPrivate: z.boolean().optional(),
+  fileUrl: z.string().max(2048).nullable().optional(),
+  hasIncident: z.boolean().optional(),
+  hasAdverseEvent: z.boolean().optional(),
+  doctorId: z.string().min(1).max(100).nullable().optional(),
+}).strict().refine(value => Object.keys(value).length > 0, {
+  message: "No se recibieron campos para actualizar",
+})
+
+function jsonError(message: string, status: number) {
+  return NextResponse.json({ error: message }, { status })
+}
+
+function isValidFileReference(value: string): boolean {
+  if (value.startsWith("/") && !value.startsWith("//") && !value.includes("\\")) return true
+  try {
+    const url = new URL(value)
+    return url.protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
 export const PATCH = createApiHandler(
-  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"], schema: z.any() },
-  async (req, { user, params, data }) => {
-    const itemId = params.itemId as string
-    if (!itemId) throw new Error("Falta el ID del ítem")
-
-    const { progress, isCompleted, discount, paidAmount, isPaid, tooth, region, note, isPrivate, fileUrl, hasIncident, hasAdverseEvent, doctorId } = data
-    // Los abonos solo pueden modificarse desde la API financiera.
-    if (paidAmount !== undefined || isPaid !== undefined) {
-      return NextResponse.json({ error: "Los importes abonados solo pueden modificarse desde Pagos" }, { status: 403 })
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"], schema: updateSchema },
+  async (_req, { user, params, data }) => {
+    const itemId = String(params.itemId || "").trim()
+    if (!itemId) return jsonError("Falta el ID del ítem", 400)
+    if (data.paidAmount !== undefined || data.isPaid !== undefined) {
+      return jsonError("Los importes abonados solo pueden modificarse desde Pagos", 403)
     }
-    if (progress !== undefined && (!Number.isInteger(Number(progress)) || Number(progress) < 0 || Number(progress) > 100)) {
-      return NextResponse.json({ error: "Progreso inválido (0-100)" }, { status: 400 })
+    if (data.tooth !== undefined && data.region !== undefined) {
+      return jsonError("Envía tooth o region, no ambos", 400)
     }
-    if (discount !== undefined && (!Number.isFinite(Number(discount)) || Number(discount) < 0 || Number(discount) > 100)) {
-      return NextResponse.json({ error: "Descuento inválido (0-100)" }, { status: 400 })
+    if (typeof data.fileUrl === "string" && data.fileUrl !== "" && !isValidFileReference(data.fileUrl)) {
+      return jsonError("Referencia de archivo no permitida", 400)
     }
-    const finalIsCompleted = isCompleted ?? (progress !== undefined && Number(progress) === 100 ? true : undefined)
 
-    const headersList = await headers()
-    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
+    const financialChange = data.discount !== undefined || data.tooth !== undefined || data.region !== undefined
+    const h = await headers()
+    const ipAddress = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null
+    const userAgent = h.get("user-agent") || null
 
-    const updatedItem = await prisma.$transaction(async (tx) => {
-      const previousItem = await tx.treatmentItem.findUnique({
-        where: { id: itemId }, include: { plan: { include: { agreement: true } } }
-      })
-      if (!previousItem) throw new Error("ITEM_NOT_FOUND")
-
-      const updated = await tx.treatmentItem.update({
-        where: { id: itemId },
-        data: {
-          ...(progress !== undefined && { progress: Number(progress) }),
-          ...(finalIsCompleted !== undefined && { isCompleted: Boolean(finalIsCompleted) }),
-          ...(discount !== undefined && { discount: Number(discount) }),
-          ...(tooth !== undefined && { tooth: String(tooth) }),
-          ...(region !== undefined && { tooth: String(region) }),
-          ...(note !== undefined && { evolutionNote: String(note) }),
-          ...(isPrivate !== undefined && { isPrivate: Boolean(isPrivate) }),
-          ...(fileUrl !== undefined && { fileUrl: String(fileUrl) }),
-          ...(hasIncident !== undefined && { hasIncident: Boolean(hasIncident) }),
-          ...(hasAdverseEvent !== undefined && { hasAdverseEvent: Boolean(hasAdverseEvent) }),
-          ...(doctorId !== undefined && { performedById: String(doctorId) }),
-        }
-      })
-
-      if (updated.treatmentPlanId) {
-        const allItems = await tx.treatmentItem.findMany({ where: { treatmentPlanId: updated.treatmentPlanId } })
-        const commercialDisc = Number(previousItem.plan?.commercialDiscount ?? 0)
-
-        const agreementDisc = previousItem.plan?.agreement ? Number(previousItem.plan.agreement.discountValue || 0) : 0
-        const globalDiscount = commercialDisc > 0 ? commercialDisc : agreementDisc
-
-        const newTotalCost = allItems.reduce((acc, itm) => {
-          const baseCost = Number(itm.cost || 0)
-          const itmDisc = Number(itm.discount || 0)
-          const effectiveDisc = itmDisc > 0 ? itmDisc : globalDiscount
-          return acc + Math.max(0, baseCost - baseCost * (effectiveDisc / 100))
-        }, 0)
-
-        await tx.treatmentPlan.update({
-          where: { id: updated.treatmentPlanId },
-          data: { totalCost: Math.round(newTotalCost * 100) / 100 }
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const previous = await tx.treatmentItem.findUnique({
+          where: { id: itemId },
+          include: {
+            plan: {
+              include: {
+                agreement: true,
+                patient: { select: { isDeleted: true } },
+                approvals: { select: { id: true }, take: 1 },
+                payments: { select: { id: true }, take: 1 },
+              },
+            },
+          },
         })
-      }
-
-      await tx.auditLog.create({
-        data: {
-          userId: user.id, action: "UPDATE_TREATMENT_ITEM", entity: "TreatmentItem", entityId: updated.id, patientId: previousItem.plan?.patientId || null,
-          details: `Actualización de prestación "${updated.procedureName || 'Tratamiento'}" (Diente: ${updated.tooth || 'General'}). Descuento: ${updated.discount ?? 0}%, Progreso: ${updated.progress ?? 0}%, Pagado: $${Number(updated.paidAmount || 0).toFixed(2)}`,
-          oldData: { progress: previousItem.progress, isCompleted: previousItem.isCompleted, discount: previousItem.discount, paidAmount: previousItem.paidAmount, isPaid: previousItem.isPaid, tooth: previousItem.tooth, evolutionNote: previousItem.evolutionNote, hasIncident: previousItem.hasIncident, hasAdverseEvent: previousItem.hasAdverseEvent, performedById: previousItem.performedById },
-          newData: { progress: updated.progress, isCompleted: updated.isCompleted, discount: updated.discount, paidAmount: updated.paidAmount, isPaid: updated.isPaid, tooth: updated.tooth, evolutionNote: updated.evolutionNote, hasIncident: updated.hasIncident, hasAdverseEvent: updated.hasAdverseEvent, performedById: updated.performedById },
-          ipAddress, userAgent,
+        if (!previous || !previous.plan || previous.plan.patient?.isDeleted) {
+          return jsonError("Prestación o paciente no encontrado", 404)
         }
-      })
 
-      return updated
-    })
+        const plan = previous.plan
+        const isAdmin = user.role === "ADMIN"
+        const assignedDoctor = plan.doctorId === user.id
+        const performingDoctor = previous.performedById === user.id
+        if (!isAdmin && user.role !== "DOCTOR") return jsonError("No autorizado para modificar prestaciones", 403)
+        if (!isAdmin && !assignedDoctor && !performingDoctor) {
+          return jsonError("La prestación pertenece a otro profesional", 403)
+        }
+        if (financialChange && !isAdmin && !assignedDoctor) {
+          return jsonError("Solo el profesional responsable del plan puede modificar su presupuesto", 403)
+        }
+        if (data.doctorId !== undefined && !isAdmin && !assignedDoctor) {
+          return jsonError("No autorizado para reasignar el profesional", 403)
+        }
 
-    return updatedItem
+        const hasFinancialHistory =
+          plan.approvals.length > 0 ||
+          plan.payments.length > 0 ||
+          Number(plan.totalPaid ?? 0) !== 0 ||
+          Number(previous.paidAmount ?? 0) !== 0 ||
+          previous.isPaid === true
+
+        if (financialChange && (plan.status !== "DRAFT" || hasFinancialHistory)) {
+          return jsonError("No se pueden alterar descuentos o piezas de un presupuesto aprobado, cerrado o con pagos", 409)
+        }
+        if (financialChange && !Number.isFinite(Number(plan.totalCost))) {
+          return jsonError("El presupuesto tiene importes inconsistentes", 409)
+        }
+
+        if (data.doctorId) {
+          const doctor = await tx.user.findFirst({
+            where: { id: data.doctorId, isActive: true, role: { in: ["DOCTOR", "ADMIN"] } },
+            select: { id: true },
+          })
+          if (!doctor) return jsonError("El profesional no existe o no está habilitado", 400)
+        }
+        const locked = await tx.treatmentPlan.updateMany({
+          where: { id: plan.id, status: plan.status },
+          data: { status: plan.status },
+        })
+        if (locked.count !== 1) return jsonError("El estado del presupuesto cambió. Actualiza la pantalla", 409)
+
+        const updated = await tx.treatmentItem.update({
+          where: { id: itemId },
+          data: {
+            ...(data.progress !== undefined && { progress: data.progress }),
+            ...(data.isCompleted !== undefined && { isCompleted: data.isCompleted }),
+            ...(data.isCompleted === undefined && data.progress === 100 && { isCompleted: true }),
+            ...(data.discount !== undefined && { discount: data.discount }),
+            ...(data.tooth !== undefined && { tooth: data.tooth }),
+            ...(data.region !== undefined && { tooth: data.region }),
+            ...(data.note !== undefined && { evolutionNote: data.note }),
+            ...(data.isPrivate !== undefined && { isPrivate: data.isPrivate }),
+            ...(data.fileUrl !== undefined && { fileUrl: data.fileUrl }),
+            ...(data.hasIncident !== undefined && { hasIncident: data.hasIncident }),
+            ...(data.hasAdverseEvent !== undefined && { hasAdverseEvent: data.hasAdverseEvent }),
+            ...(data.doctorId !== undefined && { performedById: data.doctorId }),
+          },
+        })
+
+        if (financialChange) {
+          const allItems = await tx.treatmentItem.findMany({
+            where: { treatmentPlanId: plan.id },
+            select: { cost: true, discount: true },
+          })
+          const commercial = Number(plan.commercialDiscount || 0)
+          const agreementDiscount = plan.agreement?.discountType === "PERCENTAGE"
+            ? Number(plan.agreement.discountValue || 0) : 0
+          const globalDiscount = commercial > 0 ? commercial : agreementDiscount
+          if (!Number.isFinite(globalDiscount) || globalDiscount < 0 || globalDiscount > 100) {
+            return jsonError("Descuento global del plan inválido", 409)
+          }
+          let totalCents = 0
+          for (const item of allItems) {
+            const cost = Number(item.cost)
+            const itemDiscount = Number(item.discount || 0)
+            if (!Number.isFinite(cost) || cost < 0 || !Number.isFinite(itemDiscount) || itemDiscount < 0 || itemDiscount > 100) {
+              return jsonError("Existen prestaciones con importes inválidos", 409)
+            }
+            const rate = itemDiscount > 0 ? itemDiscount : globalDiscount
+            totalCents += Math.round(cost * (1 - rate / 100) * 100)
+          }
+          await tx.treatmentPlan.update({ where: { id: plan.id }, data: { totalCost: totalCents / 100 } })
+        }
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "UPDATE_TREATMENT_ITEM",
+            entity: "TreatmentItem",
+            entityId: updated.id,
+            patientId: plan.patientId,
+            details: financialChange ? "Actualización de parámetros de prestación en borrador" : "Actualización de evolución de prestación",
+            oldData: {
+              progress: previous.progress,
+              isCompleted: previous.isCompleted,
+              discount: previous.discount,
+              tooth: previous.tooth,
+              performedById: previous.performedById,
+            },
+            newData: {
+              progress: updated.progress,
+              isCompleted: updated.isCompleted,
+              discount: updated.discount,
+              tooth: updated.tooth,
+              performedById: updated.performedById,
+            },
+            ipAddress,
+            userAgent,
+          },
+        })
+        return updated
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 })
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034") {
+        return jsonError("Otra operación actualizó el presupuesto. Vuelve a intentarlo", 409)
+      }
+      throw error
+    }
   }
 )

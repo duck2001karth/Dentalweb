@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button"
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select"
-import { ConfirmDestructiveDialog } from "@/components/ui/confirm-destructive-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { useClinicSettings } from "@/config/clinic-settings"
 
@@ -23,7 +22,7 @@ interface TreatmentPlanListProps {
   patientName?: string
   onNewPlan?: () => void
   onSelectPlan?: (id: string) => void
-  onDeletePlan?: (id: string) => void
+  onDeletePlan?: (id: string, permanent?: boolean) => void
   refetchPlans?: () => void
 }
 
@@ -46,8 +45,6 @@ export function TreatmentPlanList({
   const isAdmin = userRole === "ADMIN" || userRole === "ADMINISTRADOR"
 
   const [filterStatus, setFilterStatus] = useState<string>("ALL")
-  const [planToForceDelete, setPlanToForceDelete] = useState<string | null>(null)
-  const [isForceDeleting, setIsForceDeleting] = useState(false)
 
   const filteredPlans = useMemo(() => {
     return (plans || []).filter((plan: any) => {
@@ -60,25 +57,6 @@ export function TreatmentPlanList({
       return true
     })
   }, [plans, filterStatus])
-
-  const confirmForceDelete = async () => {
-    if (!planToForceDelete) return
-    setIsForceDeleting(true)
-    try {
-      const res = await fetch(`/api/treatments/${planToForceDelete}?force=true`, { method: "DELETE" })
-      if (res.ok) {
-        toast({ title: "Plan eliminado definitivamente", variant: "success" })
-        if (refetchPlans) refetchPlans()
-      } else {
-        throw new Error()
-      }
-    } catch {
-      toast({ title: "Error al eliminar definitivamente", variant: "destructive" })
-    } finally {
-      setIsForceDeleting(false)
-      setPlanToForceDelete(null)
-    }
-  }
 
   const handleRestore = async (id: string) => {
     try {
@@ -100,18 +78,6 @@ export function TreatmentPlanList({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300 font-sans antialiased">
-      {/* Modal Eliminación Definitiva Unificado */}
-      <ConfirmDestructiveDialog
-        isOpen={!!planToForceDelete}
-        onClose={() => setPlanToForceDelete(null)}
-        onConfirm={confirmForceDelete}
-        isLoading={isForceDeleting}
-        title="¿Destruir plan permanentemente?"
-        description="Esta acción eliminará de forma irreversible el tratamiento y sus registros clínicos de la base de datos."
-        confirmText="Sí, destruir definitivo"
-        iconType="warning"
-      />
-
       {/* Cabecera */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-card/80 backdrop-blur-xl p-6 rounded-[24px] border border-border shadow-xs">
         <div className="flex items-center gap-4">
@@ -233,19 +199,19 @@ export function TreatmentPlanList({
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     {isCancelled ? (
                       <>
-                        <Button
+                        {isAdmin && <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleRestore(plan.id)}
                           className="text-emerald-600 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 text-xs font-bold h-9 rounded-xl transition-all"
                         >
                           <RotateCcw className="w-4 h-4 mr-1.5" /> Restaurar
-                        </Button>
-                        {isAdmin && (
+                        </Button>}
+                        {isAdmin && onDeletePlan && (
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => setPlanToForceDelete(plan.id)}
+                            onClick={() => onDeletePlan(plan.id, true)}
                             className="text-red-500 hover:bg-red-100 h-9 w-9 rounded-xl transition-colors cursor-pointer"
                             title="Eliminar de la Base de Datos"
                           >
@@ -255,13 +221,13 @@ export function TreatmentPlanList({
                       </>
                     ) : (
                       <>
-                        {onDeletePlan && (
+                        {isAdmin && onDeletePlan && (
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={(e) => {
                               e.stopPropagation()
-                              onDeletePlan(plan.id)
+                              onDeletePlan(plan.id, false)
                             }}
                             className="h-9 w-9 text-muted-foreground/60 hover:text-red-500 hover:bg-red-50 rounded-xl cursor-pointer transition-colors"
                             title="Mover a papelera"

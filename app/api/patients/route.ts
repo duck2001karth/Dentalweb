@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db"
 import { z } from "zod"
 import { patientAdministrativeSelect } from "./patient-select"
 
+// Conserva el contrato anterior { patients } y añade metadatos para mostrar
+// el total real sin descargar todas las fichas clínicas del servidor.
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
   async (_req, { searchParams }) => {
@@ -24,16 +26,53 @@ export const GET = createApiHandler(
         : {}),
     }
 
-    const patients = await prisma.patient.findMany({
-      where: whereClause,
-      orderBy: { createdAt: "desc" },
-      take: search ? 20 : 50,
-      select: patientAdministrativeSelect,
-    })
+    // El listado sigue limitado a 50 registros (20 cuando hay búsqueda).
+    // La página es opcional para conservar el funcionamiento del frontend.
+    const pageParam = searchParams.get("page")
+    const parsedPage = pageParam === null ? 1 : Number(pageParam)
+    if (!Number.isSafeInteger(parsedPage) || parsedPage < 1 || parsedPage > 100_000) {
+      return Response.json({ error: "Número de página inválido" }, { status: 400 })
+    }
 
-    return { patients }
+    // Permite al directorio pedir siete filas, pero mantiene los valores anteriores
+    // para otros consumidores de la API que no envían `limit`.
+    const limitParam = searchParams.get("limit")
+    const requestedLimit = limitParam === null ? (search ? 20 : 50) : Number(limitParam)
+    if (!Number.isSafeInteger(requestedLimit) || requestedLimit < 1 || requestedLimit > 100) {
+      return Response.json({ error: "Tamaño de página inválido (1–100)" }, { status: 400 })
+    }
+    const limit = requestedLimit
+    const skip = (parsedPage - 1) * limit
+
+    // count() no está sujeto al 'take' de findMany().
+    // totalPatients cuenta a todos los pacientes activos, sin filtro de búsqueda.
+    const [patients, total, totalPatients] = await prisma.$transaction([
+      prisma.patient.findMany({
+        where: whereClause,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip,
+        take: limit,
+        select: patientAdministrativeSelect,
+      }),
+      prisma.patient.count({ where: whereClause }),
+      prisma.patient.count({ where: { isDeleted: false } }),
+    ])
+
+    return {
+      patients,
+      total,             // Total que coincide con el filtro actual
+      totalPatients,     // Total de pacientes activos para la tarjeta
+      pagination: {
+        page: parsedPage,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        hasNextPage: skip + patients.length < total,
+      },
+    }
   }
 )
+
+// Registro de pacientes sin cambios funcionales.
 export const POST = createApiHandler(
   {
     roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],

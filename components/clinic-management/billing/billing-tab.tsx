@@ -338,7 +338,7 @@ export function BillingTab({ searchTerm: externalSearch }: { searchTerm?: string
         onConfirm={async (reason) => {
           if (itemToDelete) {
             await deletePayment(itemToDelete, reason)
-            toast({ title: "Cobro Anulado", variant: "destructive" })
+            toast({ title: "El cobro ha sido Anulado", variant: "success" })
             fetchPayments()
           }
         }}

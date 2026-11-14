@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useRef, useState, useEffect, useCallback } from "react"
-import { CheckCircle2, RotateCcw, Check, PenTool } from "lucide-react"
+import * as React from "react"
+import { Check, CheckCircle2, PenTool, RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 interface SignaturePadProps {
@@ -17,131 +17,112 @@ export function SignaturePad({
   onSign,
   onClear,
   onCancel,
-  confirmButtonText = "Guardar Firma",
+  confirmButtonText = "Guardar firma",
 }: SignaturePadProps) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const [isDrawing, setIsDrawing] = useState(false)
-  const [hasSignature, setHasSignature] = useState(false)
+  const canvasRef = React.useRef<HTMLCanvasElement>(null)
+  const drawingRef = React.useRef(false)
+  const [hasSignature, setHasSignature] = React.useState(false)
 
-  const setupCanvas = useCallback(() => {
+  React.useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext("2d")
-    const rect = canvas.getBoundingClientRect()
-    if (!ctx || rect.width === 0) return
-    
-    // Evitar parpadeos si ya hay firma
-    if (hasSignature) return 
+    const context = canvas.getContext("2d")
+    if (!context) return
+    // Dimensions in HTML avoid clearing a signature while the user draws.
+    context.strokeStyle = "#0f172a"
+    context.lineWidth = 3
+    context.lineCap = "round"
+    context.lineJoin = "round"
+  }, [])
 
-    canvas.width = rect.width * 2
-    canvas.height = rect.height * 2
-    ctx.scale(2, 2)
-    ctx.strokeStyle = "#0f172a"
-    ctx.lineWidth = 2.5
-    ctx.lineCap = "round"
-    ctx.lineJoin = "round"
-  }, [hasSignature])
-
-  useEffect(() => {
-    setupCanvas()
-    const observer = new ResizeObserver(() => setupCanvas())
-    if (canvasRef.current) observer.observe(canvasRef.current)
-    return () => observer.disconnect()
-  }, [setupCanvas])
-
-  const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
-    const canvas = canvasRef.current
-    if (!canvas) return { x: 0, y: 0 }
-    const rect = canvas.getBoundingClientRect()
-    const clientX = "touches" in e ? e.touches[0].clientX : e.clientX
-    const clientY = "touches" in e ? e.touches[0].clientY : e.clientY
-    return { x: clientX - rect.left, y: clientY - rect.top }
-  }
-
-  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
-    const ctx = canvasRef.current?.getContext("2d")
-    if (!ctx) return
-    const { x, y } = getCoordinates(e)
-    ctx.beginPath()
-    ctx.moveTo(x, y)
-    setIsDrawing(true)
-  }
-
-  const draw = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isDrawing) return
-    const ctx = canvasRef.current?.getContext("2d")
-    if (!ctx) return
-    const { x, y } = getCoordinates(e)
-    ctx.lineTo(x, y)
-    ctx.stroke()
-    setHasSignature(true)
-  }
-
-  const stopDrawing = () => setIsDrawing(false)
-
-  const clearCanvas = () => {
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext("2d")
-    if (!canvas || !ctx) return
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    setHasSignature(false)
-    if (onClear) onClear()
-  }
-
-  const handleConfirmSignature = () => {
-    if (canvasRef.current && hasSignature) {
-      onSign(canvasRef.current.toDataURL("image/png"))
+  function coordinate(event: React.PointerEvent<HTMLCanvasElement>) {
+    const canvas = canvasRef.current!
+    const bounds = canvas.getBoundingClientRect()
+    return {
+      x: (event.clientX - bounds.left) * (canvas.width / bounds.width),
+      y: (event.clientY - bounds.top) * (canvas.height / bounds.height),
     }
   }
 
+  function onPointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (event.button !== 0 && event.pointerType === "mouse") return
+    const canvas = canvasRef.current
+    const context = canvas?.getContext("2d")
+    if (!canvas || !context) return
+    canvas.setPointerCapture(event.pointerId)
+    const { x, y } = coordinate(event)
+    context.beginPath()
+    context.moveTo(x, y)
+    context.lineTo(x + 0.1, y + 0.1)
+    context.stroke()
+    drawingRef.current = true
+    setHasSignature(true)
+  }
+
+  function onPointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
+    if (!drawingRef.current) return
+    const context = canvasRef.current?.getContext("2d")
+    if (!context) return
+    const { x, y } = coordinate(event)
+    context.lineTo(x, y)
+    context.stroke()
+  }
+
+  function onPointerUp(event: React.PointerEvent<HTMLCanvasElement>) {
+    drawingRef.current = false
+    if (canvasRef.current?.hasPointerCapture(event.pointerId)) {
+      canvasRef.current.releasePointerCapture(event.pointerId)
+    }
+  }
+
+  function clear() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height)
+    drawingRef.current = false
+    setHasSignature(false)
+    onClear?.()
+  }
+
   return (
-    <div className="space-y-3 font-sans">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
-          <PenTool className="w-3.5 h-3.5 text-[#008bcd]" /> {label}
+    <div className="space-y-3 font-sans text-foreground">
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <PenTool className="h-4 w-4 text-primary" /> {label}
         </span>
-        <div className="flex items-center gap-2">
-          {hasSignature ? (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-md">
-              <CheckCircle2 className="w-3 h-3" /> Trazo detectado
-            </span>
-          ) : (
-            <span className="text-[10px] font-bold text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-md">
-              Lienzo vacío
-            </span>
-          )}
-        </div>
+        <span aria-live="polite" className="flex items-center gap-1 text-xs text-muted-foreground">
+          {hasSignature ? <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> : null}
+          {hasSignature ? "Firma capturada" : "Sin firma"}
+        </span>
       </div>
-      
-      <div className="relative w-full rounded-2xl border-2 border-dashed border-border/80 bg-white dark:bg-slate-100 shadow-2xs overflow-hidden">
+      <div className="relative overflow-hidden rounded-xl border border-border bg-white shadow-inner">
         <canvas
           ref={canvasRef}
-          className="w-full h-[180px] cursor-crosshair touch-none select-none block"
-          onMouseDown={startDrawing}
-          onMouseMove={draw}
-          onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
-          onTouchStart={startDrawing}
-          onTouchMove={draw}
-          onTouchEnd={stopDrawing}
+          width={720}
+          height={256}
+          aria-label="Área para dibujar una firma"
+          className="block h-36 w-full cursor-crosshair touch-none select-none bg-white"
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
         />
         {!hasSignature && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none text-slate-400 text-sm font-medium select-none">
+          <span aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-slate-400">
             Firme aquí
-          </div>
+          </span>
         )}
       </div>
-
-      <div className="flex items-center justify-between pt-1">
-        <Button variant="outline" size="sm" onClick={clearCanvas} disabled={!hasSignature} className="rounded-xl text-xs h-9">
-          <RotateCcw className="w-3.5 h-3.5 mr-1.5" /> Reintentar
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button type="button" variant="outline" size="sm" onClick={clear} disabled={!hasSignature}>
+          <RotateCcw className="h-4 w-4" /> Limpiar
         </Button>
-        <div className="flex items-center gap-2">
-          {onCancel && (
-            <Button variant="ghost" size="sm" onClick={onCancel} className="rounded-xl text-xs h-9">Cancelar</Button>
-          )}
-          <Button size="sm" onClick={handleConfirmSignature} disabled={!hasSignature} className="bg-[#008bcd] hover:bg-[#0070a8] text-white rounded-xl text-xs h-9">
-            <Check className="w-4 h-4 mr-1.5" /> {confirmButtonText}
+        <div className="flex gap-2">
+          {onCancel && <Button type="button" variant="ghost" size="sm" onClick={onCancel}>Cancelar</Button>}
+          <Button type="button" size="sm" disabled={!hasSignature} onClick={() => {
+            if (canvasRef.current && hasSignature) onSign(canvasRef.current.toDataURL("image/png"))
+          }}>
+            <Check className="h-4 w-4" /> {confirmButtonText}
           </Button>
         </div>
       </div>

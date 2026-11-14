@@ -397,11 +397,16 @@ export function useTreatmentState(initialPlan: any, patient: any, currentUser: a
 
   const handleClearPlan = async () => {
     try {
-      await fetch(`/api/treatments/${initialPlan.id}/clear-items`, { method: "DELETE" })
+      const response = await fetch(`/api/treatments/${initialPlan.id}/clear`, { method: "DELETE" })
+      const result = await response.json().catch(() => null)
+      if (!response.ok) throw new Error(result?.error || `No se pudo vaciar el presupuesto (HTTP ${response.status})`)
       setPlanItems([])
       setIsDeleteModalOpen(false)
+      toast({ title: "Presupuesto vaciado", variant: "success" })
       await refreshPlanData()
-    } catch {}
+    } catch (error) {
+      toast({ title: "No se pudo vaciar", description: error instanceof Error ? error.message : "Error inesperado", variant: "destructive" })
+    }
   }
 
   const executeDeleteSelected = async () => {

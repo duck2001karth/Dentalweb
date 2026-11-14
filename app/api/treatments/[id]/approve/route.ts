@@ -12,14 +12,63 @@ const schema = z.object({
 
 const cents = (n: number) => Math.round(n * 100)
 
-// Este verificador reproduce las restricciones que aplica Caja a una aprobación B2.
-// Nunca se infiere aprobación a partir de status ACTIVE o de una firma del perfil.
+const ORIGINAL_SNAPSHOT_KEYS = [
+  "planId", "patientId", "name", "agreementId", "commercialDiscount",
+  "globalDiscount", "commentsToPatient", "items", "amount",
+] as const
+const ORIGINAL_ITEM_KEYS = ["id", "name", "tooth", "cost", "discount", "net"] as const
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+function restoreOriginalSnapshotOrder(snapshot: unknown): Record<string, unknown> | null {
+  if (!isPlainRecord(snapshot)) return null
+  // No se ignoran propiedades inesperadas: cualquier cambio en la evidencia
+  // sigue invalidando la aprobación.
+  const allowedSnapshotKeys = new Set<string>(ORIGINAL_SNAPSHOT_KEYS)
+  if (Object.keys(snapshot).some((key) => !allowedSnapshotKeys.has(key))) return null
+  if (!Array.isArray(snapshot.items) || snapshot.items.length === 0) return null
+
+  const originalItems: Record<string, unknown>[] = []
+  const allowedItemKeys = new Set<string>(ORIGINAL_ITEM_KEYS)
+  for (const item of snapshot.items) {
+    if (!isPlainRecord(item) || Object.keys(item).some((key) => !allowedItemKeys.has(key))) return null
+    const orderedItem: Record<string, unknown> = {}
+    for (const key of ORIGINAL_ITEM_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(item, key)) orderedItem[key] = item[key]
+    }
+    originalItems.push(orderedItem)
+  }
+
+  const orderedSnapshot: Record<string, unknown> = {}
+  for (const key of ORIGINAL_SNAPSHOT_KEYS) {
+    if (key === "items") {
+      orderedSnapshot.items = originalItems
+    } else if (Object.prototype.hasOwnProperty.call(snapshot, key)) {
+      orderedSnapshot[key] = snapshot[key]
+    }
+  }
+  return orderedSnapshot
+}
+
+function hasValidApprovalHash(snapshot: unknown, expectedHash: string): boolean {
+  if (typeof expectedHash !== "string" || !/^[0-9a-f]{64}$/i.test(expectedHash)) return false
+  if (!isPlainRecord(snapshot) || !Array.isArray(snapshot.items) || snapshot.items.length === 0) return false
+  const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
+
+  // Compatible con el orden directo si la base de datos lo preserva.
+  if (hash(snapshot) === expectedHash.toLowerCase()) return true
+  // Para jsonb, verificar la serialización EXACTA usada al crear B2.
+  const restored = restoreOriginalSnapshotOrder(snapshot)
+  return restored !== null && hash(restored) === expectedHash.toLowerCase()
+}
+
+// Conserva las verificaciones financieras que utiliza Caja D4.
 function approvalMatches(plan: any, approval: any): boolean {
-  if (!approval) return false
+  if (!approval || !hasValidApprovalHash(approval.snapshot, approval.snapshotHash)) return false
   const snapshot = approval.snapshot as any
-  if (!snapshot || !Array.isArray(snapshot.items) || snapshot.items.length === 0) return false
-  const hash = createHash("sha256").update(JSON.stringify(snapshot)).digest("hex")
-  if (hash !== approval.snapshotHash) return false
+  if (snapshot.planId !== plan.id || snapshot.patientId !== plan.patientId) return false
   if (snapshot.items.length !== plan.items.length) return false
   const byId = new Map<string, any>(plan.items.map((item: any) => [item.id, item]))
   let total = 0
@@ -35,14 +84,16 @@ function approvalMatches(plan: any, approval: any): boolean {
     if (paid < 0 || paid > cents(net)) return false
     total += cents(net)
   }
-  return total === cents(Number(approval.approvedAmount)) &&
+  return total === cents(Number(snapshot.amount)) &&
+    total === cents(Number(approval.approvedAmount)) &&
     total === cents(Number(plan.totalCost))
 }
 
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
   async (_req, { params }) => {
-    const id = String(params.id || "")
+    const id = typeof params.id === "string" ? params.id.trim() : ""
+    if (!id || id.length > 128) return NextResponse.json({ error: "ID de plan inválido" }, { status: 400 })
     const plan = await prisma.treatmentPlan.findUnique({
       where: { id },
       include: {
@@ -67,21 +118,22 @@ export const GET = createApiHandler(
 export const POST = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"], schema },
   async (_req, { user, params, data }) => {
-    const id = String(params.id || "")
+    const id = typeof params.id === "string" ? params.id.trim() : ""
+    if (!id || id.length > 128) return NextResponse.json({ error: "ID de plan inválido" }, { status: 400 })
     const h = await headers()
-    const ipAddress = h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || null
-    const userAgent = h.get("user-agent") || null
+    const ipAddress = (h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "Desconocido").slice(0, 128)
+    const userAgent = (h.get("user-agent") || "Desconocido").slice(0, 512)
 
     return prisma.$transaction(async (tx) => {
       const plan = await tx.treatmentPlan.findUnique({
         where: { id },
         include: {
-          patient: { select: { id: true, signatureBase64: true } },
+          patient: { select: { id: true, signatureBase64: true, isDeleted: true } },
           items: true, agreement: true,
           approvals: { orderBy: { approvedAt: "desc" }, take: 1 },
         },
       })
-      if (!plan) return NextResponse.json({ error: "PLAN_NOT_FOUND" }, { status: 404 })
+      if (!plan || plan.patient.isDeleted) return NextResponse.json({ error: "PLAN_NOT_FOUND" }, { status: 404 })
       const historical = plan.status === "ACTIVE" && plan.approvals.length === 0
       const draft = plan.status === "DRAFT"
       if (!draft && !historical) {
@@ -95,11 +147,16 @@ export const POST = createApiHandler(
         return NextResponse.json({ error: "INVALID_DISCOUNT" }, { status: 409 })
       }
 
-      // Regularización: una firma NUEVA en pantalla y aceptación ACTUAL del paciente.
-      // No se copia la firma del perfil para presupuestos históricos.
-      const signature = historical ? data.signatureBase64 : (data.signatureBase64 || plan.patient.signatureBase64)
+      // Un presupuesto generado para corregir una aprobación previa requiere SIEMPRE
+      // una firma nueva del paciente. La firma de su perfil no autoriza la revisión.
+      const correctedDraft = draft ? await tx.auditLog.findFirst({
+        where: { action: "CREATE_CORRECTED_TREATMENT_DRAFT", entity: "TreatmentPlan", entityId: id },
+        select: { id: true },
+      }) : null
+      const freshSignatureRequired = historical || Boolean(correctedDraft)
+      const signature = freshSignatureRequired ? data.signatureBase64 : (data.signatureBase64 || plan.patient.signatureBase64)
       if (!signature || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(signature)) {
-        return NextResponse.json({ error: historical ? "Se requiere una nueva firma y autorización actual del paciente." : "PATIENT_SIGNATURE_REQUIRED" }, { status: 400 })
+        return NextResponse.json({ error: freshSignatureRequired ? "Esta versión corregida requiere una firma nueva y la autorización actual del paciente." : "PATIENT_SIGNATURE_REQUIRED" }, { status: 400 })
       }
       const globalDiscount = Number(plan.commercialDiscount) > 0 ? Number(plan.commercialDiscount) :
         (plan.agreement?.discountType === "PERCENTAGE" ? Number(plan.agreement.discountValue) : 0)
@@ -114,8 +171,17 @@ export const POST = createApiHandler(
       if (historical && cents(amount) !== cents(Number(plan.totalCost))) {
         return NextResponse.json({ error: "El total actual difiere del valor del plan activo. Revisa el presupuesto antes de autorizarlo." }, { status: 409 })
       }
-      if (historical && plan.items.some(i => Number(i.paidAmount || 0) < 0)) {
-        return NextResponse.json({ error: "Existen abonos inconsistentes que requieren revisión." }, { status: 409 })
+      if (historical) {
+        const paidItemsCents = plan.items.reduce((sum, i) => sum + cents(Number(i.paidAmount || 0)), 0)
+        const planPaidCents = cents(Number(plan.totalPaid || 0))
+        const exceedsApproved = plan.items.some(i => {
+          const approved = items.find(saved => saved.id === i.id)
+          return !approved || cents(Number(i.paidAmount || 0)) < 0 ||
+            cents(Number(i.paidAmount || 0)) > cents(approved.net)
+        })
+        if (exceedsApproved || paidItemsCents !== planPaidCents) {
+          return NextResponse.json({ error: "Los abonos históricos no coinciden con los saldos por prestación. Requiere revisión antes de regularizar." }, { status: 409 })
+        }
       }
       const snapshot = {
         planId: plan.id, patientId: plan.patientId, name: plan.name,

@@ -11,6 +11,7 @@ import { TreatmentSidebar } from "./components/treatment-sidebar"
 import { TreatmentTable } from "./components/treatment-table"
 import { TreatmentDetailDialogs } from "./modals/treatment-detail-dialogs"
 import { TreatmentExtra } from "./components/treatment-extra"
+import { TreatmentCorrectionDialog } from "./modals/treatment-correction-dialog"
 import { OdontogramaTab } from "@/components/patients-file/odontogram/odontogram-tab"
 import { printTreatmentPlanSheet, PrintMode } from "@/components/plans-treatment/print/treatment-print-view"
 import { useClinicSettings } from "@/config/clinic-settings"
@@ -20,6 +21,7 @@ interface TreatmentPlanDetailProps {
   patient: any
   onBack: () => void
   onPlanUpdate?: () => void
+  onCorrectedDraft?: (newId: string) => void
   onSaveComment?: (comment: string) => void
   isSavingComment?: boolean
 }
@@ -28,6 +30,7 @@ export function TreatmentPlanDetail({
   plan,
   patient,
   onBack,
+  onCorrectedDraft,
   onSaveComment,
   isSavingComment = false
 }: TreatmentPlanDetailProps) {
@@ -40,6 +43,12 @@ export function TreatmentPlanDetail({
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null)
   const [sectionToDelete, setSectionToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [correctionItemIds, setCorrectionItemIds] = useState<string[]>([])
+  const [correctionOpen, setCorrectionOpen] = useState(false)
+  const currentStatus = String(state.currentPlan?.status || plan.status || "DRAFT")
+  const currentRole = String(currentUser?.role || "").toUpperCase()
+  const correctionAllowed = currentRole === "ADMIN" || (currentRole === "DOCTOR" && state.currentPlan?.doctorId === currentUser?.id)
+
 
   const activeSectionName = useMemo(() => {
     if (!activeSectionId) return null
@@ -145,6 +154,15 @@ export function TreatmentPlanDetail({
               planItems={state.planItems}
               sections={state.currentPlan?.sections || []} 
               planDiscountPercent={state.discountPercent}
+              planStatus={currentStatus}
+              onRequestCorrection={correctionAllowed ? (ids: string[]) => {
+                if (ids.length === 0) {
+                  toast({ title: "Selecciona prestaciones", description: "Marca las prestaciones que necesitan rectificación.", variant: "destructive" })
+                  return
+                }
+                setCorrectionItemIds(ids)
+                setCorrectionOpen(true)
+              } : undefined}
               setIsSectionModalOpen={setters.setIsSectionModalOpen}
               onRequestDeleteSection={(sec: { id: string; name: string }) => {
                 setSectionToDelete(sec)
@@ -196,6 +214,18 @@ export function TreatmentPlanDetail({
         </div>
       </div>
       
+      <TreatmentCorrectionDialog
+        open={correctionOpen}
+        onOpenChange={setCorrectionOpen}
+        planId={String(plan.id)}
+        selectedItems={state.planItems.filter((item: any) => correctionItemIds.includes(String(item.id))).map((item: any) => ({ id: String(item.id), name: String(item.procedureName || item.name || "Prestación") }))}
+        onComplete={async (result) => {
+          setCorrectionOpen(false)
+          await handlers.refreshPlanData()
+          if (result.mode === "NEW_DRAFT" && result.newPlanId) onCorrectedDraft?.(result.newPlanId)
+        }}
+      />
+
       {/* DIÁLOGOS Y MODALES */}
       <div className="print:hidden">
         <TreatmentDetailDialogs

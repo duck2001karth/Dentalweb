@@ -1,53 +1,65 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
+import { createApiHandler } from "@/lib/server/api-handler"
+import { prisma } from "@/lib/db"
+import { NextResponse } from "next/server"
 
-export async function GET(request: Request) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user) {
-      return NextResponse.json({ error: "Acceso denegado. No autenticado." }, { status: 401 });
+// Conservamos los roles actuales del personal que utiliza el buscador.
+// La validación de sesión, usuario activo y rol se centraliza en createApiHandler.
+export const GET = createApiHandler(
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async (_req, { searchParams }) => {
+    const rawQuery = searchParams.get("q")
+    const query = rawQuery?.trim() ?? ""
+
+    if (query.length < 2) {
+      return { patients: [], catalog: [] }
     }
 
-    const { searchParams } = new URL(request.url);
-    const q = searchParams.get('q');
-    
-    if (!q || q.length < 2) {
-      return NextResponse.json({ patients: [], catalog: [] });
+    if (query.length > 80 || /[\u0000-\u001f\u007f]/.test(query)) {
+      return NextResponse.json(
+        { error: "La búsqueda debe tener entre 2 y 80 caracteres válidos" },
+        { status: 400 }
+      )
     }
 
     const [patients, catalog] = await Promise.all([
       prisma.patient.findMany({
         where: {
+          isDeleted: false,
           OR: [
-            { firstName: { contains: q, mode: 'insensitive' } },
-            { lastName: { contains: q, mode: 'insensitive' } },
-            { ci: { contains: q, mode: 'insensitive' } }
+            { firstName: { contains: query, mode: "insensitive" } },
+            { lastName: { contains: query, mode: "insensitive" } },
+            { ci: { contains: query, mode: "insensitive" } },
           ],
-          isDeleted: false
         },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          ci: true,
+        },
+        orderBy: [{ firstName: "asc" }, { lastName: "asc" }],
         take: 5,
-        select: { id: true, firstName: true, lastName: true, ci: true }
       }),
-      
       prisma.procedureCatalog.findMany({
         where: {
+          isActive: true,
           OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { code: { contains: q, mode: 'insensitive' } }
+            { name: { contains: query, mode: "insensitive" } },
+            { code: { contains: query, mode: "insensitive" } },
           ],
-          isActive: true
         },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          category: true,
+          basePrice: true,
+        },
+        orderBy: { name: "asc" },
         take: 5,
-        select: { id: true, name: true, code: true, category: true, basePrice: true }
-      })
-    ]);
+      }),
+    ])
 
-    return NextResponse.json({ patients, catalog });
-    
-  } catch (error) {
-    console.error("Error en la búsqueda:", error);
-    return NextResponse.json({ error: "Error en el servidor" }, { status: 500 });
+    return { patients, catalog }
   }
-}
+)

@@ -9,13 +9,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "text-white shadow-xs hover:opacity-95 border-0",
+          "bg-primary text-primary-foreground shadow-xs hover:bg-primary/90 border-0",
         destructive:
           "bg-destructive text-destructive-foreground shadow-xs hover:bg-destructive/90",
         outline:
           "border border-border/80 bg-card text-foreground shadow-2xs hover:bg-[var(--doctor-accent,#008bcd)]/10 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)]",
         secondary:
-          "bg-muted text-foreground border border-border/80 hover:bg-muted/80 hover:border-[var(--doctor-accent,#008bcd)]",
+          "bg-secondary text-secondary-foreground border border-border/80 hover:bg-secondary/80 hover:border-[var(--doctor-accent,#008bcd)]",
         ghost:
           "text-foreground/80 hover:text-[var(--doctor-accent,#008bcd)] hover:bg-[var(--doctor-accent,#008bcd)]/10",
         link:
@@ -49,8 +49,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const dynamicStyle =
       variant === "default" || !variant
         ? {
-            backgroundColor: "var(--doctor-accent, #008bcd)",
-            color: "#ffffff",
+            backgroundColor: "var(--primary)",
+            color: "var(--primary-foreground)",
             ...style,
           }
         : style

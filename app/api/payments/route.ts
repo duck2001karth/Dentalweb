@@ -1,11 +1,15 @@
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
+import { Prisma } from "@prisma/client"
 import { headers } from "next/headers"
 import crypto from "crypto"
 import { NextResponse } from "next/server"
 
-// Función original intacta
+const VOID_MARKER = "[PAGO ELIMINADO"
+const hasVoidMarker = (value: string | null | undefined) =>
+  typeof value === "string" && value.toUpperCase().includes(VOID_MARKER)
+
 const normalizePrismaPaymentMethod = (method?: string): string => {
   if (!method) return "CASH"
   const m = method.toUpperCase().trim()
@@ -55,17 +59,11 @@ export const GET = createApiHandler(
       },
       orderBy: { createdAt: "desc" },
     })
-
-    const refundTransactions = rawPayments.filter((p: any) => {
-      const amt = Number(p.amount || p.paidAmount || 0)
-      const notes = typeof p.notes === "string" ? p.notes.toUpperCase() : ""
-      return amt < 0 || notes.includes("DEVOLUCION") || notes.includes("DEVOLUCIÓN") || notes.includes("NOTA")
-    })
+    const refundTransactions = rawPayments.filter((p) => Number(p.amount) < 0)
 
     const payments = rawPayments.map((payment: any) => {
       const pId = String(payment.id).toLowerCase()
       const pReceipt = String(payment.receiptNumber || "").trim().toUpperCase()
-      const pAmount = Math.abs(Number(payment.amount || payment.paidAmount || 0))
       const hasTaxNC = payment.taxDocuments?.some((d: any) => d.docType === "NOTA_CREDITO")
 
       const matchingRefund = refundTransactions.find((ref: any) => {
@@ -73,17 +71,13 @@ export const GET = createApiHandler(
         const refNotes = typeof ref.notes === "string" ? ref.notes.toUpperCase() : ""
         const refRef = typeof ref.reference === "string" ? ref.reference.toUpperCase() : ""
         const refRaw = `${refNotes} ${refRef}`
-        const refAmount = Math.abs(Number(ref.amount || ref.paidAmount || 0))
 
         const matchesId = ref.paymentId === payment.id || ref.originalPaymentId === payment.id || refRaw.toLowerCase().includes(pId)
         const matchesReceipt = pReceipt && pReceipt !== "S/N" && refRaw.includes(pReceipt)
         const refReceipt = String(ref.receiptNumber || ref.refundNumber || "").toUpperCase()
         const matchesGeneratedReceipt = pId.length >= 6 && refReceipt.toLowerCase().includes(pId.slice(-6))
         
-        const hasFiscalDoc = Boolean((payment.taxDocuments && payment.taxDocuments.length > 0) || payment.invoiceNumber)
-        const matchesPlanAndInvoice = hasFiscalDoc && payment.treatmentPlanId && ref.treatmentPlanId === payment.treatmentPlanId && refAmount === pAmount
-
-        return matchesId || matchesReceipt || matchesGeneratedReceipt || matchesPlanAndInvoice
+        return matchesId || matchesReceipt || matchesGeneratedReceipt
       })
 
       return { ...payment, hasCreditNote: Boolean(hasTaxNC || matchingRefund) }
@@ -114,10 +108,6 @@ const createPaymentSchema = z.object({
   }
 )
 
-// Compatibilidad B2: el endpoint /approve firma JSON.stringify(snapshot) antes de
-// guardarlo. PostgreSQL jsonb puede devolver las propiedades en otro orden.
-// Reconstruimos exclusivamente el orden ORIGINAL de ese endpoint y comparamos
-// contra el SHA-256 almacenado. No se omite ni se reemplaza la verificación.
 const ORIGINAL_SNAPSHOT_KEYS = [
   "planId", "patientId", "name", "agreementId", "commercialDiscount",
   "globalDiscount", "commentsToPatient", "items", "amount",
@@ -130,8 +120,6 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 function restoreOriginalSnapshotOrder(snapshot: unknown): Record<string, unknown> | null {
   if (!isPlainRecord(snapshot)) return null
-  // No se ignoran propiedades inesperadas: cualquier cambio en la evidencia
-  // sigue invalidando la aprobación.
   const allowedSnapshotKeys = new Set<string>(ORIGINAL_SNAPSHOT_KEYS)
   if (Object.keys(snapshot).some((key) => !allowedSnapshotKeys.has(key))) return null
   if (!Array.isArray(snapshot.items) || snapshot.items.length === 0) return null
@@ -179,7 +167,6 @@ export const POST = createApiHandler(
       patientId, amount, method, paymentMethod, itemIds, status, treatmentPlanId,
       reference, receiptNumber, receiptImage, notes,
     } = data
-    // La ficha de paciente sigue usando paymentMethod y itemIds: compatibilidad controlada.
     const destination = data.destination ?? (treatmentPlanId ? "PLAN" : "COUNTER")
     if (!method && !paymentMethod) {
       return NextResponse.json({ error: "Selecciona un método de cobro" }, { status: 400 })
@@ -211,6 +198,10 @@ export const POST = createApiHandler(
     if (destination === "PLAN" && (!treatmentPlanId || status !== "COMPLETED")) {
       return NextResponse.json({ error: "Selecciona un plan aprobado; los abonos a plan deben estar completados" }, { status: 400 })
     }
+    if (hasVoidMarker(notes)) {
+      return NextResponse.json({ error: "Las marcas de anulación están reservadas a Caja" }, { status: 400 })
+    }
+
     if (destination === "COUNTER" && !notes?.trim()) {
       return NextResponse.json({ error: "Indica el concepto del cobro de Mostrador" }, { status: 400 })
     }
@@ -347,69 +338,120 @@ export const POST = createApiHandler(
     }
   }
 )
+const patchPaymentSchema = z.object({
+  id: z.string().min(1).max(128).optional(),
+  paymentId: z.string().min(1).max(128).optional(),
+  method: z.string().min(1).optional(),
+  paymentMethod: z.string().min(1).optional(),
+  reference: z.string().max(150).nullable().optional(),
+  notes: z.string().max(5000).nullable().optional(),
+  receiptNumber: z.string().min(1).max(100).nullable().optional(),
+}).strict().refine(
+  v => v.method !== undefined || v.paymentMethod !== undefined ||
+       v.reference !== undefined || v.notes !== undefined || v.receiptNumber !== undefined,
+  "No hay cambios para guardar"
+)
 
 export const PATCH = createApiHandler(
-  { roles: ["ADMIN", "RECEPTIONIST", "DOCTOR"], schema: z.object({
-    id: z.string().min(1).optional(), paymentId: z.string().min(1).optional(),
-    method: z.string().optional(), paymentMethod: z.string().optional(),
-    reference: z.string().max(150).nullable().optional(),
-    notes: z.string().max(5000).nullable().optional(),
-    receiptNumber: z.string().min(1).max(100).nullable().optional(),
-  }).strict() },
-  async (req, { user, data }) => {
+  { roles: ["ADMIN", "RECEPTIONIST", "DOCTOR"], schema: patchPaymentSchema },
+  async (_req, { user, data }) => {
+    if (data.id && data.paymentId && data.id !== data.paymentId) {
+      return NextResponse.json({ error: "Los identificadores del pago no coinciden" }, { status: 400 })
+    }
     const paymentId = data.id || data.paymentId
-    if (!paymentId) throw new Error("Se requiere el ID del pago para actualizar")
+    if (!paymentId) {
+      return NextResponse.json({ error: "Se requiere el ID del pago" }, { status: 400 })
+    }
+    if (hasVoidMarker(data.notes)) {
+      return NextResponse.json({ error: "Las marcas de anulación están reservadas a Caja" }, { status: 400 })
+    }
 
-    const { method, paymentMethod, reference, notes, receiptNumber } = data
+    let validMethod: string | undefined
+    try {
+      const rawMethod = data.method || data.paymentMethod
+      validMethod = rawMethod ? normalizePrismaPaymentMethod(rawMethod) : undefined
+    } catch {
+      return NextResponse.json({ error: "Método de pago no reconocido" }, { status: 400 })
+    }
+    if (data.method && data.paymentMethod) {
+      let secondaryMethod: string
+      try {
+        secondaryMethod = normalizePrismaPaymentMethod(data.paymentMethod)
+      } catch {
+        return NextResponse.json({ error: "Método de pago no reconocido" }, { status: 400 })
+      }
+      if (secondaryMethod !== validMethod) {
+        return NextResponse.json({ error: "Los métodos de pago indicados no coinciden" }, { status: 400 })
+      }
+    }
 
-    const updatedPayment = await prisma.$transaction(async (tx) => {
-      const previous = await tx.payment.findUnique({ where: { id: paymentId } })
-      if (!previous) throw new Error("NOT_FOUND")
+    const h = await headers()
+    const metadata = {
+      ipAddress: (h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "Desconocido").slice(0, 128),
+      userAgent: (h.get("user-agent") || "Desconocido").slice(0, 512),
+    }
 
-      const rawMethod = method || paymentMethod
-      const validMethod = rawMethod ? normalizePrismaPaymentMethod(rawMethod) : undefined
+    try {
+      return await prisma.$transaction(async (tx) => {
+        const previous = await tx.payment.findUnique({ where: { id: paymentId } })
+        if (!previous) {
+          return NextResponse.json({ error: "Pago no encontrado" }, { status: 404 })
+        }
+        if (hasVoidMarker(previous.notes)) {
+          return NextResponse.json({ error: "No se puede editar un pago anulado" }, { status: 409 })
+        }
+        if (Number(previous.amount) <= 0) {
+          return NextResponse.json({ error: "No se pueden editar notas de crédito desde esta ruta" }, { status: 409 })
+        }
+        if (data.receiptNumber !== undefined && data.receiptNumber !== previous.receiptNumber) {
+          return NextResponse.json({ error: "El número de recibo emitido es inmutable" }, { status: 409 })
+        }
 
-      const updated = await tx.payment.update({
-        where: { id: paymentId },
-        data: {
-          ...(validMethod && { method: validMethod as any }),
-          ...(reference !== undefined && { reference }),
-          ...(notes !== undefined && { notes }),
-          ...(receiptNumber !== undefined && { receiptNumber }),
-        },
-        include: {
-          patient: { select: { id: true, firstName: true, lastName: true, ci: true } },
-          treatmentPlan: { select: { id: true, name: true } },
-          processedBy: { select: { id: true, name: true, role: true } },
-        },
-      })
+        const updatedPayment = await tx.payment.update({
+          where: { id: paymentId },
+          data: {
+            ...(validMethod !== undefined && { method: validMethod as Prisma.PaymentUpdateInput["method"] }),
+            ...(data.reference !== undefined && { reference: data.reference }),
+            ...(data.notes !== undefined && { notes: data.notes }),
+          },
+          include: {
+            patient: { select: { id: true, firstName: true, lastName: true, ci: true } },
+            treatmentPlan: { select: { id: true, name: true } },
+            processedBy: { select: { id: true, name: true, role: true } },
+          },
+        })
 
-
-      const headersList = await headers()
-      const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
-
-      await tx.auditLog.create({
-        data: {
-          userId: user.id,
-          action: "UPDATE_PAYMENT",
-          entity: "PAYMENT",
-          entityId: paymentId,
-          patientId: previous.patientId,
-          details: `Edición de pago #${updated.receiptNumber || paymentId}: monto ${previous.amount} -> ${updated.amount}`,
-          oldData: { 
-            method: previous.method, 
-            reference: previous.reference, 
-            amount: previous.amount, 
-            receiptNumber: previous.receiptNumber 
-          },          newData: { method: updated.method, reference: updated.reference, amount: updated.amount, receiptNumber: updated.receiptNumber },
-          ipAddress,
-          userAgent: headersList.get("user-agent") || "Desconocido",
-        },
-      })
-
-      return updated
-    })
-
-    return { success: true, message: "Pago actualizado correctamente", payment: updatedPayment }
+        await tx.auditLog.create({
+          data: {
+            userId: user.id,
+            action: "UPDATE_PAYMENT",
+            entity: "PAYMENT",
+            entityId: paymentId,
+            patientId: previous.patientId,
+            details: `Actualización de metadatos de pago #${previous.receiptNumber || paymentId}`,
+            oldData: {
+              method: previous.method,
+              reference: previous.reference,
+              receiptNumber: previous.receiptNumber,
+            },
+            newData: {
+              method: updatedPayment.method,
+              reference: updatedPayment.reference,
+              receiptNumber: updatedPayment.receiptNumber,
+            },
+            ...metadata,
+          },
+        })
+        return { success: true, message: "Pago actualizado correctamente", payment: updatedPayment }
+      }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 15000 })
+    } catch (error: unknown) {
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2034") {
+        return NextResponse.json({ error: "Movimiento simultáneo: consulta nuevamente el pago antes de reintentar" }, { status: 409 })
+      }
+      if (typeof error === "object" && error !== null && "code" in error && error.code === "P2002") {
+        return NextResponse.json({ error: "Conflicto de datos del pago; consulta nuevamente antes de reintentar" }, { status: 409 })
+      }
+      throw error
+    }
   }
 )

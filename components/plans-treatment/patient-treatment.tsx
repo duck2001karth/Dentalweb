@@ -5,16 +5,19 @@ import { useSearchParams, usePathname } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2 } from "lucide-react"
 
-import { ConfirmDestructiveDialog } from "@/components/ui/confirm-destructive-dialog"
+import { AdminPlanDeleteDialog } from "@/components/plans-treatment/modals/admin-plan-delete-dialog"
+import { useSession } from "next-auth/react"
 
 import { CreatePlanModal } from "@/components/plans-treatment/modals/create-plan-modal"
 import { TreatmentPlanList } from "@/components/plans-treatment/components/treatment-list"
 import { TreatmentPlanDetail } from "@/components/plans-treatment/treatment-detail"
-import { useGetTreatmentPlans, useDeleteTreatmentPlan, useUpdateTreatmentPlan } from "@/hooks/treatments"
+import { useGetTreatmentPlans, useUpdateTreatmentPlan } from "@/hooks/treatments"
 import { useGetPatient } from "@/hooks/patients"
 
 export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
   const { toast } = useToast()
+  const { data: session } = useSession()
+  const isAdmin = String((session?.user as any)?.role || "").toUpperCase() === "ADMIN"
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
@@ -22,12 +25,12 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(urlPlanId || null)
   const [newlyCreatedPlan, setNewlyCreatedPlan] = useState<any | null>(null)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
-  const [planToDelete, setPlanToDelete] = useState<string | null>(null)
+  const [planToDelete, setPlanToDelete] = useState<{ id: string; permanent: boolean } | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [isFetchingDirect, setIsFetchingDirect] = useState(false)
 
   const { plans = [], isLoading, refetch } = useGetTreatmentPlans({ patientId })
   const { patient } = useGetPatient(patientId)
-  const { deleteTreatmentPlan, isLoading: isDeleting } = useDeleteTreatmentPlan()
   const { updateTreatmentPlan, isLoading: isSavingComment } = useUpdateTreatmentPlan()
 
   useEffect(() => {
@@ -70,9 +73,7 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
 
   const handleSelectPlan = useCallback((id: string, initialData?: any) => {
     const cleanId = String(id).trim()
-    if (initialData) {
-      setNewlyCreatedPlan(initialData)
-    }
+    setNewlyCreatedPlan(initialData || null)
     setSelectedPlanId(cleanId)
     if (typeof window !== "undefined") {
       window.history.pushState(null, "", `${pathname}?tab=planes&planId=${cleanId}`)
@@ -101,23 +102,41 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
     [selectedPlanId, updateTreatmentPlan, toast]
   )
 
-  const confirmDeletePlan = useCallback(() => {
-    if (!planToDelete) return
-    deleteTreatmentPlan(planToDelete, {
-      onSuccess: () => {
-        toast({ title: "Plan enviado a la papelera", variant: "success" })
-        const deletedId = planToDelete
-        setPlanToDelete(null)
-        if (selectedPlanId === deletedId) {
-          handleBackToList()
-        }
-        refetch()
-      },
-      onError: () => {
-        toast({ title: "Error al anular el plan", variant: "destructive" })
-      },
-    })
-  }, [planToDelete, deleteTreatmentPlan, selectedPlanId, handleBackToList, refetch, toast])
+  const planForDeletion = (plans as any[]).find((p: any) => String(p.id) === planToDelete?.id) ||
+    (newlyCreatedPlan?.id === planToDelete?.id ? newlyCreatedPlan : null)
+
+  const confirmDeletePlan = async (reason: string): Promise<boolean> => {
+    if (!planToDelete || !isAdmin || isDeleting) return false
+    setIsDeleting(true)
+    try {
+      const url = `/api/treatments/${encodeURIComponent(planToDelete.id)}${planToDelete.permanent ? "?force=true" : ""}`
+      const response = await fetch(url, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        toast({
+          title: "No se pudo procesar el plan",
+          description: String(result?.error || `Error HTTP ${response.status}`),
+          variant: "destructive",
+        })
+        return false
+      }
+      const deletedId = planToDelete.id
+      setPlanToDelete(null)
+      toast({ title: planToDelete.permanent ? "Plan eliminado definitivamente" : "Plan enviado a la papelera", variant: "success" })
+      if (selectedPlanId === deletedId) handleBackToList()
+      void refetch()
+      return true
+    } catch {
+      toast({ title: "Error de conexión al gestionar el plan", variant: "destructive" })
+      return false
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
   return (
     <div className="w-full font-sans antialiased">
@@ -131,15 +150,13 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
         }}
       />
 
-      <ConfirmDestructiveDialog
-        isOpen={!!planToDelete}
+      <AdminPlanDeleteDialog
+        open={!!planToDelete}
+        plan={planForDeletion}
+        permanent={!!planToDelete?.permanent}
+        loading={isDeleting}
         onClose={() => setPlanToDelete(null)}
         onConfirm={confirmDeletePlan}
-        isLoading={isDeleting}
-        title="¿Mover a la papelera?"
-        description="El plan pasará al estado anulado. Podrás restaurarlo o destruirlo definitivamente desde la papelera."
-        confirmText="Sí, mover a papelera"
-        iconType="warning"
       />
 
       {selectedPlanId ? (
@@ -150,6 +167,10 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
             patient={patient}
             onBack={handleBackToList}
             onPlanUpdate={refetch}
+            onCorrectedDraft={(newId: string) => {
+              void refetch()
+              handleSelectPlan(newId)
+            }}
             onSaveComment={handleSaveComment}
             isSavingComment={isSavingComment}
           />
@@ -177,7 +198,7 @@ export function PatientTreatmentPlans({ patientId }: { patientId: string }) {
           patientName={patient ? `${patient.firstName || ""} ${patient.lastName || ""}`.trim() : ""}
           onNewPlan={() => setIsCreateModalOpen(true)}
           onSelectPlan={handleSelectPlan}
-          onDeletePlan={(id: string) => setPlanToDelete(id)}
+          onDeletePlan={isAdmin ? (id: string, permanent = false) => setPlanToDelete({ id, permanent }) : undefined}
           refetchPlans={refetch}
         />
       )}
