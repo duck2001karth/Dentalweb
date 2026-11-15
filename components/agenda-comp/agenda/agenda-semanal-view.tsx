@@ -3,13 +3,20 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { format, isSameDay } from "date-fns"
 import { es } from "date-fns/locale"
-import { CalendarDays } from "lucide-react"
+import { CalendarDays, Coffee } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { AppointmentCard } from "./appointment-card"
 
-const HOUR_HEIGHT = 88
+// Se conserva la jornada de la agenda original:
+// marcas de 08:00 a 18:00 y último bloque 18:00–19:00.
 const START_HOUR = 8
 const END_HOUR = 19
+const BREAK_START = 12
+const BREAK_END = 13
+const HOUR_HEIGHT = 88
+const TIME_LABELS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) =>
+  `${String(START_HOUR + i).padStart(2, "0")}:00`
+)
 
 type PositionedAppointment = {
   cita: any
@@ -21,7 +28,7 @@ type PositionedAppointment = {
 
 interface AgendaSemanalViewProps {
   weekDays: Date[]
-  hours: string[]
+  hours: string[] // Se conserva la prop para no romper la página que utiliza el componente
   appointments: any[]
   doctorColorsMap: Record<string, string>
   onSelectCita: (cita: any) => void
@@ -37,35 +44,46 @@ const dateKey = (value: unknown): string => {
 
 const toMinutes = (value: unknown): number => {
   if (typeof value !== "string" || !/^\d{1,2}:\d{2}/.test(value)) return START_HOUR * 60
-  const [hours, minutes] = value.split(":").map(Number)
-  return hours * 60 + minutes
+  const [hour, minute] = value.split(":").map(Number)
+  return hour * 60 + minute
 }
 
 export const AgendaSemanalView: React.FC<AgendaSemanalViewProps> = ({
-  weekDays, hours, appointments, doctorColorsMap, onSelectCita, defaultDoctorColor,
+  weekDays,
+  appointments,
+  doctorColorsMap,
+  onSelectCita,
+  defaultDoctorColor,
 }) => {
   const [selectedDayKey, setSelectedDayKey] = useState(() => format(new Date(), "yyyy-MM-dd"))
+  const weekIdentity = weekDays.map((day) => format(day, "yyyy-MM-dd")).join("|")
   const firstDayKey = weekDays[0] ? format(weekDays[0], "yyyy-MM-dd") : ""
-  const weekIdentity = weekDays.map(day => format(day, "yyyy-MM-dd")).join("|")
 
   useEffect(() => {
     if (!weekDays.length) return
-    const keys = weekDays.map(day => format(day, "yyyy-MM-dd"))
-    setSelectedDayKey(prev => keys.includes(prev) ? prev : (keys.includes(format(new Date(), "yyyy-MM-dd")) ? format(new Date(), "yyyy-MM-dd") : keys[0]))
-  }, [weekIdentity]) 
+    const keys = weekDays.map((day) => format(day, "yyyy-MM-dd"))
+    setSelectedDayKey((previous) => {
+      if (keys.includes(previous)) return previous
+      const today = format(new Date(), "yyyy-MM-dd")
+      return keys.includes(today) ? today : keys[0]
+    })
+  }, [weekIdentity])
 
   const byDay = useMemo(() => {
     const grouped: Record<string, any[]> = {}
-    weekDays.forEach(day => { grouped[format(day, "yyyy-MM-dd")] = [] })
-    appointments.forEach(cita => {
+    weekDays.forEach((day) => { grouped[format(day, "yyyy-MM-dd")] = [] })
+    appointments.forEach((cita) => {
       if (cita.status === "CANCELLED" || cita.status === "CANCELED") return
       const key = dateKey(cita.date)
-      if (grouped[key]) grouped[key].push(cita)
+      if (Object.prototype.hasOwnProperty.call(grouped, key)) grouped[key].push(cita)
     })
-    Object.values(grouped).forEach(day => day.sort((a,b) => toMinutes(a.startTime) - toMinutes(b.startTime)))
+    Object.values(grouped).forEach((items) =>
+      items.sort((a, b) => toMinutes(a.startTime) - toMinutes(b.startTime))
+    )
     return grouped
   }, [appointments, weekIdentity])
 
+  // Posicionamiento calculado sin añadir propiedades a los objetos originales.
   const positioned = useMemo(() => {
     const result: Record<string, PositionedAppointment[]> = {}
     Object.entries(byDay).forEach(([key, items]) => {
@@ -76,21 +94,29 @@ export const AgendaSemanalView: React.FC<AgendaSemanalViewProps> = ({
         const clippedEnd = Math.max(clippedStart, Math.min(END_HOUR * 60, end))
         const top = ((clippedStart - START_HOUR * 60) / 60) * HOUR_HEIGHT
         const height = Math.max(24, ((clippedEnd - clippedStart) / 60) * HOUR_HEIGHT - 4)
-        const overlapping = items.filter((other, otherIndex) => {
+        const overlaps = items.filter((other, otherIndex) => {
           if (index === otherIndex) return false
-          const os = toMinutes(other.startTime)
-          const oe = other.endTime ? toMinutes(other.endTime) : os + 30
-          return Math.max(start, os) < Math.min(end, oe)
+          const otherStart = toMinutes(other.startTime)
+          const otherEnd = other.endTime ? toMinutes(other.endTime) : otherStart + 30
+          return Math.max(start, otherStart) < Math.min(end, otherEnd)
         })
-        const group = [cita, ...overlapping].sort((a,b) => String(a.id).localeCompare(String(b.id)))
-        const position = group.findIndex(item => item.id === cita.id)
-        return { cita, top, height, left: overlapping.length ? `${position * 100 / group.length}%` : "4px", width: overlapping.length ? `${100 / group.length}%` : "calc(100% - 8px)" }
+        const group = [cita, ...overlaps].sort((a, b) => String(a.id).localeCompare(String(b.id)))
+        const position = group.findIndex((item) => item.id === cita.id)
+        return {
+          cita,
+          top,
+          height,
+          left: overlaps.length ? `${(position * 100) / group.length}%` : "4px",
+          width: overlaps.length ? `${100 / group.length}%` : "calc(100% - 8px)",
+        }
       })
     })
     return result
   }, [byDay])
 
-  const activeDayKey = weekDays.some(d => format(d, "yyyy-MM-dd") === selectedDayKey) ? selectedDayKey : firstDayKey
+  const activeDayKey = weekDays.some((day) => format(day, "yyyy-MM-dd") === selectedDayKey)
+    ? selectedDayKey
+    : firstDayKey
   const selectedAppointments = byDay[activeDayKey] || []
   const gridHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT
   const columnWidth = weekDays.length >= 6 ? 155 : 180
@@ -103,47 +129,139 @@ export const AgendaSemanalView: React.FC<AgendaSemanalViewProps> = ({
 
   return (
     <section className="min-w-0 flex-1 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      {/* CELULAR: se muestran todas las franjas horarias, incluida la pausa. */}
       <div className="block p-3 sm:hidden">
-        <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${Math.max(weekDays.length,1)}, minmax(0, 1fr))` }} role="group" aria-label="Seleccionar día de la semana">
-          {weekDays.map(day => {
+        <div
+          className="grid gap-1"
+          style={{ gridTemplateColumns: `repeat(${Math.max(weekDays.length, 1)}, minmax(0, 1fr))` }}
+          role="group"
+          aria-label="Seleccionar día de la semana"
+        >
+          {weekDays.map((day) => {
             const key = format(day, "yyyy-MM-dd")
             const selected = key === activeDayKey
             return (
-              <button key={key} type="button" onClick={() => setSelectedDayKey(key)} aria-pressed={selected}
-                className={cn("flex min-w-0 flex-col items-center rounded-xl border px-1 py-2 text-xs transition-colors", selected ? "border-primary bg-primary/10 text-primary" : "border-transparent text-muted-foreground hover:bg-muted")}
-              ><span className="text-[10px] capitalize">{format(day,"EEE",{locale:es})}</span><span className="mt-0.5 text-sm font-semibold">{format(day,"d")}</span>{(byDay[key]?.length || 0) > 0 && <span className="mt-1 h-1 w-1 rounded-full bg-primary" />}</button>
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSelectedDayKey(key)}
+                aria-pressed={selected}
+                className={cn(
+                  "flex min-w-0 flex-col items-center rounded-xl border px-1 py-2 text-xs transition-colors",
+                  selected
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-transparent text-muted-foreground hover:bg-muted"
+                )}
+              >
+                <span className="text-[10px] capitalize">{format(day, "EEE", { locale: es })}</span>
+                <span className="mt-0.5 text-sm font-semibold">{format(day, "d")}</span>
+                {(byDay[key]?.length || 0) > 0 && <span className="mt-1 h-1 w-1 rounded-full bg-primary" />}
+              </button>
             )
           })}
         </div>
-        <div className="mt-4 space-y-2">
-          <p className="text-xs font-medium text-muted-foreground" aria-live="polite">{selectedAppointments.length} cita(s) · {weekDays.find(d => format(d,"yyyy-MM-dd") === activeDayKey) ? format(weekDays.find(d => format(d,"yyyy-MM-dd") === activeDayKey)!,"d 'de' MMMM",{locale:es}) : ""}</p>
-          {selectedAppointments.length === 0 ? (
-            <div className="flex min-h-40 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-muted/20 p-5 text-center">
-              <CalendarDays className="h-7 w-7 text-muted-foreground" />
-              <p className="text-sm font-medium text-foreground">Sin citas para este día</p>
-              <p className="text-xs text-muted-foreground">Selecciona otro día para consultar la agenda.</p>
+        <p className="my-3 text-xs text-muted-foreground" aria-live="polite">
+          {selectedAppointments.length} cita(s) en el día seleccionado · 08:00–19:00
+        </p>
+        <div className="max-h-[65dvh] space-y-1 overflow-y-auto overscroll-contain pr-1">
+          {TIME_LABELS.map((label, index) => {
+            const hour = START_HOUR + index
+            const items = selectedAppointments.filter((cita) => {
+              const start = toMinutes(cita.startTime)
+              return start >= hour * 60 && start < (hour + 1) * 60
+            })
+            const isBreak = hour >= BREAK_START && hour < BREAK_END
+            return (
+              <div key={label} className="grid grid-cols-[52px_minmax(0,1fr)] gap-2 border-b border-border/40 py-2 last:border-b-0">
+                <span className="pt-2 text-xs font-medium tabular-nums text-muted-foreground">{label}</span>
+                <div className="min-h-12 space-y-2">
+                  {isBreak && (
+                    <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                      <Coffee className="h-4 w-4 text-amber-500" /> Break Time · 12:00–13:00
+                    </div>
+                  )}
+                  {items.map((cita) => (
+                    <div key={cita.id} className="h-28">
+                      <AppointmentCard cita={cita} doctorColor={doctorColorFor(cita)} onClick={() => onSelectCita(cita)} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          {selectedAppointments.length === 0 && (
+            <div className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
+              <CalendarDays className="h-4 w-4" /> Sin citas programadas en este día
             </div>
-          ) : selectedAppointments.map(cita => (
-            <div key={cita.id} className="h-28"><AppointmentCard cita={cita} doctorColor={doctorColorFor(cita)} onClick={() => onSelectCita(cita)} /></div>
-          ))}
+          )}
         </div>
       </div>
-      <div className="hidden min-w-0 max-w-full overflow-x-auto overscroll-x-contain sm:block" tabIndex={0} role="region" aria-label="Agenda semanal desplazable">
+
+      {/* TABLETA/LAPTOP: cuadrícula original completa, con desplazamiento interior. */}
+      <div
+        className="hidden max-h-[72dvh] min-w-0 max-w-full overflow-auto overscroll-contain sm:block"
+        tabIndex={0}
+        role="region"
+        aria-label="Agenda semanal desplazable de 08:00 a 19:00"
+      >
         <div className="w-full" style={{ minWidth: `${64 + weekDays.length * columnWidth}px` }}>
-          <div className="sticky top-0 z-20 grid border-b border-border bg-card/95 backdrop-blur-sm" style={{ gridTemplateColumns }}>
+          <div
+            className="sticky top-0 z-20 grid border-b border-border bg-card/95 backdrop-blur-sm"
+            style={{ gridTemplateColumns }}
+          >
             <div className="border-r border-border/50 p-3 text-center text-[11px] font-medium text-muted-foreground">HORA</div>
-            {weekDays.map(day => <div key={format(day,"yyyy-MM-dd")} className={cn("border-r border-border/50 p-3 text-center last:border-r-0", isSameDay(day,new Date()) && "bg-primary/5")}><span className="text-xs font-semibold capitalize text-foreground">{format(day,"EEE d",{locale:es})}</span></div>)}
+            {weekDays.map((day) => (
+              <div
+                key={format(day, "yyyy-MM-dd")}
+                className={cn("border-r border-border/50 p-3 text-center last:border-r-0", isSameDay(day, new Date()) && "bg-primary/5")}
+              >
+                <span className="text-xs font-semibold capitalize text-foreground">{format(day, "EEE d", { locale: es })}</span>
+              </div>
+            ))}
           </div>
-          <div className="relative grid" style={{ height:gridHeight, gridTemplateColumns }}>
+          <div className="relative grid" style={{ height: gridHeight, gridTemplateColumns }}>
             <div className="relative border-r border-border/50 bg-muted/10">
-              {hours.map((hour, index) => <div key={`${hour}-${index}`} className="absolute right-2 text-xs font-medium tabular-nums text-muted-foreground" style={{top: Math.max(4, index * HOUR_HEIGHT - 8)}}>{hour}</div>)}
+              {TIME_LABELS.map((hour, index) => (
+                <div
+                  key={hour}
+                  className="absolute right-2 text-xs font-medium tabular-nums text-muted-foreground"
+                  style={{ top: Math.max(4, index * HOUR_HEIGHT - 8) }}
+                >
+                  {hour}
+                </div>
+              ))}
             </div>
-            {weekDays.map(day => {
-              const key = format(day,"yyyy-MM-dd")
+            {weekDays.map((day) => {
+              const key = format(day, "yyyy-MM-dd")
               return (
                 <div key={key} className="relative min-w-0 border-r border-border/50 last:border-r-0">
-                  {hours.map((hour,index) => <div key={`${hour}-${index}`} className="pointer-events-none absolute inset-x-0 border-b border-border/30" style={{top:index*HOUR_HEIGHT}} />)}
-                  {(positioned[key] || []).map(item => <div key={item.cita.id} className="absolute z-10" style={{top:item.top,height:item.height,left:item.left,width:item.width}}><AppointmentCard cita={item.cita} doctorColor={doctorColorFor(item.cita)} onClick={() => onSelectCita(item.cita)} /></div>)}
+                  {TIME_LABELS.map((hour, index) => (
+                    <div
+                      key={hour}
+                      className="pointer-events-none absolute inset-x-0 border-b border-border/30"
+                      style={{ top: index * HOUR_HEIGHT }}
+                    />
+                  ))}
+                  <div
+                    className="pointer-events-none absolute inset-x-0 z-0 flex items-center justify-center border-y border-border/40 bg-muted/35"
+                    style={{
+                      top: (BREAK_START - START_HOUR) * HOUR_HEIGHT,
+                      height: (BREAK_END - BREAK_START) * HOUR_HEIGHT,
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-card/90 px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                      <Coffee className="h-3.5 w-3.5 text-amber-500" /> Break Time
+                    </span>
+                  </div>
+                  {(positioned[key] || []).map((item) => (
+                    <div
+                      key={item.cita.id}
+                      className="absolute z-10"
+                      style={{ top: item.top, height: item.height, left: item.left, width: item.width }}
+                    >
+                      <AppointmentCard cita={item.cita} doctorColor={doctorColorFor(item.cita)} onClick={() => onSelectCita(item.cita)} />
+                    </div>
+                  ))}
                 </div>
               )
             })}

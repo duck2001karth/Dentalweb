@@ -6,7 +6,7 @@ import Link from "next/link"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { 
-  CalendarCheck, RefreshCcw, Phone, AlertCircle, Clock, 
+  CalendarCheck, RefreshCcw, Phone, AlertCircle, Clock, Plus, Printer, 
   MapPin, User, CheckCircle2, Tags, HelpCircle, ChevronLeft, ChevronRight, RotateCcw 
 } from "lucide-react"
 
@@ -140,7 +140,7 @@ export function DashboardAgenda() {
             </Button>
           </div>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           {isAdminOrStaff ? (
             <div className="flex min-w-0 items-center gap-2">
               <span className="shrink-0 text-xs font-medium text-muted-foreground">Especialista</span>
@@ -161,31 +161,67 @@ export function DashboardAgenda() {
                 </SelectContent>
               </Select>
             </div>
-          ) : <span />}       
+          ) : <span />}
+          {/* Cuatro acciones con exactamente las mismas dimensiones.
+              No se modifica la lógica de los modales ni de las citas. */}
+          <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end" aria-label="Acciones de la agenda">
             <Button
+              type="button"
               variant="outline"
               size="sm"
-              className="h-10 gap-2 rounded-xl border-border bg-card px-4 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent"
-              onClick={() => { setSelectedAppointment(null)
-                setIsRescheduleOpen(true)
-              }}
+              className="h-10 w-full min-w-0 gap-2 rounded-xl border-border bg-card px-3 text-xs font-medium text-foreground shadow-none transition-colors hover:bg-accent sm:w-auto sm:px-3.5 sm:text-sm"
+              onClick={() => { setSelectedAppointment(null); setIsRescheduleOpen(true) }}
             >
-              <RefreshCcw className="h-4 w-4" />
-              Reprogramar
+              <RefreshCcw className="h-4 w-4 shrink-0" aria-hidden="true" />
+              <span className="truncate">Reprogramar</span>
             </Button>
-
             <Button
               asChild
               variant="outline"
               size="sm"
-              className="h-10 gap-2 rounded-xl border-border bg-card px-4 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent"
+              className="h-10 w-full min-w-0 gap-2 rounded-xl border-border bg-card px-3 text-xs font-medium text-foreground shadow-none transition-colors hover:bg-accent sm:w-auto sm:px-3.5 sm:text-sm"
             >
               <Link href="/agenda-global">
-                <CalendarCheck className="h-4 w-4" />
-                Agenda global
+                <CalendarCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">Agenda global</span>
               </Link>
             </Button>
-
+            <div className="min-w-0 sm:w-auto">
+              <PrintAgendaModal
+                date={date || new Date()}
+                appointments={citasActivas}
+                citas={citasActivas}
+                doctors={doctorsList}
+                trigger={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full min-w-0 gap-2 rounded-xl border-border bg-card px-3 text-xs font-medium text-foreground shadow-none transition-colors hover:bg-accent sm:w-auto sm:px-3.5 sm:text-sm"
+                  >
+                    <Printer className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>Imprimir</span>
+                  </Button>
+                }
+              />
+            </div>
+            <div className="min-w-0 sm:w-auto">
+              <NewAppointmentModal
+                defaultDate={date}
+                customTrigger={
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-10 w-full min-w-0 gap-2 rounded-xl border-border bg-card px-3 text-xs font-medium text-foreground shadow-none transition-colors hover:bg-accent sm:w-auto sm:px-3.5 sm:text-sm"
+                  >
+                    <Plus className="h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>Dar cita</span>
+                  </Button>
+                }
+              />
+            </div>
+          </div>
         </div>
       </div>
 

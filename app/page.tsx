@@ -48,10 +48,12 @@ export default async function IndexPage() {
           motion-safe:duration-300
         "
       >
+        {/* Bienvenida e indicadores */}
         <section className="w-full min-w-0">
           <Greeting />
         </section>
 
+        {/* Agenda diaria */}
         <section
           className="w-full min-w-0"
           aria-label="Agenda diaria"
