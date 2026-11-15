@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from "react"
+import type { ReactNode } from "react"
+import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
 import { usePathname } from "next/navigation"
+import { Menu, Search, X } from "lucide-react"
 import { useSession } from "next-auth/react"
-import { Menu, MoreHorizontal, Search, WifiOff, X } from "lucide-react"
 
 import { useSearch } from "../providers/search-provider"
 import { cn } from "@/lib/utils"
@@ -13,63 +14,49 @@ import { NotificationsDropdown } from "@/components/notifications/notifications-
 import { DynamicBreadcrumbs } from "@/components/breadcrumbs"
 import { QuickActions } from "@/components/dashboard/quick-actions"
 import { NextPatientDropdown } from "@/components/notifications/notifications-patient"
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 
 const AppCommand = dynamic(() => import("../app-command").then((mod) => mod.AppCommand))
 const GlobalLoader = dynamic(() => import("../global-loader").then((mod) => mod.GlobalLoader))
-
 const Nav = dynamic(() => import("@/components/navigations/nav").then((mod) => mod.Nav), {
-  loading: () => <div className="h-full min-h-20 w-full animate-pulse bg-card" />,
+  loading: () => <div className="h-full w-full animate-pulse bg-card" />,
 })
-
-const ProfilePicture = dynamic(() =>
-  import("../auth/profile-picture").then((mod) => mod.ProfilePicture)
-)
-const ThemeToggle = dynamic(() =>
-  import("../theme-toggle").then((mod) => mod.ThemeToggle)
-)
-
-const Sheet = dynamic(() => import("../ui/sheet").then((mod) => mod.Sheet))
-const SheetContent = dynamic(() => import("../ui/sheet").then((mod) => mod.SheetContent))
-const SheetTrigger = dynamic(() => import("../ui/sheet").then((mod) => mod.SheetTrigger))
-const SheetTitle = dynamic(() => import("../ui/sheet").then((mod) => mod.SheetTitle))
-
-const headerIconClass =
-  "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-
-const headerWidgetClass =
-  "flex shrink-0 items-center justify-center [&_button]:h-10 [&_button]:w-10 [&_button]:rounded-xl [&_button]:border-0 [&_button]:bg-transparent [&_button]:shadow-none [&_button]:hover:bg-accent/70 [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-ring [&_svg]:h-5 [&_svg]:w-5 [&_svg]:text-muted-foreground"
+const ProfilePicture = dynamic(() => import("../auth/profile-picture").then((mod) => mod.ProfilePicture))
+const ThemeToggle = dynamic(() => import("../theme-toggle").then((mod) => mod.ThemeToggle))
 
 export const AppLayout = ({ children }: { children: ReactNode }) => {
   const { toggle } = useSearch()
 
   useEffect(() => {
-    const handleShortcut = (event: KeyboardEvent) => {
-      if (
-        event.key.toLowerCase() === "b" &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.repeat
-      ) {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key.toLowerCase() === "b" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault()
         toggle()
       }
     }
-
-    document.addEventListener("keydown", handleShortcut)
-    return () => document.removeEventListener("keydown", handleShortcut)
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
   }, [toggle])
 
   return (
-    <div className="min-h-dvh min-w-0 bg-background font-sans text-foreground antialiased">
+    <div className="min-h-dvh w-full min-w-0 bg-background font-sans text-foreground antialiased">
       <GlobalLoader />
-      <div className="grid min-h-dvh min-w-0 grid-cols-1 md:grid-cols-[auto_minmax(0,1fr)]">
-        <aside className="sticky top-0 z-30 hidden h-dvh min-w-[70px] overflow-hidden border-r border-border/60 bg-card md:block print:hidden">
+      <div className="flex min-h-dvh min-w-0">
+        <aside className="sticky top-0 z-30 hidden h-dvh shrink-0 border-r border-border/60 bg-card lg:block">
           <Nav />
         </aside>
-        <div className="flex min-h-dvh min-w-0 flex-col">
+
+        <div className="flex min-h-dvh min-w-0 flex-1 flex-col">
           <Header />
-          <main className="flex min-w-0 flex-1 flex-col" id="contenido-principal">
-            {children}
-          </main>
+          <main className="flex min-w-0 flex-1 flex-col">{children}</main>
         </div>
       </div>
     </div>
@@ -79,146 +66,134 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
 const Header = () => {
   const { data: session } = useSession()
   const pathname = usePathname()
-  const [isOnline, setIsOnline] = useState(true)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
-  const [mobileToolsOpen, setMobileToolsOpen] = useState(false)
-
   const currentUser = session?.user as { calendarColor?: string } | undefined
   const accentColor = currentUser?.calendarColor || "#008bcd"
-  const hoverAccent = { "--hover-accent": accentColor } as CSSProperties
 
-  useEffect(() => {
-    setIsOnline(navigator.onLine)
-    const onOnline = () => setIsOnline(true)
-    const onOffline = () => setIsOnline(false)
-    window.addEventListener("online", onOnline)
-    window.addEventListener("offline", onOffline)
-    return () => {
-      window.removeEventListener("online", onOnline)
-      window.removeEventListener("offline", onOffline)
-    }
-  }, [])
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
+  const [isOnline, setIsOnline] = useState(true)
 
   useEffect(() => {
     setMobileMenuOpen(false)
     setMobileSearchOpen(false)
-    setMobileToolsOpen(false)
   }, [pathname])
 
+  useEffect(() => {
+    setIsOnline(navigator.onLine)
+    const handleOnline = () => setIsOnline(true)
+    const handleOffline = () => setIsOnline(false)
+    window.addEventListener("online", handleOnline)
+    window.addEventListener("offline", handleOffline)
+    return () => {
+      window.removeEventListener("online", handleOnline)
+      window.removeEventListener("offline", handleOffline)
+    }
+  }, [])
+
+  const iconControlClass = cn(
+    "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+    "transition-colors hover:bg-accent/60",
+    "[&_button]:h-9 [&_button]:w-9 [&_button]:rounded-lg [&_button]:border-0",
+    "[&_button]:bg-transparent [&_button]:shadow-none [&_button]:hover:bg-accent/60",
+    "[&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:text-muted-foreground",
+    "[&_button:hover_svg]:text-primary"
+  )
+
   return (
-    <header className="sticky top-0 z-40 w-full min-w-0 border-b border-border/60 bg-background/95 backdrop-blur-xl supports-[backdrop-filter]:bg-background/85 print:hidden">
-      <div className="flex h-16 min-w-0 items-center gap-1.5 px-3 sm:px-4 lg:h-[70px] lg:gap-3 lg:px-6">
-        <div className="md:hidden">
-          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
-            <SheetTrigger asChild>
-              <button type="button" className={headerIconClass} aria-label="Abrir menú de navegación">
-                <Menu className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </SheetTrigger>
-            <SheetContent
-              position="left"
-              className="h-dvh w-[min(85vw,290px)] overflow-y-auto border-r border-border/60 bg-card p-0"
+    <header className="sticky top-0 z-40 shrink-0 border-b border-border/60 bg-background/90 backdrop-blur-xl print:hidden">
+      <div className="flex h-14 min-w-0 items-center gap-2 px-3 sm:h-16 sm:px-4 lg:h-[70px] lg:gap-3 lg:px-6">
+        <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              aria-label="Abrir menú de navegación"
+              className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
             >
-              <SheetTitle className="sr-only">Navegación de Carmo Dental</SheetTitle>
+              <Menu className="h-5 w-5" aria-hidden="true" />
+            </button>
+          </SheetTrigger>
+          <SheetContent
+            position="left"
+            size="content"
+            showCloseButton={false}
+            className="flex h-dvh w-[min(320px,88vw)] max-w-[88vw] flex-col overflow-hidden bg-card p-0"
+          >
+            <SheetHeader className="shrink-0 border-b border-border/60 px-4 py-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <SheetTitle>Carmo Dental</SheetTitle>
+                  <SheetDescription className="text-xs">Navegación del sistema</SheetDescription>
+                </div>
+                <SheetClose asChild>
+                  <button
+                    type="button"
+                    aria-label="Cerrar menú"
+                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <X className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </SheetClose>
+              </div>
+            </SheetHeader>
+            <nav aria-label="Menú principal" className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
               <Nav />
-            </SheetContent>
-          </Sheet>
-        </div>
-        <div className="hidden min-w-0 items-center gap-3 xl:flex">
+            </nav>
+          </SheetContent>
+        </Sheet>
+
+        <div className="hidden min-w-0 shrink-0 items-center gap-2 lg:flex">
           <QuickActions />
           <DynamicBreadcrumbs />
         </div>
-        <div className="hidden min-w-0 items-center lg:flex xl:hidden">
-          <DynamicBreadcrumbs />
-        </div>
-        <div className="hidden min-w-0 flex-1 justify-center px-1 md:flex lg:justify-start">
-          <div className="w-full max-w-xl min-w-0">
-            <AppCommand />
-          </div>
+        <div className="hidden min-w-0 flex-1 justify-center px-2 sm:flex lg:justify-start">
+          <div className="w-full max-w-2xl"><AppCommand /></div>
         </div>
 
-        <div className="min-w-0 flex-1 md:hidden" />
+        <div className="min-w-0 flex-1 sm:hidden">
+          <span className="block truncate text-sm font-semibold">Carmo Dental</span>
+        </div>
 
         <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           <button
             type="button"
-            className={cn(headerIconClass, "md:hidden")}
             aria-label={mobileSearchOpen ? "Cerrar búsqueda" : "Abrir búsqueda"}
             aria-expanded={mobileSearchOpen}
-            aria-controls="busqueda-movil"
-            onClick={() => {
-              setMobileSearchOpen((value) => !value)
-              setMobileToolsOpen(false)
-            }}
+            onClick={() => setMobileSearchOpen((value) => !value)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:hidden"
           >
-            {mobileSearchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+            <Search className="h-[18px] w-[18px]" aria-hidden="true" />
           </button>
 
-          {!isOnline && (
-            <span className="inline-flex h-9 w-9 items-center justify-center text-destructive" title="Sin conexión a internet">
-              <WifiOff className="h-4 w-4" aria-label="Sin conexión" />
-            </span>
-          )}
           <div
             className={cn(
-              "mr-1 hidden items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium xl:flex",
+              "hidden items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium xl:flex",
               isOnline
-                ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400"
-                : "border-destructive/30 bg-destructive/10 text-destructive"
+                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "border-destructive/20 bg-destructive/10 text-destructive"
             )}
-            title="Estado de conexión del dispositivo"
+            title={isOnline ? "Conectado a internet" : "Sin conexión a internet"}
           >
-            <span className={cn("h-2 w-2 rounded-full", isOnline ? "bg-emerald-500" : "bg-destructive")} />
-            {isOnline ? "Conectado" : "Sin conexión"}
+            <span className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-emerald-500" : "bg-destructive")} />
+            {isOnline ? "Online" : "Offline"}
           </div>
 
-          <div className={cn(headerWidgetClass, "hidden lg:flex")} style={hoverAccent}>
+          <div style={{ "--hover-accent": accentColor } as React.CSSProperties} className={cn(iconControlClass, "hidden sm:flex")}>
             <NotificationsHelp />
           </div>
-          <div className={cn(headerWidgetClass, "hidden sm:flex")} style={hoverAccent}>
+          <div style={{ "--hover-accent": accentColor } as React.CSSProperties} className={cn(iconControlClass, "hidden md:flex")}>
             <NextPatientDropdown />
           </div>
-          <div className={headerWidgetClass} style={hoverAccent}>
+          <div style={{ "--hover-accent": accentColor } as React.CSSProperties} className={iconControlClass}>
             <NotificationsDropdown />
           </div>
-          <div className={headerWidgetClass}>
-            <ThemeToggle />
-          </div>
-          <div className="flex shrink-0 items-center justify-center pl-0.5 sm:pl-1">
-            <ProfilePicture />
-          </div>
-          <button
-            type="button"
-            className={cn(headerIconClass, "sm:hidden")}
-            aria-label={mobileToolsOpen ? "Cerrar herramientas" : "Más herramientas"}
-            aria-expanded={mobileToolsOpen}
-            aria-controls="herramientas-moviles"
-            onClick={() => {
-              setMobileToolsOpen((value) => !value)
-              setMobileSearchOpen(false)
-            }}
-          >
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
+          <div className={iconControlClass}><ThemeToggle /></div>
+          <div className="flex shrink-0 items-center pl-1"><ProfilePicture /></div>
         </div>
       </div>
 
       {mobileSearchOpen && (
-        <div id="busqueda-movil" className="border-t border-border/50 bg-card px-3 py-3 md:hidden">
-          <AppCommand />
-        </div>
-      )}
-
-      {mobileToolsOpen && (
-        <div id="herramientas-moviles" className="flex items-center gap-3 border-t border-border/50 bg-card px-4 py-2 sm:hidden">
-          <span className="text-xs font-medium text-muted-foreground">Ayuda y próximas citas</span>
-          <div className={headerWidgetClass} style={hoverAccent}>
-            <NotificationsHelp />
-          </div>
-          <div className={headerWidgetClass} style={hoverAccent}>
-            <NextPatientDropdown />
-          </div>
+        <div className="border-t border-border/50 px-3 py-3 sm:hidden">
+          <div className="mx-auto w-full max-w-xl"><AppCommand /></div>
         </div>
       )}
     </header>
