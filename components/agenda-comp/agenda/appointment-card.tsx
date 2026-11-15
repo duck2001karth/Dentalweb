@@ -19,9 +19,11 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
   const StatusIcon = config.icon
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
-      className="group relative flex flex-col justify-between rounded-xl bg-card border border-border/80 p-2.5 shadow-2xs hover:shadow-md hover:border-border transition-all cursor-pointer overflow-hidden text-left h-full"
+      aria-label={`Ver cita de ${cita.patient?.firstName || "paciente"} ${cita.patient?.lastName || ""} a las ${cita.startTime}`}
+      className="group w-full relative flex flex-col justify-between rounded-xl bg-card border border-border/80 p-2.5 shadow-2xs hover:shadow-md hover:border-border transition-all cursor-pointer overflow-hidden text-left h-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
       <div
         className="absolute left-0 top-0 bottom-0 w-1 transition-colors"
@@ -52,6 +54,6 @@ export const AppointmentCard: React.FC<AppointmentCardProps> = ({
           <span>{config.label}</span>
         </span>
       </div>
-    </div>
+    </button>
   )
 }

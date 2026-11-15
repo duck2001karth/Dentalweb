@@ -3,20 +3,16 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { useSession } from "next-auth/react" 
+import { useSession } from "next-auth/react"
 import {
-  Calendar, ChevronDown, Home, Users, Settings, LucideIcon,
+  Calendar, ChevronDown, Home, Users, Settings, type LucideIcon,
   Stethoscope, CreditCard, FileText, Activity, Box, Briefcase,
-  FileCode, Sliders
+  FileCode, Sliders,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { useClinicSettings } from "@/config/clinic-settings"
-
-// ============================================================================
-// 1. CONFIGURACIÓN DE RUTAS Y ROLES
-// ============================================================================
 
 type NavItemConfig = {
   name: string
@@ -25,6 +21,7 @@ type NavItemConfig = {
   roles?: string[]
 }
 
+// Las rutas y los permisos visibles se conservan.
 const mainNavItems: NavItemConfig[] = [
   { name: "Panel de Inicio", href: "/", icon: Home },
   { name: "Agenda de Citas", href: "/agenda-global", icon: Calendar },
@@ -50,39 +47,45 @@ const configNavItems: NavItemConfig[] = [
 
 type ModuleKey = "clinica" | "admin" | "config"
 
-// ============================================================================
-// 2. COMPONENTE PRINCIPAL: NAV
-// ============================================================================
+interface NavProps {
+  /** En el Sheet móvil, las etiquetas siempre deben estar visibles. */
+  mobile?: boolean
+  /** Cierra el Sheet al seleccionar una ruta, incluso si es la actual. */
+  onNavigate?: () => void
+}
 
-export const Nav = () => {
+const matchesRoute = (pathname: string | null, href: string) =>
+  pathname === href || (href !== "/" && pathname?.startsWith(`${href}/`) === true)
+
+export const Nav = ({ mobile = false, onNavigate }: NavProps) => {
   const pathname = usePathname()
   const [isHovered, setIsHovered] = React.useState(false)
   const [activeOpenModule, setActiveOpenModule] = React.useState<ModuleKey | null>(null)
-  
   const { data: session } = useSession()
-  const currentUser = session?.user as any
-  const userRole = currentUser?.role || "ADMIN"
+  const currentUser = session?.user as
+    | { role?: string; calendarColor?: string }
+    | undefined
+  // No presumir ADMIN cuando la sesión aún no ha cargado.
+  const userRole = currentUser?.role ?? ""
   const accentColor = currentUser?.calendarColor || "#008bcd"
-
   const { settings } = useClinicSettings()
-  const visibleAdminItems = React.useMemo(() => {
-    return adminNavItems.filter(item => !item.roles || item.roles.includes(userRole))
-  }, [userRole])
 
-  const visibleConfigItems = React.useMemo(() => {
-    return configNavItems.filter(item => !item.roles || item.roles.includes(userRole))
-  }, [userRole])
-  
-  const showAdminModule = visibleAdminItems.length > 0
-  const showConfigModule = visibleConfigItems.length > 0
+  const isExpanded = mobile || isHovered
+  const visibleAdminItems = React.useMemo(
+    () => adminNavItems.filter(item => !item.roles || item.roles.includes(userRole)),
+    [userRole]
+  )
+  const visibleConfigItems = React.useMemo(
+    () => configNavItems.filter(item => !item.roles || item.roles.includes(userRole)),
+    [userRole]
+  )
 
   const [logoScale, setLogoScale] = React.useState(100)
-
   React.useEffect(() => {
     const updateScale = () => {
-      const saved = localStorage.getItem("clinic_logo_scale")
-      if (saved) setLogoScale(Number(saved))
-      else if (settings?.logoScale) setLogoScale(settings.logoScale)
+      const saved = window.localStorage.getItem("clinic_logo_scale")
+      const next = saved ? Number(saved) : settings?.logoScale ?? 100
+      setLogoScale(Number.isFinite(next) ? Math.min(Math.max(next, 40), 200) : 100)
     }
     updateScale()
     window.addEventListener("logoScaleUpdated", updateScale)
@@ -90,288 +93,200 @@ export const Nav = () => {
   }, [settings?.logoScale])
 
   React.useEffect(() => {
-    if (!pathname) return
-
-    if (clinicaNavItems.some(i => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
+    if (clinicaNavItems.some(i => matchesRoute(pathname, i.href))) {
       setActiveOpenModule("clinica")
-    } else if (visibleAdminItems.some(i => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
+    } else if (visibleAdminItems.some(i => matchesRoute(pathname, i.href))) {
       setActiveOpenModule("admin")
-    } else if (visibleConfigItems.some(i => pathname === i.href || pathname.startsWith(`${i.href}/`))) {
+    } else if (visibleConfigItems.some(i => matchesRoute(pathname, i.href))) {
       setActiveOpenModule("config")
+    } else {
+      // En el móvil, ofrecer inicialmente el área clínica sin ocupar demasiado.
+      setActiveOpenModule(mobile ? "clinica" : null)
     }
-  }, [pathname, visibleAdminItems, visibleConfigItems])
+  }, [pathname, visibleAdminItems, visibleConfigItems, mobile])
 
-  const toggleModule = (moduleKey: ModuleKey) => {
-    setActiveOpenModule(prev => (prev === moduleKey ? null : moduleKey))
+  const toggleModule = (key: ModuleKey) => {
+    setActiveOpenModule(prev => (prev === key ? null : key))
   }
-
-  const scaleRatio = logoScale / 100
 
   return (
     <nav
+      aria-label={mobile ? "Navegación móvil" : "Navegación lateral"}
       className={cn(
-        "flex flex-col h-screen bg-card transition-all duration-300 ease-in-out z-40 border-r border-border/60 select-none relative shadow-[4px_0_24px_rgba(0,0,0,0.02)] shrink-0",
-        isHovered ? "w-[260px]" : "w-[80px]"
+        "relative z-0 flex shrink-0 flex-col bg-card font-sans text-foreground transition-[width] duration-200",
+        mobile
+          ? "h-full min-h-0 w-full min-w-0 border-0 shadow-none"
+          : "h-dvh border-r border-border/60",
+        !mobile && (isHovered ? "w-[260px]" : "w-[80px]")
       )}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      onMouseEnter={mobile ? undefined : () => setIsHovered(true)}
+      onMouseLeave={mobile ? undefined : () => setIsHovered(false)}
     >
-      {/* CABECERA DE LOGOTIPO DINÁMICO */}
-      <Link 
-        href="/"
-        className={cn(
-          "flex items-center justify-center shrink-0 border-b border-border/40 hover:bg-muted/10 transition-all duration-300 relative overflow-hidden",
-          isHovered ? "h-28 w-full px-3 py-2" : "h-20 w-full p-2"
-        )}
-      >
-        {isHovered ? (
-          <div className="flex items-center justify-center w-full h-full animate-in fade-in duration-200 overflow-hidden">
-            {settings?.logoUrl ? (
-              <img 
-                src={settings.logoUrl} 
-                alt={settings?.clinicName || "Logo Clínica"} 
-                style={{ transform: `scale(${scaleRatio})` }}
-                className="w-full h-full max-h-24 max-w-[210px] object-contain drop-shadow-md transition-transform duration-200"
-              />
-            ) : (
-              <span className="font-black text-lg text-foreground text-center tracking-tight leading-tight">
-                {settings?.clinicName || "Carmo Dental"}
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center w-full h-full animate-in zoom-in duration-200">
-            {settings?.logoUrl ? (
-              <div className="h-12 w-12 flex items-center justify-center rounded-xl bg-background/50 border border-border/60 p-1 shadow-xs overflow-hidden">
-                <img 
-                  src={settings.logoUrl} 
-                  alt="Logo" 
-                  className="w-full h-full object-contain" 
-                />
-              </div>
-            ) : (
-              <div 
-                style={{ backgroundColor: accentColor }}
-                className="h-11 w-11 flex items-center justify-center rounded-2xl shadow-md text-white font-black text-xl transition-colors"
-              >
-                {settings?.clinicName?.charAt(0) || "C"}
-              </div>
-            )}
-          </div>
-        )}
-      </Link>
-      
-      {/* LISTADO DE NAVEGACIÓN */}
-      <ScrollArea className="flex-1 w-full py-4">
-        <div className="flex flex-col gap-1 px-3">
-          
-          {mainNavItems.map((item) => (
-            <NavItem key={item.name} item={item} isExpanded={isHovered} accentColor={accentColor} />
+      {/* El panel móvil ya muestra el título Carmo Dental; evitar un segundo logo. */}
+      {!mobile && (
+        <Link
+          href="/"
+          onClick={onNavigate}
+          aria-label="Ir al panel de inicio"
+          className={cn(
+            "flex shrink-0 items-center justify-center overflow-hidden border-b border-border/50 hover:bg-muted/20",
+            isExpanded ? "h-24 px-3 py-2" : "h-20 p-2"
+          )}
+        >
+          {settings?.logoUrl ? (
+            <img
+              src={settings.logoUrl}
+              alt={settings.clinicName || "Carmo Dental"}
+              style={{ transform: isExpanded ? `scale(${logoScale / 100})` : undefined }}
+              className={cn(
+                "object-contain",
+                isExpanded ? "max-h-20 w-full max-w-[205px]" : "h-12 w-12 rounded-xl border border-border/60 bg-background p-1"
+              )}
+            />
+          ) : (
+            <span className={cn("font-semibold text-foreground", isExpanded ? "text-base" : "text-xl")}>
+              {isExpanded ? (settings?.clinicName || "Carmo Dental") : (settings?.clinicName?.charAt(0) || "C")}
+            </span>
+          )}
+        </Link>
+      )}
+
+      <ScrollArea className="min-h-0 w-full flex-1">
+        <div className={cn("flex flex-col gap-1 py-3", isExpanded ? "px-3" : "px-2")}>
+          {mainNavItems.map(item => (
+            <NavItem key={item.href} item={item} isExpanded={isExpanded} accentColor={accentColor} onNavigate={onNavigate} />
           ))}
 
-          <div className="mt-5 mb-2">
-            <div className={cn("flex items-center text-muted-foreground transition-all overflow-hidden", isHovered ? "px-4" : "justify-center")}>
-              {isHovered ? (
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-60">Módulos del Sistema</span>
-              ) : (
-                <div className="h-[2px] w-8 bg-border/80 rounded-full" />
-              )}
-            </div>
+          <div className={cn("mb-1 mt-5", isExpanded ? "px-3" : "flex justify-center")}>
+            {isExpanded ? (
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Módulos del sistema
+              </span>
+            ) : (
+              <div className="h-px w-8 bg-border" />
+            )}
           </div>
 
-          {/* MÓDULO CLÍNICO */}
-          <NavSection 
-            title="Área Clínica" 
-            icon={Stethoscope} 
-            isExpanded={isHovered} 
-            isOpen={activeOpenModule === "clinica"} 
+          <NavSection
+            title="Área Clínica"
+            icon={Stethoscope}
+            isExpanded={isExpanded}
+            isOpen={activeOpenModule === "clinica"}
             onToggle={() => toggleModule("clinica")}
             accentColor={accentColor}
           >
-            {clinicaNavItems.map((item) => (
-              <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} accentColor={accentColor} />
+            {clinicaNavItems.map(item => (
+              <NavItem key={item.href} item={item} isSubItem isExpanded={isExpanded} accentColor={accentColor} onNavigate={onNavigate} />
             ))}
           </NavSection>
 
-          {/* MÓDULO ADMINISTRACIÓN */}
-          {showAdminModule && (
-            <NavSection 
-              title="Administración" 
-              icon={Briefcase} 
-              isExpanded={isHovered} 
-              isOpen={activeOpenModule === "admin"} 
+          {visibleAdminItems.length > 0 && (
+            <NavSection
+              title="Administración"
+              icon={Briefcase}
+              isExpanded={isExpanded}
+              isOpen={activeOpenModule === "admin"}
               onToggle={() => toggleModule("admin")}
               accentColor={accentColor}
             >
-              {visibleAdminItems.map((item) => (
-                <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} accentColor={accentColor} />
+              {visibleAdminItems.map(item => (
+                <NavItem key={item.href} item={item} isSubItem isExpanded={isExpanded} accentColor={accentColor} onNavigate={onNavigate} />
               ))}
             </NavSection>
           )}
 
-          {/* MÓDULO CONFIGURACIÓN */}
-          {showConfigModule && (
-            <NavSection 
-              title="Configuración" 
-              icon={Settings} 
-              isExpanded={isHovered} 
-              isOpen={activeOpenModule === "config"} 
+          {visibleConfigItems.length > 0 && (
+            <NavSection
+              title="Configuración"
+              icon={Settings}
+              isExpanded={isExpanded}
+              isOpen={activeOpenModule === "config"}
               onToggle={() => toggleModule("config")}
               accentColor={accentColor}
             >
-              {visibleConfigItems.map((item) => (
-                <NavItem key={item.name} item={item} isSubItem isExpanded={isHovered} accentColor={accentColor} />
+              {visibleConfigItems.map(item => (
+                <NavItem key={item.href} item={item} isSubItem isExpanded={isExpanded} accentColor={accentColor} onNavigate={onNavigate} />
               ))}
             </NavSection>
           )}
-
         </div>
       </ScrollArea>
     </nav>
   )
 }
 
-// ============================================================================
-// 3. COMPONENTE: ITEM DE NAVEGACIÓN
-// ============================================================================
-
-export const NavItem = ({ 
-  item, 
-  isSubItem, 
-  isExpanded, 
-  accentColor 
-}: { 
+interface NavItemProps {
   item: NavItemConfig
   isSubItem?: boolean
   isExpanded: boolean
   accentColor: string
-}) => {
-  const pathname = usePathname()
-  const isActive =
-    item.href === "/" || item.href === "/ajustes"
-      ? pathname === item.href
-      : pathname === item.href || pathname?.startsWith(`${item.href}/`)
+  onNavigate?: () => void
+}
 
+export const NavItem = ({ item, isSubItem = false, isExpanded, accentColor, onNavigate }: NavItemProps) => {
+  const pathname = usePathname()
+  const isActive = matchesRoute(pathname, item.href)
   const Icon = item.icon
 
   return (
-    <div className="relative group/navitem w-full">
-      <Link
-        href={item.href}
-        style={{
-          background: isActive ? `linear-gradient(to right, ${accentColor}26, transparent)` : undefined,
-          color: isActive ? accentColor : undefined,
-        }}
-        className={cn(
-          "relative flex items-center rounded-xl py-2.5 transition-all duration-200 outline-none cursor-pointer z-10",
-          !isExpanded ? "justify-center w-14 mx-auto" : "justify-start px-4 w-full gap-3",
-          isActive ? "font-bold" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground font-medium"
-        )}
-      >
-        {isActive && (
-          <div 
-            style={{ 
-              backgroundColor: accentColor,
-              boxShadow: `1px 0 8px ${accentColor}80` 
-            }}
-            className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 h-6 rounded-r-full" 
-          />
-        )}
-
-        <div className="flex items-center justify-center shrink-0">
-          <Icon 
-            style={{ color: isActive ? accentColor : undefined }}
-            className={cn(
-              "transition-transform duration-300",
-              isActive ? "stroke-[2.5]" : "text-muted-foreground group-hover/navitem:text-foreground",
-              isSubItem && !isExpanded ? "h-5 w-5" : "h-[20px] w-[20px]",
-              !isExpanded && "group-hover/navitem:scale-110"
-            )} 
-          />
-        </div>
-
-        {isExpanded && (
-          <span className="whitespace-nowrap transition-all duration-300 text-sm tracking-tight">
-            {item.name}
-          </span>
-        )}
-      </Link>
-
-      {!isExpanded && (
-        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-4 px-3 py-1.5 bg-foreground text-background text-xs font-bold rounded-md opacity-0 pointer-events-none group-hover/navitem:opacity-100 transition-opacity duration-200 z-50 whitespace-nowrap shadow-xl">
-          {item.name}
-          <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-foreground" />
-        </div>
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      title={!isExpanded ? item.name : undefined}
+      aria-label={!isExpanded ? item.name : undefined}
+      aria-current={isActive ? "page" : undefined}
+      style={isActive ? { backgroundColor: `${accentColor}15`, color: accentColor } : undefined}
+      className={cn(
+        "group relative flex min-h-11 w-full items-center rounded-xl transition-colors outline-none",
+        "focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+        isExpanded ? "gap-3 px-3" : "justify-center",
+        isSubItem && isExpanded && "pl-5",
+        isActive
+          ? "font-semibold"
+          : "font-medium text-muted-foreground hover:bg-muted/60 hover:text-foreground"
       )}
-    </div>
+    >
+      {isActive && <span className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full" style={{ backgroundColor: accentColor }} />}
+      <Icon className="h-[19px] w-[19px] shrink-0" aria-hidden="true" />
+      {isExpanded && <span className="min-w-0 truncate text-[13px]">{item.name}</span>}
+    </Link>
   )
 }
 
-// ============================================================================
-// 4. COMPONENTE: SECCIÓN COLAPSABLE TIPO ACORDEÓN
-// ============================================================================
-
-const NavSection = ({ 
-  title, 
-  icon: Icon, 
-  isExpanded, 
-  isOpen, 
-  onToggle, 
-  children,
-  accentColor
-}: { 
+interface NavSectionProps {
   title: string
   icon: LucideIcon
   isExpanded: boolean
   isOpen: boolean
   onToggle: () => void
-  children: React.ReactNode 
+  children: React.ReactNode
   accentColor: string
-}) => {
-  return (
-    <div className="mt-1 w-full"> 
-      <button
-        type="button"
-        onClick={onToggle}
-        className={cn(
-          "flex items-center w-full rounded-xl py-2.5 transition-all duration-200 group cursor-pointer select-none relative outline-none",
-          "hover:bg-muted/40 active:scale-[0.98]",
-          !isExpanded ? "justify-center w-14 mx-auto" : "justify-between px-4"
-        )}
-      >
-        <div className="flex items-center gap-3 overflow-hidden">
-          <Icon 
-            style={{ color: isOpen ? accentColor : undefined }}
-            className={cn(
-              "h-5 w-5 shrink-0 transition-colors duration-300",
-              isOpen ? "stroke-[2.5]" : "text-muted-foreground group-hover:text-foreground",
-              isExpanded && "hidden" 
-            )} 
-          />
-
-          {isExpanded && (
-            <span className={cn(
-              "text-xs font-black uppercase tracking-wider transition-all duration-300 whitespace-nowrap",
-              isOpen ? "text-foreground font-extrabold" : "text-muted-foreground group-hover:text-foreground"
-            )}>
-              {title}
-            </span>
-          )}
-        </div>
-
-        {isExpanded && (
-          <ChevronDown className={cn(
-            "h-4 w-4 shrink-0 transition-transform duration-300 text-muted-foreground",
-            isOpen && "rotate-180 text-foreground"
-          )} />
-        )}
-      </button>
-
-      {isOpen && (
-        <div className="flex flex-col gap-0.5 mt-1 relative before:pointer-events-none before:absolute before:left-7 before:top-0 before:bottom-0 before:w-[1px] before:bg-border/50 animate-in fade-in duration-200">
-          {children}
-        </div>
-      )}
-    </div>
-  )
 }
+
+const NavSection = ({ title, icon: Icon, isExpanded, isOpen, onToggle, children, accentColor }: NavSectionProps) => (
+  <div className="mt-1 w-full">
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={isOpen}
+      aria-label={!isExpanded ? title : undefined}
+      title={!isExpanded ? title : undefined}
+      className={cn(
+        "group flex min-h-11 w-full items-center rounded-xl text-left transition-colors",
+        "hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        isExpanded ? "justify-between gap-2 px-3" : "justify-center"
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        {!isExpanded && <Icon className="h-5 w-5" style={isOpen ? { color: accentColor } : undefined} aria-hidden="true" />}
+        {isExpanded && (
+          <span className={cn("truncate text-[11px] font-semibold uppercase tracking-wide", isOpen ? "text-foreground" : "text-muted-foreground")}>
+            {title}
+          </span>
+        )}
+      </div>
+      {isExpanded && <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform", isOpen && "rotate-180")} aria-hidden="true" />}
+    </button>
+    {isOpen && <div className="mt-1 flex flex-col gap-0.5">{children}</div>}
+  </div>
+)

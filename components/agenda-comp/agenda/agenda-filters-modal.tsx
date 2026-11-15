@@ -43,7 +43,7 @@ export function AgendaFiltersModal({
         <Button 
           variant="outline" 
           size="sm" 
-          className="h-9 rounded-xl gap-2 text-xs font-bold border-border/80 bg-card text-foreground hover:bg-muted cursor-pointer transition-all shadow-2xs relative"
+          className="h-10 shrink-0 rounded-xl gap-2 px-3 text-xs font-medium border-border bg-card text-foreground hover:bg-muted transition-colors relative"
         >
           <SlidersHorizontal className="w-3.5 h-3.5" style={{ color: activeCount > 0 ? accentColor : undefined }} />
           <span>Filtros</span>
@@ -58,7 +58,7 @@ export function AgendaFiltersModal({
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-72 p-4 bg-card border-border/80 rounded-2xl shadow-2xl z-[120]">
+      <PopoverContent align="end" className="w-[min(19rem,calc(100vw-1.5rem))] max-h-[min(80dvh,540px)] overflow-y-auto p-4 bg-popover border-border rounded-2xl shadow-xl z-[120]">
         <div className="flex items-center justify-between pb-3 border-b border-border/60">
           <p className="text-xs font-black uppercase tracking-wider text-foreground">Filtrar Agenda</p>
           {activeCount > 0 && (

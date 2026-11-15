@@ -50,6 +50,7 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
     <div className="min-h-dvh w-full min-w-0 bg-background font-sans text-foreground antialiased">
       <GlobalLoader />
       <div className="flex min-h-dvh min-w-0">
+        {/* Escritorio: respetar la lógica existente de ancho/colapso de Nav. */}
         <aside className="sticky top-0 z-30 hidden h-dvh shrink-0 border-r border-border/60 bg-card lg:block">
           <Nav />
         </aside>
@@ -102,6 +103,7 @@ const Header = () => {
   return (
     <header className="sticky top-0 z-40 shrink-0 border-b border-border/60 bg-background/90 backdrop-blur-xl print:hidden">
       <div className="flex h-14 min-w-0 items-center gap-2 px-3 sm:h-16 sm:px-4 lg:h-[70px] lg:gap-3 lg:px-6">
+        {/* Celular y tableta: menú lateral accesible. */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetTrigger asChild>
             <button
@@ -135,9 +137,9 @@ const Header = () => {
                 </SheetClose>
               </div>
             </SheetHeader>
-            <nav aria-label="Menú principal" className="min-h-0 w-full min-w-0 flex-1 overflow-y-auto overflow-x-hidden">
-              <Nav />
-            </nav>
+            <div className="min-h-0 w-full min-w-0 flex-1 overflow-hidden">
+              <Nav mobile onNavigate={() => setMobileMenuOpen(false)} />
+            </div>
           </SheetContent>
         </Sheet>
 
@@ -145,6 +147,8 @@ const Header = () => {
           <QuickActions />
           <DynamicBreadcrumbs />
         </div>
+
+        {/* Buscador ancho únicamente cuando hay espacio suficiente. */}
         <div className="hidden min-w-0 flex-1 justify-center px-2 sm:flex lg:justify-start">
           <div className="w-full max-w-2xl"><AppCommand /></div>
         </div>

@@ -32,7 +32,7 @@ export function AgendaListaView({
 
   return (
     <div className="flex-1 bg-card border border-border/70 rounded-2xl shadow-xs overflow-hidden flex flex-col">
-      <div className="overflow-auto flex-1 custom-scrollbar p-4 space-y-3">
+      <div className="min-w-0 overflow-y-auto flex-1 custom-scrollbar p-3 sm:p-4 space-y-3">
         {appointments.map((cita) => {
           const docId = cita.doctorId || cita.doctor?.id
           const docColor = doctorColorsMap[docId] || cita.doctor?.calendarColor || defaultDoctorColor
@@ -45,7 +45,7 @@ export function AgendaListaView({
             <div
               key={cita.id}
               onClick={() => onSelectCita(cita)}
-              className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-muted/15 hover:bg-muted/30 border border-border/60 hover:border-border rounded-xl gap-3 cursor-pointer transition-all group"
+              className="flex min-w-0 flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-muted/15 hover:bg-muted/30 border border-border/60 hover:border-border rounded-xl gap-3 cursor-pointer transition-all group"
             >
               <div className="flex items-center gap-3.5 min-w-0">
                 <div 
@@ -64,7 +64,7 @@ export function AgendaListaView({
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 text-xs w-full sm:w-auto justify-between sm:justify-end">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs w-full sm:w-auto justify-between sm:justify-end">
                 <div className="flex items-center gap-1.5 text-muted-foreground font-semibold">
                   <Clock className="w-3.5 h-3.5" style={{ color: docColor }} />
                   <span>{format(citaDate, "EEE dd", { locale: es }).toUpperCase()} • {cita.startTime} - {cita.endTime}</span>

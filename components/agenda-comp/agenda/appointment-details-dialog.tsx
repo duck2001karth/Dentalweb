@@ -4,7 +4,7 @@ import React from "react"
 import Link from "next/link"
 import { CalendarDays, Stethoscope } from "lucide-react"
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { appointmentStatuses } from "@/constants/status"
 import { cn } from "@/lib/utils"
@@ -28,7 +28,7 @@ export const AppointmentDetailsDialog: React.FC<AppointmentDetailsDialogProps> =
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[440px] bg-card border-border/80 text-foreground rounded-[24px] shadow-2xl p-0 overflow-hidden">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-[440px] max-h-[90dvh] overflow-y-auto bg-card border-border text-foreground rounded-2xl shadow-xl p-0">
         <div 
           className="px-6 py-5 border-b border-border/80"
           style={{
@@ -49,6 +49,7 @@ export const AppointmentDetailsDialog: React.FC<AppointmentDetailsDialogProps> =
               </div>
               Detalle de Cita Médica
             </DialogTitle>
+            <DialogDescription className="sr-only">Detalles y horario de la cita seleccionada.</DialogDescription>
           </DialogHeader>
         </div>
         
