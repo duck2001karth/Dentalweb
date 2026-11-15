@@ -81,7 +81,7 @@ export function PaymentBreakdownModal({ isOpen, onClose, payment, patient }: any
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[580px] bg-card text-card-foreground border-border rounded-2xl p-6 font-sans antialiased">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[580px] bg-card text-card-foreground border-border rounded-2xl p-6 font-sans antialiased">
         
         {/* ENCABEZADO */}
         <DialogHeader className="space-y-1">

@@ -470,7 +470,7 @@ export function RecipeShareModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[490px] bg-card border-border/80 rounded-[28px] p-0 shadow-2xl overflow-hidden font-sans">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[490px] bg-card border-border/80 rounded-[28px] p-0 shadow-2xl overflow-hidden font-sans">
         <DialogHeader className="px-6 py-5 border-b border-border/60 bg-muted/20">
           <DialogTitle className="text-lg font-black text-foreground flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#25D366]/15 text-[#25D366] flex items-center justify-center border border-[#25D366]/20 shrink-0">

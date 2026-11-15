@@ -328,7 +328,7 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
     <div className="animate-in fade-in duration-300 relative space-y-6">
       {/* LIGHTBOX */}
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
-        <DialogContent className="max-w-[90vw] md:max-w-5xl bg-transparent border-none shadow-none p-0 flex justify-center items-center">
+        <DialogContent className="max-w-[calc(100vw-1rem)] max-w-[90vw] md:max-w-5xl bg-transparent border-none shadow-none p-0 flex justify-center items-center">
           <DialogTitle className="sr-only">Visualizador</DialogTitle>
           {previewImage && (
             <img
@@ -342,7 +342,7 @@ export function EvolucionesTab({ patientId }: { patientId: string }) {
 
       {/* CONFIRMACIÓN ELIMINAR */}
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
-        <AlertDialogContent className="bg-card border-border/80 rounded-[24px] shadow-2xl sm:max-w-[400px]">
+        <AlertDialogContent className="max-w-[calc(100vw-1rem)] bg-card border-border/80 rounded-[24px] shadow-2xl sm:max-w-[400px]">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-xl text-destructive font-bold flex items-center gap-2">
               <Trash2 className="w-5 h-5" /> Confirmar Eliminación

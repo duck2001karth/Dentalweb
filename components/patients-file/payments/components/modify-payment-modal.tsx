@@ -121,7 +121,7 @@ export function ManagePaymentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[460px] bg-card text-card-foreground border-border rounded-2xl p-6 font-sans">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[460px] bg-card text-card-foreground border-border rounded-2xl p-6 font-sans">
         
         {mode === "edit" ? (
           /* FORMULARIO DE MODIFICACIÓN */
@@ -152,7 +152,7 @@ export function ManagePaymentModal({
                 </Select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-bold">Nº Secuencial / Recibo</Label>
                   <Input 

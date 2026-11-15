@@ -268,7 +268,7 @@ export function FinancialBalanceView({
       </div>
 
       {/* TARJETAS DE TOTALES */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 no-print">      
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4 no-print">      
         <div className="p-5 rounded-2xl bg-card border border-border shadow-xs space-y-2">
           <div className="flex items-center justify-between text-muted-foreground">
             <span className="text-xs font-bold uppercase tracking-wider">Total Cobrado</span>
@@ -339,7 +339,7 @@ export function FinancialBalanceView({
       </div>
 
       {/* COBERTURA Y MÉTODOS DE PAGO */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 no-print">
+      <div className="grid min-w-0 grid-cols-1 xl:grid-cols-12 gap-4 lg:gap-6 no-print">
         <div className="md:col-span-6 p-6 rounded-2xl bg-card border border-border shadow-xs flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center justify-between mb-2">
@@ -412,7 +412,7 @@ export function FinancialBalanceView({
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-muted/30 border-b border-border text-muted-foreground uppercase font-bold text-[10px] tracking-wider">
               <tr>

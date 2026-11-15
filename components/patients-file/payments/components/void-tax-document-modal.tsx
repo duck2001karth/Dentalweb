@@ -90,7 +90,7 @@ export function VoidTaxDocumentModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[540px] bg-card text-foreground border border-border/80 shadow-2xl rounded-3xl p-0 overflow-hidden font-sans antialiased">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[540px] bg-card text-foreground border border-border/80 shadow-2xl rounded-3xl p-0 overflow-hidden font-sans antialiased">
         {/* CABECERA */}
         <DialogHeader className="px-6 py-4 border-b border-border/70 bg-red-500/5 flex flex-row items-center gap-3 text-left">
           <div className="p-2.5 bg-red-500/15 text-red-600 dark:text-red-400 rounded-2xl shrink-0 border border-red-500/20">

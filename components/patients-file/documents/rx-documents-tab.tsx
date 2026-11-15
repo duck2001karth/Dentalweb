@@ -182,7 +182,7 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
       
       {/* LIGHTBOX DE IMÁGENES */}
       <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
-        <DialogContent className="max-w-[95vw] md:max-w-5xl p-0 overflow-hidden bg-transparent border-none shadow-none [&>button]:hidden flex justify-center items-center">
+        <DialogContent className="max-w-[calc(100vw-1rem)] max-w-[95vw] md:max-w-5xl p-0 overflow-hidden bg-transparent border-none shadow-none [&>button]:hidden flex justify-center items-center">
           <DialogTitle className="sr-only">Visualizador de Documento</DialogTitle>
           {previewImage && (
             <div className="relative group">
@@ -236,7 +236,7 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
               Guía de archivos
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[680px] bg-card border border-border/80 rounded-2xl shadow-xl p-0 overflow-hidden">
+          <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[680px] bg-card border border-border/80 rounded-2xl shadow-xl p-0 overflow-hidden">
             <DialogHeader className="px-6 py-4 border-b border-border/70 bg-muted/20">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-[#008bcd]/10 flex items-center justify-center text-[#008bcd]">
@@ -478,7 +478,7 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
                                       <Trash2 size={12} />
                                     </Button>
                                   </AlertDialogTrigger>
-                                  <AlertDialogContent className="bg-card border-border/80 rounded-2xl sm:max-w-[400px]">
+                                  <AlertDialogContent className="max-w-[calc(100vw-1rem)] bg-card border-border/80 rounded-2xl sm:max-w-[400px]">
                                     <AlertDialogHeader>
                                       <AlertDialogTitle className="font-bold text-base text-foreground flex items-center gap-2">
                                         <Trash2 className="w-4 h-4 text-destructive" /> ¿Eliminar documento?

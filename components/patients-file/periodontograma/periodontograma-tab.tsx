@@ -269,7 +269,7 @@ const fetchHistory = useCallback(async () => {
         <span className="text-[10px] text-muted-foreground font-medium">16 Piezas Dentales</span>
       </div>
 
-      <div className="overflow-x-auto [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/60">
+      <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain touch-pan-x [&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/60">
         <table className="w-max text-center border-collapse text-xs">
           <thead>
             {/* 1. FILA MODIFICADA: Gráfico Clínico */}

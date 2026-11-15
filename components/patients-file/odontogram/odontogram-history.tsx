@@ -199,7 +199,7 @@ export function OdontogramHistory({
         </div>
 
         {/* TABLA DE AUDITORÍA */}
-        <div className="overflow-x-auto">
+        <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
           <table className="w-full text-left text-xs whitespace-nowrap">
             <thead className="bg-muted/10 border-b border-border/70 text-[10px] uppercase text-muted-foreground font-bold">
               <tr>

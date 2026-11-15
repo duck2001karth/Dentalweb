@@ -116,7 +116,7 @@ export function DailyReceiptModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[700px] bg-card border-border p-6 rounded-2xl">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[700px] bg-card border-border p-6 rounded-2xl">
         <div className="flex flex-col items-center text-center space-y-4 mb-6">
           <div className="w-14 h-14 rounded-full bg-[#008bcd]/10 flex items-center justify-center text-[#008bcd]">
             <FileText className="w-7 h-7" />

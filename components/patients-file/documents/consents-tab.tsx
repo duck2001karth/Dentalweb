@@ -230,7 +230,7 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
       />
 
       <Dialog open={Boolean(selectedDoc)} onOpenChange={(open) => !open && setSelectedDoc(null)}>
-        <DialogContent className="sm:max-w-[1000px] w-[95vw] h-[85vh] max-h-[85vh] flex flex-col bg-card border-border/80 p-0 rounded-2xl shadow-2xl [&>button]:hidden print:hidden font-sans overflow-hidden">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[1000px] w-[95vw] h-[min(88dvh,850px)] max-h-[calc(100dvh-1rem)] flex flex-col bg-card border-border/80 p-0 rounded-2xl shadow-2xl [&>button]:hidden print:hidden font-sans overflow-hidden">
           <DialogHeader className="shrink-0 flex flex-row justify-between items-center px-6 py-3.5 border-b border-border/70 bg-muted/20">
             <div>
               <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
@@ -261,7 +261,7 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
           </DialogHeader>
 
           {selectedDoc && (
-            <div className="flex-1 grid grid-cols-1 md:grid-cols-12 min-h-0 bg-background overflow-hidden">
+            <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0 bg-background overflow-hidden">
               {/* PANEL LATERAL IZQUIERDO: METADATOS Y FIRMAS */}
               <div className="md:col-span-4 border-r border-border/60 bg-muted/10 p-4 overflow-y-auto space-y-3.5 [scrollbar-width:thin]">
                 {/* FICHA DEL FACULTATIVO */}
@@ -423,7 +423,7 @@ export function ConsentimientosTab({ patientId }: { patientId: string }) {
       </Dialog>
 
       <Dialog open={!!signingRole} onOpenChange={(open) => !open && setSigningRole(null)}>
-        <DialogContent className="sm:max-w-[680px] w-[95vw] bg-card border-border/80 rounded-2xl p-0 overflow-hidden font-sans shadow-2xl">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[680px] w-[95vw] bg-card border-border/80 rounded-2xl p-0 overflow-hidden font-sans shadow-2xl">
           <div className="px-6 py-4 border-b border-border/70 bg-muted/15 flex items-center justify-between">
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
               <PenTool className="w-4 h-4 text-[#008bcd]" /> Registrar Firma Digital

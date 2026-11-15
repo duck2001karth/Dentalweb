@@ -45,22 +45,22 @@ export function PatientDemographicsCard({
   }
 
   return (
-    <div className="bg-card border border-border/80 rounded-[24px] p-6 shadow-xs relative">
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+    <div className="min-w-0 w-full bg-card border border-border/80 rounded-2xl p-3 sm:p-5 lg:p-6 shadow-xs relative">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 items-start min-w-0">
         
         {/* PANEL IZQUIERDO */}
-        <div className="md:col-span-4 flex flex-col items-center text-center md:border-r md:border-border/60 md:pr-6">
+        <div className="lg:col-span-4 flex flex-col items-center text-center lg:border-r lg:border-border/60 lg:pr-6 min-w-0 pb-4 lg:pb-0 border-b lg:border-b-0 border-border/60">
           <div className="relative mb-3">
             {patient?.photoUrl ? (
               <img
                 src={patient.photoUrl}
                 alt={fullName}
-                className="w-20 h-20 rounded-full object-cover border-2 border-border shadow-xs"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full object-cover border-2 border-border shadow-xs"
               />
             ) : (
               <div 
                 style={{ backgroundColor: "var(--doctor-accent, #008bcd)" }}
-                className="w-20 h-20 rounded-full text-white flex items-center justify-center font-bold text-2xl shadow-xs"
+                className="w-16 h-16 sm:w-20 sm:h-20 rounded-full text-white flex items-center justify-center font-bold text-xl sm:text-2xl shadow-xs"
               >
                 {patient?.firstName?.charAt(0).toUpperCase() || "P"}
               </div>
@@ -70,17 +70,17 @@ export function PatientDemographicsCard({
           <h2 className="text-base font-bold text-foreground tracking-tight leading-tight">
             {fullName}
           </h2>
-          <p className="text-xs text-muted-foreground mt-0.5 truncate max-w-[200px]">
+          <p className="text-xs text-muted-foreground mt-0.5 max-w-full break-all px-2">
             {patient?.email || "Sin correo electrónico"}
           </p>
 
-          <div className="grid grid-cols-2 w-full max-w-[210px] py-2.5 my-3 border-y border-border/60">
+          <div className="grid grid-cols-2 w-full max-w-[260px] lg:max-w-[210px] py-2.5 my-3 border-y border-border/60">
             <div className="border-r border-border/60 px-2">
-              <span className="text-base font-bold text-foreground">{pastAppointmentsCount}</span>
+              <span className="text-base font-bold text-foreground break-words">{pastAppointmentsCount}</span>
               <p className="text-[10px] text-muted-foreground font-medium">Pasadas</p>
             </div>
             <div className="px-2">
-              <span className="text-base font-bold text-foreground">{upcomingAppointmentsCount}</span>
+              <span className="text-base font-bold text-foreground break-words">{upcomingAppointmentsCount}</span>
               <p className="text-[10px] text-muted-foreground font-medium">Próximas</p>
             </div>
           </div>
@@ -90,7 +90,7 @@ export function PatientDemographicsCard({
             onClick={handleOpenWhatsApp}
             disabled={!patient?.phone}
             variant="outline"
-            className="w-full max-w-[210px] h-9 px-4 rounded-xl text-xs font-bold border border-border/80 bg-card text-emerald-700 dark:text-emerald-400 shadow-2xs transition-all cursor-pointer hover:bg-[#25D366]/10 hover:border-[#25D366]/50 hover:text-emerald-800 dark:hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]/40 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="w-full max-w-[260px] lg:max-w-[210px] h-10 px-4 rounded-xl text-xs font-bold border border-border/80 bg-card text-emerald-700 dark:text-emerald-400 shadow-2xs transition-all cursor-pointer hover:bg-[#25D366]/10 hover:border-[#25D366]/50 hover:text-emerald-800 dark:hover:text-emerald-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366]/40 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send className="w-3.5 h-3.5 mr-1.5 text-[#25D366] shrink-0" />
             <span>Enviar Mensaje</span>
@@ -98,10 +98,10 @@ export function PatientDemographicsCard({
         </div>
 
         {/* PANEL DERECHO */}
-        <div className="md:col-span-8 flex flex-col">
+        <div className="lg:col-span-8 flex min-w-0 flex-col">
           
-          <div className="flex items-center justify-between border-b border-border/60 pb-3 mb-5 gap-3">
-            <div className="flex items-center gap-2 overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-border/60 pb-3 mb-4 sm:mb-5 gap-3 min-w-0">
+            <div className="flex w-full min-w-0 items-center gap-2 overflow-x-auto pb-1 sm:pb-0 [scrollbar-width:thin] sm:flex-1">
               {activeSection !== "general" && (
                 <button
                   type="button"
@@ -122,7 +122,7 @@ export function PatientDemographicsCard({
                     : undefined
                 }
                 className={cn(
-                  "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]",
+                  "shrink-0 min-h-9 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]",
                   activeSection === "contact"
                     ? "shadow-2xs"
                     : "bg-muted/40 text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted"
@@ -140,7 +140,7 @@ export function PatientDemographicsCard({
                     : undefined
                 }
                 className={cn(
-                  "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]",
+                  "shrink-0 min-h-9 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]",
                   activeSection === "health"
                     ? "shadow-2xs"
                     : "bg-muted/40 text-muted-foreground border-border/80 hover:text-foreground hover:bg-muted"
@@ -153,7 +153,7 @@ export function PatientDemographicsCard({
                 type="button"
                 onClick={() => setActiveSection(activeSection === "emergency" ? "general" : "emergency")}
                 className={cn(
-                  "px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40",
+                  "shrink-0 min-h-9 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40",
                   activeSection === "emergency"
                     ? "bg-rose-600 text-white border-rose-600 shadow-2xs"
                     : patient?.medicalAlerts
@@ -166,17 +166,17 @@ export function PatientDemographicsCard({
             </div>
 
             {/* BOTONES DE ACCIÓN (IMPRIMIR, EDITAR Y ELIMINAR) */}
-            <div className="flex items-center gap-1.5 shrink-0">
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
               <PrintPatientInfoModal 
                 patient={patient}
                 trigger={
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="rounded-xl h-8 w-8 p-0 bg-card border border-border/80 text-muted-foreground shadow-2xs transition-all cursor-pointer hover:bg-muted hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
-                    title="Imprimir Ficha"
+                    className="rounded-xl h-10 w-10 p-0 bg-card border border-border/80 text-muted-foreground shadow-2xs transition-all cursor-pointer hover:bg-muted hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
+                    title="Imprimir Ficha" aria-label="Imprimir ficha del paciente"
                   >
-                    <Printer className="w-3.5 h-3.5" />
+                    <Printer className="w-4 h-4" />
                   </Button>
                 }
               />
@@ -185,10 +185,10 @@ export function PatientDemographicsCard({
                 variant="outline"
                 size="sm"
                 onClick={onEditPatient}
-                className="rounded-xl h-8 w-8 p-0 bg-card border border-border/80 text-[var(--doctor-accent,#008bcd)] shadow-2xs transition-all cursor-pointer hover:bg-[var(--doctor-accent,#008bcd)]/15 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
-                title="Editar Paciente"
+                className="rounded-xl h-10 w-10 p-0 bg-card border border-border/80 text-[var(--doctor-accent,#008bcd)] shadow-2xs transition-all cursor-pointer hover:bg-[var(--doctor-accent,#008bcd)]/15 hover:border-[var(--doctor-accent,#008bcd)] hover:text-[var(--doctor-accent,#008bcd)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--doctor-accent,#008bcd)]"
+                title="Editar Paciente" aria-label="Editar paciente"
               >
-                <Edit className="w-3.5 h-3.5" />
+                <Edit className="w-4 h-4" />
               </Button>
 
               {/* Botón de eliminar habilitado para Administrador */}
@@ -197,10 +197,10 @@ export function PatientDemographicsCard({
                   variant="outline"
                   size="sm"
                   onClick={onDeleteRequest}
-                  className="w-8 h-8 p-0 bg-background text-destructive/80 hover:text-destructive hover:bg-destructive/10 border-border/80 hover:border-destructive/30 rounded-lg cursor-pointer"
-                  title="Eliminar Paciente"
+                  className="w-10 h-10 p-0 bg-background text-destructive/80 hover:text-destructive hover:bg-destructive/10 border-border/80 hover:border-destructive/30 rounded-lg cursor-pointer"
+                  title="Eliminar Paciente" aria-label="Eliminar paciente"
                 >
-                  <Trash2 className="w-3.5 h-3.5 transition-colors" />
+                  <Trash2 className="w-4 h-4 transition-colors" />
                 </Button>
                 
               )}
@@ -208,50 +208,50 @@ export function PatientDemographicsCard({
           </div>
 
           {/* CUERPO DINÁMICO */}
-          <div className="animate-in fade-in duration-200">
+          <div className="motion-safe:animate-in motion-safe:fade-in motion-safe:duration-200 min-w-0">
             {activeSection === "general" && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6 text-xs">
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Género</span><p className="font-bold text-foreground capitalize">{patient?.sexo || "No especificado"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Fecha Nacimiento</span><p className="font-bold text-foreground">{formattedBirth}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Teléfono</span><p className="font-bold text-foreground font-mono">{patient?.phone || "No registrado"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Dirección</span><p className="font-bold text-foreground truncate" title={patient?.address}>{patient?.address || "No registrada"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Ciudad</span><p className="font-bold text-foreground">{patient?.ciudad || "Ciudad"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Código / CI</span><p className="font-bold text-foreground font-mono">{patient?.ci || "No registrado"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Estado del Paciente</span><p className="font-bold text-foreground">{patient?.tipoPaciente || "Activo"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Fecha de Registro</span><p className="font-bold text-foreground">{formattedRegister}</p></div>
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 xl:grid-cols-3 gap-y-4 gap-x-4 sm:gap-x-6 text-xs min-w-0 [&>div]:min-w-0 [&_p]:break-words">
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Género</span><p className="font-bold text-foreground capitalize break-words">{patient?.sexo || "No especificado"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Fecha Nacimiento</span><p className="font-bold text-foreground break-words">{formattedBirth}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Teléfono</span><p className="font-bold text-foreground font-mono break-all">{patient?.phone || "No registrado"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Dirección</span><p className="font-bold text-foreground break-words" title={patient?.address}>{patient?.address || "No registrada"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Ciudad</span><p className="font-bold text-foreground break-words">{patient?.ciudad || "Ciudad"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Código / CI</span><p className="font-bold text-foreground font-mono break-all">{patient?.ci || "No registrado"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Estado del Paciente</span><p className="font-bold text-foreground break-words">{patient?.tipoPaciente || "Activo"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Fecha de Registro</span><p className="font-bold text-foreground break-words">{formattedRegister}</p></div>
                 <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Seguro / EPS</span><p className="font-bold" style={{ color: "var(--doctor-accent, #008bcd)" }}>{patient?.eps || "Particular"}</p></div>
               </div>
             )}
 
             {activeSection === "contact" && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6 text-xs">
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Teléfono Móvil</span><p className="font-bold text-foreground font-mono">{patient?.phone || "No registrado"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Correo Electrónico</span><p className="font-bold text-foreground truncate">{patient?.email || "No registrado"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Teléfono Fijo</span><p className="font-bold text-foreground font-mono">{patient?.telefonoFijo || "No registrado"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Ciudad</span><p className="font-bold text-foreground">{patient?.ciudad || "No registrada"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Provincia / Dpto.</span><p className="font-bold text-foreground">{patient?.departamento || "No registrada"}</p></div>
-                <div className="sm:col-span-2"><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Dirección Exacta</span><p className="font-bold text-foreground truncate">{patient?.address || "No registrada"}</p></div>
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 xl:grid-cols-3 gap-y-4 gap-x-4 sm:gap-x-6 text-xs min-w-0 [&>div]:min-w-0 [&_p]:break-words">
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Teléfono Móvil</span><p className="font-bold text-foreground font-mono break-all">{patient?.phone || "No registrado"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Correo Electrónico</span><p className="font-bold text-foreground break-words">{patient?.email || "No registrado"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Teléfono Fijo</span><p className="font-bold text-foreground font-mono break-all">{patient?.telefonoFijo || "No registrado"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Ciudad</span><p className="font-bold text-foreground break-words">{patient?.ciudad || "No registrada"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Provincia / Dpto.</span><p className="font-bold text-foreground break-words">{patient?.departamento || "No registrada"}</p></div>
+                <div className="min-[420px]:col-span-2"><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Dirección Exacta</span><p className="font-bold text-foreground break-words">{patient?.address || "No registrada"}</p></div>
               </div>
             )}
 
             {activeSection === "health" && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6 text-xs">
+              <div className="grid grid-cols-1 min-[420px]:grid-cols-2 xl:grid-cols-3 gap-y-4 gap-x-4 sm:gap-x-6 text-xs min-w-0 [&>div]:min-w-0 [&_p]:break-words">
                 <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">EPS / Seguro</span><p className="font-bold" style={{ color: "var(--doctor-accent, #008bcd)" }}>{patient?.eps || "Particular"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Tipo Paciente</span><p className="font-bold text-foreground">{patient?.tipoPaciente || "Particular"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Convenio Activo</span><p className="font-bold text-foreground">{patient?.convenio || "Sin convenio"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Tipo Paciente</span><p className="font-bold text-foreground break-words">{patient?.tipoPaciente || "Particular"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Convenio Activo</span><p className="font-bold text-foreground break-words">{patient?.convenio || "Sin convenio"}</p></div>
                 <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Grupo Sanguíneo</span><p className="font-bold text-rose-600">{patient?.grupoSanguineo || "O+"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Estado Civil</span><p className="font-bold text-foreground capitalize">{patient?.estadoCivil || "No registrado"}</p></div>
-                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Nivel Educativo</span><p className="font-bold text-foreground">{patient?.nivelEducativo || "No registrado"}</p></div>
-                <div className="sm:col-span-2"><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Profesión / Ocupación</span><p className="font-bold text-foreground">{patient?.profesion || "No registrada"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Estado Civil</span><p className="font-bold text-foreground capitalize break-words">{patient?.estadoCivil || "No registrado"}</p></div>
+                <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Nivel Educativo</span><p className="font-bold text-foreground break-words">{patient?.nivelEducativo || "No registrado"}</p></div>
+                <div className="min-[420px]:col-span-2"><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Profesión / Ocupación</span><p className="font-bold text-foreground break-words">{patient?.profesion || "No registrada"}</p></div>
               </div>
             )}
 
             {activeSection === "emergency" && (
               <div className="space-y-4 text-xs">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-y-4 gap-x-6">
-                  <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Acompañante / Tutor</span><p className="font-bold text-foreground">{patient?.nombreAcompanante || "No registrado"}</p></div>
-                  <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Teléfono Acompañante</span><p className="font-bold text-foreground font-mono">{patient?.telefonoAcompanante || "No registrado"}</p></div>
-                  <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Cédula Acudiente</span><p className="font-bold text-foreground font-mono">{patient?.cedulaAcudiente || "No registrado"}</p></div>
+                <div className="grid grid-cols-1 min-[420px]:grid-cols-2 xl:grid-cols-3 gap-y-4 gap-x-4 sm:gap-x-6 min-w-0 [&>div]:min-w-0 [&_p]:break-words">
+                  <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Acompañante / Tutor</span><p className="font-bold text-foreground break-words">{patient?.nombreAcompanante || "No registrado"}</p></div>
+                  <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Teléfono Acompañante</span><p className="font-bold text-foreground font-mono break-all">{patient?.telefonoAcompanante || "No registrado"}</p></div>
+                  <div><span className="text-[11px] text-muted-foreground block mb-0.5 font-medium">Cédula Acudiente</span><p className="font-bold text-foreground font-mono break-all">{patient?.cedulaAcudiente || "No registrado"}</p></div>
                 </div>
 
                 <div className={cn("p-3 rounded-xl border", patient?.medicalAlerts ? "bg-rose-500/10 border-rose-500/20 text-rose-700 dark:text-rose-400" : "bg-muted/20 border-border/60 text-muted-foreground")}>

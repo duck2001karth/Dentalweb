@@ -49,7 +49,7 @@ export function DeletedPaymentDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[560px] bg-card text-foreground border border-border/80 shadow-2xl rounded-3xl p-0 overflow-hidden font-sans antialiased">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[560px] bg-card text-foreground border border-border/80 shadow-2xl rounded-3xl p-0 overflow-hidden font-sans antialiased">
         {/* Cabecera */}
         <DialogHeader className="px-6 py-4 border-b border-border/70 bg-rose-500/5 flex flex-row items-center gap-3 text-left">
           <div className="p-2.5 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-2xl shrink-0 border border-rose-500/20">
@@ -71,7 +71,7 @@ export function DeletedPaymentDetailModal({
         {/* Contenido */}
         <div className="p-6 space-y-4 text-xs">
           {/* Metadatos de la anulación */}
-          <div className="grid grid-cols-2 gap-3 bg-muted/20 p-3.5 rounded-2xl border border-border/70">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/20 p-3.5 rounded-2xl border border-border/70">
             <div className="space-y-1">
               <span className="text-[10px] font-bold uppercase text-muted-foreground flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5" /> Anulado Por

@@ -137,7 +137,7 @@ export function PaymentsTable({
       </div>
 
       <div className="rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
           <table className="w-full text-left">
             <thead className="bg-muted/30 border-b border-border/80 text-muted-foreground uppercase font-bold text-[10px] tracking-wider">
               <tr>

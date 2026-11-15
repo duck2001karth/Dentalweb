@@ -326,7 +326,7 @@ export function RecetasTab({ patientId }: { patientId: string }) {
           }
         }}
       >
-        <DialogContent className="sm:max-w-xl bg-card border-border rounded-[24px] shadow-2xl p-0 overflow-hidden">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-xl bg-card border-border rounded-[24px] shadow-2xl p-0 overflow-hidden">
           <DialogHeader className="px-6 py-4 border-b border-border/70 bg-muted/15">
             <DialogTitle className="text-xl font-bold flex items-center gap-2 text-foreground">
               <PenTool className="w-5 h-5 text-[#008bcd]" /> Firma del Especialista
@@ -444,7 +444,7 @@ export function RecetasTab({ patientId }: { patientId: string }) {
       </div>
 
       {/* 4. CONTENIDO PRINCIPAL (Diseño Integrado Original) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 print:hidden">
+      <div className="grid min-w-0 grid-cols-1 xl:grid-cols-12 gap-4 lg:gap-6 xl:gap-8 print:hidden">
          
         {/* EDITOR (Izquierda) */}
         {canEditClinicalData && (

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { format, isSameDay } from "date-fns"
 import { es } from "date-fns/locale"
 import { CalendarDays, Coffee } from "lucide-react"
@@ -13,7 +13,8 @@ const START_HOUR = 8
 const END_HOUR = 19
 const BREAK_START = 12
 const BREAK_END = 13
-const HOUR_HEIGHT = 88
+// Franjas más compactas para laptop sin perder el horario completo.
+const HOUR_HEIGHT = 68
 const TIME_LABELS = Array.from({ length: END_HOUR - START_HOUR }, (_, i) =>
   `${String(START_HOUR + i).padStart(2, "0")}:00`
 )
@@ -56,6 +57,7 @@ export const AgendaSemanalView: React.FC<AgendaSemanalViewProps> = ({
   defaultDoctorColor,
 }) => {
   const [selectedDayKey, setSelectedDayKey] = useState(() => format(new Date(), "yyyy-MM-dd"))
+  const desktopScrollRef = useRef<HTMLDivElement>(null)
   const weekIdentity = weekDays.map((day) => format(day, "yyyy-MM-dd")).join("|")
   const firstDayKey = weekDays[0] ? format(weekDays[0], "yyyy-MM-dd") : ""
 
@@ -67,6 +69,11 @@ export const AgendaSemanalView: React.FC<AgendaSemanalViewProps> = ({
       const today = format(new Date(), "yyyy-MM-dd")
       return keys.includes(today) ? today : keys[0]
     })
+  }, [weekIdentity])
+
+  // Al cambiar de semana, mostrar otra vez la jornada desde las 08:00.
+  useEffect(() => {
+    if (desktopScrollRef.current) desktopScrollRef.current.scrollTop = 0
   }, [weekIdentity])
 
   const byDay = useMemo(() => {
@@ -119,8 +126,9 @@ export const AgendaSemanalView: React.FC<AgendaSemanalViewProps> = ({
     : firstDayKey
   const selectedAppointments = byDay[activeDayKey] || []
   const gridHeight = (END_HOUR - START_HOUR) * HOUR_HEIGHT
-  const columnWidth = weekDays.length >= 6 ? 155 : 180
-  const gridTemplateColumns = `64px repeat(${weekDays.length}, minmax(${columnWidth}px, 1fr))`
+  // Ancho mínimo solo para evitar columnas ilegibles en tabletas.
+  const columnWidth = weekDays.length >= 6 ? 132 : 148
+  const gridTemplateColumns = `60px repeat(${weekDays.length}, minmax(${columnWidth}px, 1fr))`
 
   const doctorColorFor = (cita: any) => {
     const id = cita.doctorId || cita.doctor?.id
@@ -199,21 +207,22 @@ export const AgendaSemanalView: React.FC<AgendaSemanalViewProps> = ({
 
       {/* TABLETA/LAPTOP: cuadrícula original completa, con desplazamiento interior. */}
       <div
-        className="hidden max-h-[72dvh] min-w-0 max-w-full overflow-auto overscroll-contain sm:block"
+        ref={desktopScrollRef}
+        className="hidden max-h-[72dvh] min-w-0 max-w-full overflow-auto overscroll-contain sm:block lg:max-h-[75dvh]"
         tabIndex={0}
         role="region"
         aria-label="Agenda semanal desplazable de 08:00 a 19:00"
       >
-        <div className="w-full" style={{ minWidth: `${64 + weekDays.length * columnWidth}px` }}>
+        <div className="w-full" style={{ minWidth: `${60 + weekDays.length * columnWidth}px` }}>
           <div
             className="sticky top-0 z-20 grid border-b border-border bg-card/95 backdrop-blur-sm"
             style={{ gridTemplateColumns }}
           >
-            <div className="border-r border-border/50 p-3 text-center text-[11px] font-medium text-muted-foreground">HORA</div>
+            <div className="border-r border-border/50 px-2 py-3 text-center text-[11px] font-medium text-muted-foreground">HORA</div>
             {weekDays.map((day) => (
               <div
                 key={format(day, "yyyy-MM-dd")}
-                className={cn("border-r border-border/50 p-3 text-center last:border-r-0", isSameDay(day, new Date()) && "bg-primary/5")}
+                className={cn("border-r border-border/50 px-2 py-3 text-center last:border-r-0", isSameDay(day, new Date()) && "bg-primary/5")}
               >
                 <span className="text-xs font-semibold capitalize text-foreground">{format(day, "EEE d", { locale: es })}</span>
               </div>
@@ -224,7 +233,7 @@ export const AgendaSemanalView: React.FC<AgendaSemanalViewProps> = ({
               {TIME_LABELS.map((hour, index) => (
                 <div
                   key={hour}
-                  className="absolute right-2 text-xs font-medium tabular-nums text-muted-foreground"
+                  className="absolute right-2 text-[11px] font-medium tabular-nums text-muted-foreground"
                   style={{ top: Math.max(4, index * HOUR_HEIGHT - 8) }}
                 >
                   {hour}

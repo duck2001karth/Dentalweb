@@ -39,7 +39,7 @@ export function DocumentVoidDialog({
           <Trash2 className="h-4 w-4 shrink-0 text-red-600 dark:text-red-400 group-hover:text-red-700" />
         </Button>
       </AlertDialogTrigger>
-      <AlertDialogContent className="rounded-2xl max-w-[420px]">
+      <AlertDialogContent className="max-w-[calc(100vw-1rem)] rounded-2xl max-w-[420px]">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-base font-bold text-foreground">
             ¿Anular documento clínico?

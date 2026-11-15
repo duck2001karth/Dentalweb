@@ -151,7 +151,7 @@ export function IssuedDocumentsView({
 
       {/* TABLA DE COMPROBANTES */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-xs">
-        <div className="overflow-x-auto">
+        <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
           <table className="w-full text-left text-xs border-collapse">
             <thead className="bg-muted/30 border-b border-border text-muted-foreground uppercase font-bold text-[10px] tracking-wider">
               <tr>
@@ -308,7 +308,7 @@ export function IssuedDocumentsView({
 
       {/* MODAL ANULAR */}
       <AlertDialog open={!!docToCancel} onOpenChange={(open) => !open && setDocToCancel(null)}>
-        <AlertDialogContent className="bg-card border-border rounded-[24px] sm:max-w-[450px] p-6 shadow-2xl">
+        <AlertDialogContent className="max-w-[calc(100vw-1rem)] bg-card border-border rounded-[24px] sm:max-w-[450px] p-6 shadow-2xl">
           <AlertDialogHeader className="space-y-3">
             <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center border border-amber-500/20">
               <Ban className="w-6 h-6" />
@@ -329,7 +329,7 @@ export function IssuedDocumentsView({
 
       {/* MODAL PURGAR */}
       <AlertDialog open={!!docToDelete} onOpenChange={(open) => !open && setDocToDelete(null)}>
-        <AlertDialogContent className="bg-card border-border rounded-[24px] sm:max-w-[450px] p-6 shadow-2xl">
+        <AlertDialogContent className="max-w-[calc(100vw-1rem)] bg-card border-border rounded-[24px] sm:max-w-[450px] p-6 shadow-2xl">
           <AlertDialogHeader className="space-y-3">
             <div className="w-12 h-12 rounded-2xl bg-rose-500/10 text-rose-600 flex items-center justify-center border border-rose-500/20">
               <AlertCircle className="w-6 h-6" />

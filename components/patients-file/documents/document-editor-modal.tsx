@@ -158,7 +158,7 @@ export function ClinicalDocEditorModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-[1020px] w-[95vw] bg-card text-foreground border border-border/80 shadow-2xl rounded-[28px] p-0 overflow-hidden font-sans antialiased">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[1020px] w-[95vw] bg-card text-foreground border border-border/80 shadow-2xl rounded-[28px] p-0 overflow-hidden font-sans antialiased">
           
           {/* CABECERA */}
           <DialogHeader className="px-7 py-4.5 border-b border-border/70 bg-muted/20 flex flex-row items-center justify-between text-left">
@@ -179,7 +179,7 @@ export function ClinicalDocEditorModal({
 
           {/* CUERPO EN 2 COLUMNAS */}
           <form onSubmit={handleSubmit} className="p-7 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch min-h-[460px]">
+            <div className="grid min-w-0 grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-stretch min-h-0 lg:min-h-[460px]">
               <div className="md:col-span-5 bg-muted/15 border border-border/80 rounded-2xl p-4 flex flex-col gap-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 text-[11px] font-black text-[#008bcd] uppercase tracking-wider">
@@ -301,7 +301,7 @@ export function ClinicalDocEditorModal({
 
       {/* CONFIRMACIÓN DE SOBRESCRITURA */}
       <AlertDialog open={!!pendingTemplate} onOpenChange={() => setPendingTemplate(null)}>
-        <AlertDialogContent className="rounded-[24px]">
+        <AlertDialogContent className="max-w-[calc(100vw-1rem)] rounded-[24px]">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-foreground text-sm font-bold">
               <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />

@@ -50,7 +50,7 @@ export const AppLayout = ({ children }: { children: ReactNode }) => {
     <div className="min-h-dvh w-full min-w-0 bg-background font-sans text-foreground antialiased">
       <GlobalLoader />
       <div className="flex min-h-dvh min-w-0">
-        {/* Escritorio: respetar la lógica existente de ancho/colapso de Nav. */}
+
         <aside className="sticky top-0 z-30 hidden h-dvh shrink-0 border-r border-border/60 bg-card lg:block">
           <Nav />
         </aside>
@@ -91,18 +91,25 @@ const Header = () => {
     }
   }, [])
 
-  const iconControlClass = cn(
-    "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-    "transition-colors hover:bg-accent/60",
-    "[&_button]:h-9 [&_button]:w-9 [&_button]:rounded-lg [&_button]:border-0",
-    "[&_button]:bg-transparent [&_button]:shadow-none [&_button]:hover:bg-accent/60",
-    "[&_svg]:h-[18px] [&_svg]:w-[18px] [&_svg]:text-muted-foreground",
-    "[&_button:hover_svg]:text-primary"
-  )
+ const iconControlClass = cn(
+  "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
+  "lg:h-11 lg:w-11",
+  "transition-colors hover:bg-accent/60",
+  "[&_button]:flex [&_button]:h-10 [&_button]:w-10",
+  "[&_button]:items-center [&_button]:justify-center",
+  "[&_button]:rounded-xl [&_button]:border-0",
+  "[&_button]:bg-transparent [&_button]:shadow-none",
+  "[&_button]:hover:bg-accent/60",
+  "lg:[&_button]:h-11 lg:[&_button]:w-11",
+  "[&_svg]:h-5 [&_svg]:w-5",
+  "lg:[&_svg]:h-[22px] lg:[&_svg]:w-[22px]",
+  "[&_svg]:text-muted-foreground",
+  "[&_button:hover_svg]:text-primary"
+)
 
   return (
     <header className="sticky top-0 z-40 shrink-0 border-b border-border/60 bg-background/90 backdrop-blur-xl print:hidden">
-      <div className="flex h-14 min-w-0 items-center gap-2 px-3 sm:h-16 sm:px-4 lg:h-[70px] lg:gap-3 lg:px-6">
+      <div className="flex h-[60px] min-w-0 items-center gap-2 px-3 sm:h-16 sm:px-4 lg:h-[72px] lg:gap-4 lg:px-6">
         {/* Celular y tableta: menú lateral accesible. */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetTrigger asChild>
@@ -150,14 +157,16 @@ const Header = () => {
 
         {/* Buscador ancho únicamente cuando hay espacio suficiente. */}
         <div className="hidden min-w-0 flex-1 justify-center px-2 sm:flex lg:justify-start">
-          <div className="w-full max-w-2xl"><AppCommand /></div>
+          <div className="w-full max-w-[700px]">
+            <AppCommand />
+          </div>
         </div>
 
         <div className="min-w-0 flex-1 sm:hidden">
           <span className="block truncate text-sm font-semibold">Carmo Dental</span>
         </div>
 
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+        <div className="flex shrink-0 items-center gap-1 lg:gap-2">
           <button
             type="button"
             aria-label={mobileSearchOpen ? "Cerrar búsqueda" : "Abrir búsqueda"}

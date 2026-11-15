@@ -54,7 +54,7 @@ export function OdontogramGrid({
   )
 
   return (
-    <div className="bg-card border border-border/70 rounded-2xl p-6 sm:p-7 shadow-xs overflow-x-auto relative">
+    <div className="bg-card border border-border/70 rounded-2xl p-2 sm:p-4 lg:p-7 shadow-xs overflow-x-auto overscroll-x-contain relative">
       <div className="min-w-[820px] flex flex-col items-center select-none">
         
         {/* Marcadores Superiores Discretos */}

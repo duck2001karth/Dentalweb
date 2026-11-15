@@ -166,7 +166,7 @@ export function EvolutionModal({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-[940px] w-[95vw] bg-card text-foreground border border-border/80 rounded-[24px] shadow-2xl p-0 overflow-hidden font-sans">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[940px] w-[95vw] bg-card text-foreground border border-border/80 rounded-[24px] shadow-2xl p-0 overflow-hidden font-sans">
           {/* CABECERA */}
           <DialogHeader className="px-7 py-4.5 border-b border-border/70 bg-muted/20 flex flex-row items-center gap-3 text-left">
             <div className="p-2.5 bg-[#008bcd]/15 text-[#008bcd] dark:text-[#38bdf8] rounded-2xl shrink-0 border border-[#008bcd]/20">
@@ -201,7 +201,7 @@ export function EvolutionModal({
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
                   <div className="space-y-1.5 flex flex-col justify-end">
                     <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1 h-4">
                       <CalendarIcon className="w-3.5 h-3.5 text-[#008bcd]" /> Fecha Atención
@@ -462,7 +462,7 @@ export function EvolutionModal({
 
       {/* MODAL EMERGENTE DEDICADO PARA LA FIRMA DEL PACIENTE */}
       <Dialog open={isSignModalOpen} onOpenChange={setIsSignModalOpen}>
-        <DialogContent className="sm:max-w-[650px] w-[95vw] bg-card border-border/80 rounded-2xl p-0 overflow-hidden font-sans shadow-2xl">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[650px] w-[95vw] bg-card border-border/80 rounded-2xl p-0 overflow-hidden font-sans shadow-2xl">
           <div className="px-6 py-4 border-b border-border/70 bg-muted/15 flex items-center justify-between">
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
               <PenTool className="w-4 h-4 text-[#008bcd]" /> Registrar Firma de Conformidad

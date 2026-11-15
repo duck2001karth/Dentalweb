@@ -397,7 +397,7 @@ export function PaymentReceiptModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[920px] max-h-[92vh] flex flex-col bg-muted/30 border-border p-0 overflow-hidden rounded-2xl [&>button]:hidden font-sans antialiased">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[920px] max-h-[calc(100dvh-1rem)] flex min-w-0 flex-col bg-muted/30 border-border p-0 overflow-hidden rounded-2xl [&>button]:hidden font-sans antialiased">
         
         {/* CABECERA MODAL */}
         <div className="bg-background px-6 py-4 border-b border-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0 no-print">

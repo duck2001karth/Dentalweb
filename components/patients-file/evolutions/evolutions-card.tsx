@@ -123,7 +123,7 @@ export function EvolutionCard({
             <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2.5">
               Firmas de Conformidad:
             </p>
-            <div className="grid grid-cols-2 gap-3 max-w-md">
+            <div className="grid grid-cols-1 min-[390px]:grid-cols-2 gap-3 max-w-md">
               
               {/* Firma Doctor */}
               <div className="p-2.5 rounded-xl border border-border/70 bg-muted/20 flex flex-col items-center">

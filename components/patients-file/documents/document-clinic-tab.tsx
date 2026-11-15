@@ -449,7 +449,7 @@ export function DocumentosClinicosTab({
       />
 
       <Dialog open={!!signingRole} onOpenChange={(open) => !open && setSigningRole(null)}>
-        <DialogContent className="sm:max-w-[680px] w-[95vw] bg-card border-border/80 rounded-2xl p-0 overflow-hidden font-sans shadow-2xl">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[680px] w-[95vw] bg-card border-border/80 rounded-2xl p-0 overflow-hidden font-sans shadow-2xl">
           <div className="px-6 py-4 border-b border-border/70 bg-muted/15 flex items-center justify-between">
             <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
               <PenTool className="w-4 h-4 text-[#008bcd]" /> Registrar Firma Digital

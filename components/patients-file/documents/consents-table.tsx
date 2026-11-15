@@ -53,7 +53,7 @@ export function ConsentsTable({
 
   return (
     <div className="bg-card border border-border/80 rounded-2xl shadow-xs overflow-hidden print:hidden">
-      <div className="overflow-x-auto">
+      <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
         <table className="w-full text-xs text-left">
           <thead className="bg-muted/40 border-b border-border/80 text-muted-foreground">
             <tr>

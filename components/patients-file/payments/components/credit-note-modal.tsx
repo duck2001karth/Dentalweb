@@ -67,7 +67,7 @@ export function CreditNoteModal({ isOpen, onClose, payment, onSuccess }: any) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[480px] bg-card text-card-foreground border-border rounded-2xl p-6 font-sans">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[480px] bg-card text-card-foreground border-border rounded-2xl p-6 font-sans">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold flex items-center gap-2 text-amber-600 dark:text-amber-400">
             <RotateCcw className="w-5 h-5" /> Emitir Nota de Crédito

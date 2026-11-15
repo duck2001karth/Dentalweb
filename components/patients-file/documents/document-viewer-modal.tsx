@@ -112,7 +112,7 @@ export function DocumentViewerModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[1000px] w-[95vw] h-[85vh] max-h-[85vh] flex flex-col bg-card border-border/80 p-0 rounded-2xl shadow-2xl [&>button]:hidden print:hidden font-sans overflow-hidden">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[1000px] w-[95vw] h-[min(88dvh,850px)] max-h-[calc(100dvh-1rem)] flex flex-col bg-card border-border/80 p-0 rounded-2xl shadow-2xl [&>button]:hidden print:hidden font-sans overflow-hidden">
         {/* CABECERA COMPACTA */}
         <div className="shrink-0 flex items-center justify-between px-6 py-3.5 border-b border-border/70 bg-muted/20">
           <div className="flex items-center gap-3 min-w-0 pr-4">
@@ -172,7 +172,7 @@ export function DocumentViewerModal({
         </div>
 
         {/* CONTENIDO INTERNO */}
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-12 min-h-0 bg-background overflow-hidden">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 min-h-0 bg-background overflow-hidden">
           {/* PANEL IZQUIERDO: METADATOS Y FIRMAS */}
           <div className="md:col-span-4 border-r border-border/60 bg-muted/10 p-4 overflow-y-auto space-y-3.5 [scrollbar-width:thin]">
             {/* DATOS DEL FACULTATIVO */}

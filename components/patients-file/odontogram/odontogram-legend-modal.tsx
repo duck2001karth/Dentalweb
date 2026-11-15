@@ -31,7 +31,7 @@ export function OdontogramLegendModal() {
       </DialogTrigger>
 
       {/* Modal Horizontal Ancho */}
-      <DialogContent className="sm:max-w-4xl bg-card border-border/80 rounded-2xl p-6 shadow-2xl overflow-hidden">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-4xl bg-card border-border/80 rounded-2xl p-6 shadow-2xl overflow-hidden">
         <DialogHeader className="border-b border-border/70 pb-3">
           <DialogTitle className="text-base font-black uppercase text-foreground flex items-center gap-2">
             <Layers className="w-5 h-5 text-[#008bcd]" /> Convenciones y Simbología del Odontograma

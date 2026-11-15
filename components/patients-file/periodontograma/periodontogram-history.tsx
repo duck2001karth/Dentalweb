@@ -81,7 +81,7 @@ export function PeriodontogramHistory({
       </div>
 
       {/* Tabla con fuentes de tamaño estándar */}
-      <div className="overflow-x-auto">
+      <div className="min-w-0 max-w-full overflow-x-auto overscroll-x-contain">
         <table className="w-full text-sm text-left whitespace-nowrap">
           <thead className="border-b border-border/70 text-muted-foreground bg-muted/10 uppercase text-xs font-bold tracking-wider">
             <tr>
@@ -196,7 +196,7 @@ export function PeriodontogramHistory({
                                 <Trash2 size={14} />
                               </Button>
                             </AlertDialogTrigger>
-                            <AlertDialogContent className="bg-card border-border/80 rounded-2xl sm:max-w-[420px]">
+                            <AlertDialogContent className="max-w-[calc(100vw-1rem)] bg-card border-border/80 rounded-2xl sm:max-w-[420px]">
                               <AlertDialogHeader>
                                 <AlertDialogTitle className="text-destructive font-bold text-base flex items-center gap-2">
                                   <Trash2 size={18} /> ¿Eliminar Evaluación Periodontal?

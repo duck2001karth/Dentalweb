@@ -64,7 +64,7 @@ export function OdontogramHistoryModals({
           }
         }}
       >
-        <DialogContent className="sm:max-w-[450px] bg-card border-border/80 rounded-2xl shadow-xl p-6">
+        <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[450px] bg-card border-border/80 rounded-2xl shadow-xl p-6">
           <DialogHeader className="border-b border-border/70 pb-3">
             <DialogTitle className="text-sm font-black uppercase text-foreground flex items-center justify-between">
               <span className="flex items-center gap-2">
@@ -147,7 +147,7 @@ export function OdontogramHistoryModals({
 
       {/* MODAL DE CONFIRMACIÓN PARA ANULAR REGISTRO */}
       <AlertDialog open={!!recordToDelete} onOpenChange={(open) => !open && setRecordToDelete(null)}>
-        <AlertDialogContent className="bg-card border-border/80 rounded-2xl sm:max-w-[420px] p-6 shadow-2xl">
+        <AlertDialogContent className="max-w-[calc(100vw-1rem)] bg-card border-border/80 rounded-2xl sm:max-w-[420px] p-6 shadow-2xl">
           <AlertDialogHeader className="flex flex-col items-center text-center space-y-2">
             <div className="w-12 h-12 bg-destructive/10 text-destructive rounded-full flex items-center justify-center border border-destructive/20 mb-1">
               <Trash2 className="w-6 h-6" />

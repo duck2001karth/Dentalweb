@@ -61,7 +61,7 @@ export function SendEmailModal({ isOpen, onClose, payment, patient }: any) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px] bg-card text-card-foreground border-border rounded-2xl p-6 font-sans">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[425px] bg-card text-card-foreground border-border rounded-2xl p-6 font-sans">
         <DialogHeader>
           <DialogTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
             <Mail className="w-5 h-5 text-[#008bcd]" /> Enviar Comprobante por Correo

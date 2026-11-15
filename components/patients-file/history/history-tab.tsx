@@ -1,22 +1,10 @@
 "use client"
 
 import React, { useState, useEffect } from "react"
-import {
-  Printer,
-  Image as ImageIcon,
-  FileText,
-  Loader2,
-  Pill,
-  Plus,
-  ChevronDown,
-  Trash2,
-  Search,
-  FileClock,
-} from "lucide-react"
+import { FileText, Loader2, Trash2 } from "lucide-react"
 import { isThisMonth, format } from "date-fns"
 import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import {
   AlertDialog,
@@ -28,14 +16,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Input } from "@/components/ui/input"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { useGetClinicalNotes, useCreateClinicalNote } from "@/hooks/clinical-notes"
 import { useGetPatient } from "@/hooks/patients"
@@ -45,6 +25,7 @@ import { HistoryCard } from "@/components/patients-file/history/history-card"
 import { EvolutionModal } from "@/components/patients-file/evolutions/evolutions-modal"
 import { QuickDocumentModal } from "@/components/patients-file/history/history-modal"
 import { QuickPrescriptionModal } from "@/components/patients-file/history/history-pmodal"
+import { HistoryToolbar } from "@/components/patients-file/history/history-toolbar"
 
 const getTodayDateString = () => {
   return format(new Date(), "yyyy-MM-dd")
@@ -378,130 +359,32 @@ useEffect(() => {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* CABECERA Y FILTROS */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-5 bg-card p-5 rounded-2xl border border-border/80 shadow-xs sticky top-0 z-20">
-          <div>
-            <div className="flex items-center gap-3">
-              <h2 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2">
-                <FileClock className="w-5 h-5 text-[#008bcd]" /> Historial Clínico
-              </h2>
-              {!canEditClinicalData && (
-                <span className="text-[10px] bg-muted text-muted-foreground font-bold px-2 py-0.5 rounded-md border border-border/80 tracking-wider">
-                  SÓLO LECTURA
-                </span>
-              )}
-            </div>
-            <p className="text-sm font-medium text-muted-foreground mt-0.5">
-              Línea de tiempo integral de procedimientos, recetas y documentos del paciente.
-            </p>
-          </div>
-
-          {/* Filtros y Acciones */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 w-full lg:w-auto">
-            <div className="relative w-full sm:w-[220px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none z-10 transition-colors" />
-              <input
-                type="text"
-                placeholder="Buscar registro..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                style={{
-                  backgroundColor: "var(--card, #ffffff)",
-                  color: "var(--foreground, #0f172a)",
-                  borderColor: "var(--border, #e2e8f0)",
-                }}
-                className="h-10 w-full rounded-xl border pl-9 pr-4 text-xs font-semibold placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-2xs transition-colors focus:outline-none focus:ring-2 focus:ring-[#008bcd]/20 focus:border-[#008bcd]"
-              />
-            </div>
-            <Select value={monthFilter} onValueChange={setMonthFilter}>
-              <SelectTrigger className="w-full sm:w-[140px] h-10 rounded-xl bg-background border-border/80 text-xs font-semibold">
-                <SelectValue placeholder="Meses" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/80">
-                <SelectItem value="todos" className="text-xs font-medium cursor-pointer">
-                  Todos los meses
-                </SelectItem>
-                <SelectItem value="actual" className="text-xs font-medium cursor-pointer">
-                  Mes actual
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-full sm:w-[140px] h-10 rounded-xl bg-background border-border/80 text-xs font-semibold">
-                <SelectValue placeholder="Tipos" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/80">
-                <SelectItem value="todos" className="text-xs font-medium cursor-pointer">
-                  Todos los tipos
-                </SelectItem>
-                <SelectItem value="evoluciones" className="text-xs font-medium cursor-pointer">
-                  Evoluciones
-                </SelectItem>
-                <SelectItem value="recetas" className="text-xs font-medium cursor-pointer">
-                  Recetas Médicas
-                </SelectItem>
-                <SelectItem value="otros" className="text-xs font-medium cursor-pointer">
-                  Documentos / Rx
-                </SelectItem>
-              </SelectContent>
-            </Select>
-
-            {canEditClinicalData && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button className="bg-primary hover:bg-[#0070a8] text-white rounded-xl h-10 px-4 text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer">
-                    <Plus className="w-4 h-4" /> Nuevo Registro <ChevronDown className="w-3.5 h-3.5 opacity-70" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-56 p-1.5 border-border/80 shadow-2xl rounded-2xl bg-card">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetEvolutionForm()
-                      fetchDoctorSignature()
-                      setIsEvolutionOpen(true)
-                    }}
-                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-bold hover:bg-[#008bcd]/10 text-foreground hover:text-[#008bcd] rounded-xl transition-colors cursor-pointer"
-                  >
-                    <FileText className="w-4 h-4 text-[#008bcd]" /> Agregar Evolución
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedNoteForModal(null)
-                      setIsPrescriptionOpen(true)
-                    }}
-                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-bold hover:bg-purple-500/10 text-foreground hover:text-purple-500 rounded-xl transition-colors cursor-pointer"
-                  >
-                    <Pill className="w-4 h-4 text-purple-500" /> Emitir Receta
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedNoteForModal(null)
-                      setIsDocumentOpen(true)
-                    }}
-                    className="w-full flex items-center gap-3 px-3.5 py-2.5 text-xs font-bold hover:bg-teal-500/10 text-foreground hover:text-teal-500 rounded-xl transition-colors cursor-pointer"
-                  >
-                    <ImageIcon className="w-4 h-4 text-teal-500" /> Subir Documento / Rx
-                  </button>
-                </PopoverContent>
-              </Popover>
-            )}
-
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handlePrintHistorial}
-              disabled={isPatientLoading || !patient}
-              className="bg-background border-border/80 text-foreground hover:bg-muted/80 shrink-0 rounded-xl h-11 w-11 font-bold cursor-pointer transition-all shadow-xs"
-              title="Imprimir Historial General"
-            >
-              <Printer className="w-5 h-5 stroke-[2.2]" />
-            </Button>
-          </div>
-        </div>
+        {/* CABECERA Y FILTROS: componente visual separado */}
+        <HistoryToolbar
+          canEditClinicalData={canEditClinicalData}
+          isPatientLoading={isPatientLoading}
+          hasPatient={Boolean(patient)}
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          monthFilter={monthFilter}
+          onMonthFilterChange={setMonthFilter}
+          typeFilter={typeFilter}
+          onTypeFilterChange={setTypeFilter}
+          onNewEvolution={() => {
+            resetEvolutionForm()
+            void fetchDoctorSignature()
+            setIsEvolutionOpen(true)
+          }}
+          onNewPrescription={() => {
+            setSelectedNoteForModal(null)
+            setIsPrescriptionOpen(true)
+          }}
+          onNewDocument={() => {
+            setSelectedNoteForModal(null)
+            setIsDocumentOpen(true)
+          }}
+          onPrint={() => void handlePrintHistorial()}
+        />
 
         {/* TIMELINE */}
         {isLoading ? (

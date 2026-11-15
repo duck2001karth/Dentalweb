@@ -71,7 +71,7 @@ export function OdontogramActionMenu({
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-card text-card-foreground w-[90%] max-w-[600px] max-h-[85vh] rounded-[24px] shadow-2xl border border-border flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+      <div className="bg-card text-card-foreground w-[calc(100vw-1.5rem)] sm:w-[90%] max-w-[600px] max-h-[90dvh] rounded-[24px] shadow-2xl border border-border flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
         
         <div className="bg-[#0b0f19] dark:bg-slate-950 px-7 py-5 flex items-center justify-between text-white shrink-0">
           <div className="flex items-center gap-4">
@@ -128,7 +128,7 @@ export function OdontogramActionMenu({
           )}
 
           {(menuStep === "LESIONS" || menuStep === "PREEXISTENCES") && (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 p-6 bg-card">
+            <div className="grid grid-cols-2 min-[390px]:grid-cols-3 sm:grid-cols-4 gap-2 sm:gap-3 p-3 sm:p-6 bg-card">
               {(menuStep === "LESIONS" ? LESION_OPTIONS : PREEXISTENCE_OPTIONS).map((opt) => (
                 <button key={opt.value} onClick={() => { setSelectedStatus(opt); setMenuStep("SAVE_FORM"); }} className="flex flex-col items-center justify-start gap-3 py-4 px-2 rounded-2xl hover:bg-accent transition-colors text-center border border-border hover:border-[#008bcd] shadow-2xs group">
                   <div className="text-3xl flex items-center justify-center h-10 w-10 group-hover:scale-110 transition-transform"><opt.Icon /></div>

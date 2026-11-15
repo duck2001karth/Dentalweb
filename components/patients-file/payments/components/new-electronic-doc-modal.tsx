@@ -190,7 +190,7 @@ export function NewElectronicDocModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[880px] bg-card text-foreground border border-border/80 shadow-2xl rounded-3xl p-0 overflow-hidden font-sans antialiased">
+      <DialogContent className="max-w-[calc(100vw-1rem)] sm:max-w-[880px] bg-card text-foreground border border-border/80 shadow-2xl rounded-3xl p-0 overflow-hidden font-sans antialiased">
         
         {/* CABECERA */}
         <DialogHeader className="px-7 py-4 border-b border-border/70 bg-muted/20 flex flex-row items-center gap-3 text-left">
@@ -217,7 +217,7 @@ export function NewElectronicDocModal({
                 Datos del Receptor / Paciente
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label className="text-[11px] font-bold text-muted-foreground">
                     Tipo Doc. <span className="text-rose-500">*</span>

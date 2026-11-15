@@ -152,31 +152,31 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[750px] max-h-[90vh] bg-card border-border/60 p-0 overflow-hidden flex flex-col gap-0 rounded-[24px] shadow-2xl [&>button]:hidden">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[750px] sm:max-w-[750px] max-h-[calc(100dvh-1rem)] sm:max-h-[90dvh] min-h-0 bg-card border-border/60 p-0 overflow-hidden flex flex-col gap-0 rounded-2xl sm:rounded-[24px] shadow-2xl [&>button]:hidden">
         
         {/* CABECERA DEL MODAL */}
-        <DialogHeader className="px-8 py-6 border-b border-border/50 bg-muted/10 flex flex-row items-start justify-between sticky top-0 z-10">
+        <DialogHeader className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 lg:py-6 border-b border-border/50 bg-muted/10 flex flex-row items-start justify-between gap-3 shrink-0 z-10">
           <div>
-            <DialogTitle className="text-xl md:text-2xl font-black text-foreground tracking-tight">
+            <DialogTitle className="text-lg sm:text-xl md:text-2xl font-black text-foreground tracking-tight">
               {isEditing ? "Editar Perfil del Paciente" : "Registrar Nuevo Paciente"}
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-1.5 font-medium">
               Completa la información requerida a continuación. Los campos con <span className="text-rose-500 font-bold">(*)</span> son obligatorios.
             </DialogDescription>
           </div>
-          <button onClick={onClose} className="p-2 bg-muted/50 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0">
+          <button type="button" aria-label="Cerrar formulario" onClick={onClose} className="flex h-10 w-10 items-center justify-center bg-muted/50 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <X size={18} strokeWidth={2.5} />
           </button>
         </DialogHeader>
-        <div className="px-8 py-5 bg-background border-b border-border/50 flex items-center justify-between shrink-0">
+        <div className="px-4 py-4 sm:px-6 sm:py-5 lg:px-8 bg-background border-b border-border/50 flex items-center justify-between gap-1 shrink-0">
           {[
             { num: 1, title: "Principal" },
             { num: 2, title: "Contacto" },
             { num: 3, title: "Médicos" }
           ].map((s, i) => (
-            <div key={s.num} className="flex items-center w-full">
-              <div className={`flex items-center gap-3 transition-all duration-300 ${step === s.num ? "opacity-100" : step > s.num ? "opacity-100" : "opacity-40 grayscale"}`}>
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black transition-all duration-300
+            <div key={s.num} className="flex min-w-0 items-center flex-1 last:flex-none sm:last:flex-1">
+              <div className={`flex shrink-0 items-center gap-2 sm:gap-3 transition-all duration-300 ${step === s.num ? "opacity-100" : step > s.num ? "opacity-100" : "opacity-40 grayscale"}`}>
+                <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex shrink-0 items-center justify-center text-xs font-black transition-all duration-300
                   ${step === s.num ? "bg-[#008bcd] text-white shadow-lg shadow-[#008bcd]/30 ring-4 ring-[#008bcd]/10" : step > s.num ? "bg-emerald-500 text-white" : "bg-muted-foreground/20 text-muted-foreground"}`}
                 >
                   {step > s.num ? <CheckCircle2 className="w-5 h-5 stroke-[2.5]" /> : s.num}
@@ -185,13 +185,15 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
                   {s.title}
                 </span>
               </div>
-              {i < 2 && <div className={`flex-1 h-[2px] mx-4 sm:mx-6 rounded-full transition-all duration-500 ${step > s.num ? "bg-emerald-500/50" : "bg-border"}`} />}
+              {i < 2 && <div className={`flex-1 h-[2px] mx-2 sm:mx-4 lg:mx-6 rounded-full transition-all duration-500 ${step > s.num ? "bg-emerald-500/50" : "bg-border"}`} />}
             </div>
           ))}
         </div>
 
+        <p className="sr-only" aria-live="polite">Paso {step} de 3</p>
+
         {/* CUERPO DEL FORMULARIO */}
-        <div className="overflow-y-auto p-8 custom-scrollbar bg-card flex-1 min-h-[350px]" onKeyDown={handleKeyDown}>
+        <div className="overflow-y-auto overscroll-contain px-4 py-5 sm:p-6 lg:p-8 custom-scrollbar bg-card flex-1 min-h-0" onKeyDown={handleKeyDown}>
           <div className="space-y-6">
             
             {/* PASO 1: PRINCIPAL */}
@@ -202,15 +204,15 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
                   <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Información Principal</h3>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase">Nombres <span className="text-rose-500">*</span></Label>
-                    <Input name="firstName" value={formData.firstName} onChange={handleChange} required className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold" placeholder="Ej. Juan Carlos" autoFocus />
+                    <Input name="firstName" value={formData.firstName} onChange={handleChange} required className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold text-base sm:text-sm" placeholder="Ej. Juan Carlos" autoFocus />
                   </div>
                   
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase">Apellidos <span className="text-rose-500">*</span></Label>
-                    <Input name="lastName" value={formData.lastName} onChange={handleChange} required className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold" placeholder="Ej. Pérez Gómez" />
+                    <Input name="lastName" value={formData.lastName} onChange={handleChange} required className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold text-base sm:text-sm" placeholder="Ej. Pérez Gómez" />
                   </div>
                   
                   <div className="space-y-2">
@@ -229,15 +231,15 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
                   
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase">Número de Documento (CI) <span className="text-rose-500">*</span></Label>
-                    <Input name="ci" value={formData.ci} onChange={handleChange} required className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold font-mono" placeholder="Ej. 1712345678" />
+                    <Input name="ci" value={formData.ci} onChange={handleChange} required className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold font-mono text-base sm:text-sm" placeholder="Ej. 1712345678" />
                   </div>
                   
                   <div className="space-y-2 relative">
                     <Label className="text-xs font-bold text-muted-foreground uppercase">Fecha de Nacimiento <span className="text-rose-500">*</span></Label>
                     <div className="relative">
-                      <Input type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} required className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold pr-16" />
+                      <Input type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} required className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold pr-16 text-base sm:text-sm" />
                       {patientAge !== null && (
-                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black bg-muted px-2 py-1 rounded text-muted-foreground pointer-events-none">
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:block text-[10px] font-black bg-muted px-2 py-1 rounded text-muted-foreground pointer-events-none">
                           {patientAge} AÑOS
                         </span>
                       )}
@@ -268,30 +270,30 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
                   <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Contacto y Ubicación</h3>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Phone size={12}/> Teléfono Móvil</Label>
-                    <Input name="phone" value={formData.phone} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold font-mono" placeholder="Ej. 0998877665" autoFocus />
+                    <Input name="phone" value={formData.phone} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold font-mono text-base sm:text-sm" placeholder="Ej. 0998877665" autoFocus />
                   </div>
                   
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Mail size={12}/> Correo Electrónico</Label>
-                    <Input type="email" name="email" value={formData.email} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold" placeholder="correo@ejemplo.com" />
+                    <Input type="email" name="email" value={formData.email} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold text-base sm:text-sm" placeholder="correo@ejemplo.com" />
                   </div>
                   
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Map size={12}/> Ciudad</Label>
-                    <Input name="ciudad" value={formData.ciudad} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold" placeholder="Ej. Santa Cruz" />
+                    <Input name="ciudad" value={formData.ciudad} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold text-base sm:text-sm" placeholder="Ej. Santa Cruz" />
                   </div>
                   
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5"><MapPin size={12}/> Provincia / Dpto.</Label>
-                    <Input name="departamento" value={formData.departamento} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold" placeholder="Ej. Santa Cruz" />
+                    <Input name="departamento" value={formData.departamento} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold text-base sm:text-sm" placeholder="Ej. Santa Cruz" />
                   </div>
                   
-                  <div className="md:col-span-2 space-y-2">
+                  <div className="sm:col-span-2 space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Home size={12}/> Dirección Completa</Label>
-                    <Input name="address" value={formData.address} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold" placeholder="Ej. Av. Principal, Calle 4, Nro 123..." />
+                    <Input name="address" value={formData.address} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold text-base sm:text-sm" placeholder="Ej. Av. Principal, Calle 4, Nro 123..." />
                   </div>
                 </div>
               </div>
@@ -305,10 +307,10 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
                   <h3 className="font-black text-sm uppercase tracking-wider text-foreground">Información Médica</h3>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                   <div className="space-y-2">
                     <Label className="text-xs font-bold text-muted-foreground uppercase flex items-center gap-1.5"><Stethoscope size={12}/> EPS / Seguro Médico</Label>
-                    <Input name="eps" value={formData.eps} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold" placeholder="Ej. Seguro de Salud" autoFocus />
+                    <Input name="eps" value={formData.eps} onChange={handleChange} className="h-11 rounded-xl bg-background border-border/80 focus:ring-[#008bcd]/20 font-semibold text-base sm:text-sm" placeholder="Ej. Seguro de Salud" autoFocus />
                   </div>
                   
                   <div className="space-y-2">
@@ -325,7 +327,7 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
                     </Select>
                   </div>
                   
-                  <div className="md:col-span-2 space-y-2 bg-amber-500/5 p-4 rounded-2xl border border-amber-500/20 mt-2">
+                  <div className="sm:col-span-2 space-y-2 bg-amber-500/5 p-4 rounded-2xl border border-amber-500/20 mt-2">
                     <Label className="text-amber-600 dark:text-amber-500 flex items-center gap-1.5 font-black text-xs uppercase tracking-wider">
                       <ShieldAlert size={14} className="stroke-[2.5]" /> Alertas Médicas Importantes
                     </Label>
@@ -345,25 +347,25 @@ export const PatientsForm = ({ isOpen, onClose, onSuccess, initialData = null }:
         </div>
 
         {/* FOOTER - BOTONES DE ACCIÓN */}
-        <div className="px-8 py-5 border-t border-border/50 bg-muted/10 flex items-center justify-between sticky bottom-0">
+        <div className="px-4 py-3 sm:px-6 sm:py-4 lg:px-8 lg:py-5 border-t border-border/50 bg-muted/10 flex shrink-0 flex-wrap items-center justify-between gap-3">
           <Button 
             type="button"
             variant="ghost" 
             onClick={step === 1 ? onClose : handleBack}
-            className="hover:bg-muted text-muted-foreground font-bold rounded-xl h-10 px-6 text-xs transition-colors"
+            className="hover:bg-muted text-muted-foreground font-bold rounded-xl h-11 sm:h-10 px-4 sm:px-6 text-xs transition-colors"
           >
             {step === 1 ? "Cancelar" : <><ChevronLeft className="w-4 h-4 mr-1.5"/> Volver</>}
           </Button>
 
           {step < 3 ? (
-            <Button onClick={handleNext} className="bg-primary hover:bg-[#0070a8] text-white font-bold h-10 px-8 shadow-md shadow-[#008bcd]/20 rounded-xl text-xs transition-all active:scale-95">
+            <Button onClick={handleNext} className="bg-primary hover:bg-[#0070a8] text-white font-bold h-11 sm:h-10 px-5 sm:px-8 shadow-md shadow-[#008bcd]/20 rounded-xl text-xs transition-all active:scale-95">
               Siguiente <ChevronRight className="w-4 h-4 ml-1.5 stroke-[2.5]" />
             </Button>
           ) : (
             <Button 
               onClick={handleSubmit} 
               disabled={isSubmitting} 
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-8 shadow-md shadow-emerald-600/20 rounded-xl text-xs transition-all active:scale-95"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-11 sm:h-10 px-5 sm:px-8 shadow-md shadow-emerald-600/20 rounded-xl text-xs transition-all active:scale-95"
             >
               {isSubmitting ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Registrando...</>
@@ -391,7 +393,7 @@ export const NewPatientModal = ({ onSuccess }: { onSuccess?: () => void }) => {
     <>
       <Button 
         onClick={() => setIsOpen(true)} 
-        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-5 h-11 rounded-xl flex items-center gap-2 shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/35 transition-all hover:-translate-y-0.5"
+        className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold px-4 sm:px-5 h-11 rounded-xl flex items-center gap-2 shadow-md shadow-primary/25 hover:shadow-lg hover:shadow-primary/35 transition-all hover:-translate-y-0.5"
       >
         <Plus className="w-5 h-5 stroke-[2.5]" /> Nuevo Paciente
       </Button>

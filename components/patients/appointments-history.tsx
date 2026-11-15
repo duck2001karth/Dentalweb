@@ -66,10 +66,7 @@ export function AppointmentsHistory({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
-      {/* Tarjeta unificada idéntica a la sección de próximas citas */}
       <div className="bg-card border border-border/85 rounded-[24px] shadow-xs relative overflow-hidden">
-        
-        {/* Cabecera integrada dentro de la tarjeta con título y botón de visualizar alineados */}
         <div className="px-6 py-4.5 border-b border-border/60 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <h3 className="text-xs font-bold text-foreground uppercase tracking-wider">
             Historial de Citas Pasadas ({pastList.length})
@@ -89,8 +86,6 @@ export function AppointmentsHistory({
             }
           />
         </div>
-
-        {/* Contenido de la línea de tiempo */}
         <div className="p-6">
           <div className="relative pl-6 space-y-4">
             <div className="absolute left-[8px] top-2 bottom-2 w-[2px] bg-[#008bcd]/30" />
