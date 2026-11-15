@@ -1,23 +1,25 @@
-import "@/styles/globals.css";
-import { Metadata, Viewport } from "next";
-import { Analytics } from "@vercel/analytics/react";
-import { Inter } from "next/font/google";
 
-import { cn } from "@/lib/utils";
-import { siteConfig } from "@/config/site"; 
+import "@/styles/globals.css"
 
-import ClientProvider from "@/components/providers/client-provider";
-import { TailwindIndicator } from "@/components/tailwind-indicator";
-import { ThemeProvider } from "@/components/theme-provider";
-import { Toaster } from "@/components/toaster";
-import { NextAuthProvider } from "@/components/providers/session-provider";
-import { ClinicSettingsProvider } from "@/config/clinic-settings"; 
+import type { Metadata, Viewport } from "next"
+import { Analytics } from "@vercel/analytics/react"
+import { Inter } from "next/font/google"
+
+import { cn } from "@/lib/utils"
+import { siteConfig } from "@/config/site"
+
+import ClientProvider from "@/components/providers/client-provider"
+import { TailwindIndicator } from "@/components/tailwind-indicator"
+import { ThemeProvider } from "@/components/theme-provider"
+import { Toaster } from "@/components/toaster"
+import { NextAuthProvider } from "@/components/providers/session-provider"
+import { ClinicSettingsProvider } from "@/config/clinic-settings"
 
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
   display: "swap",
-});
+})
 
 export const metadata: Metadata = {
   title: {
@@ -28,53 +30,67 @@ export const metadata: Metadata = {
   icons: {
     icon: "/diente.ico",
   },
-};
-
-export const viewport: Viewport = {
-  initialScale: 1,
-  width: "device-width",
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#000000" },
-  ],
-};
-
-interface RootLayoutProps {
-  children: React.ReactNode;
 }
 
-export default function RootLayout({ children }: RootLayoutProps) {
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    {
+      media: "(prefers-color-scheme: light)",
+      color: "#f5f7fa",
+    },
+    {
+      media: "(prefers-color-scheme: dark)",
+      color: "#0b1220",
+    },
+  ],
+}
+
+interface RootLayoutProps {
+  children: React.ReactNode
+}
+
+export default function RootLayout({
+  children,
+}: RootLayoutProps) {
   return (
     <html lang="es" suppressHydrationWarning>
       <body
         suppressHydrationWarning
         className={cn(
-          "min-h-screen bg-background text-foreground antialiased font-sans selection:bg-primary/20 selection:text-primary",
-          inter.className
+          "min-h-dvh bg-background font-sans text-foreground antialiased",
+          "selection:bg-primary/20 selection:text-foreground",
+          inter.variable
         )}
       >
         <NextAuthProvider>
-          <ThemeProvider 
-            attribute="class" 
-            defaultTheme="dark" 
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
             enableSystem
             disableTransitionOnChange
           >
             <ClientProvider>
               <ClinicSettingsProvider>
-                <div className="relative flex min-h-screen flex-col bg-background">
-                  <div className="flex-1 bg-background">{children}</div>
+                <div className="relative flex min-h-dvh min-w-0 flex-col bg-background">
+                  <main className="min-w-0 flex-1">
+                    {children}
+                  </main>
+
                   <div className="print:hidden">
                     <Toaster />
                   </div>
                 </div>
+
                 <TailwindIndicator />
               </ClinicSettingsProvider>
             </ClientProvider>
           </ThemeProvider>
         </NextAuthProvider>
+
         <Analytics />
       </body>
     </html>
-  );
+  )
 }

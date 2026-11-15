@@ -161,17 +161,31 @@ export function DashboardAgenda() {
                 </SelectContent>
               </Select>
             </div>
-          ) : <span />}
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" className="h-9 font-medium" onClick={() => { setSelectedAppointment(null); setIsRescheduleOpen(true) }}>
-              <RefreshCcw className="h-4 w-4" /> Reprogramar
+          ) : <span />}       
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 gap-2 rounded-xl border-border bg-card px-4 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent"
+              onClick={() => { setSelectedAppointment(null)
+                setIsRescheduleOpen(true)
+              }}
+            >
+              <RefreshCcw className="h-4 w-4" />
+              Reprogramar
             </Button>
-            <Button asChild variant="outline" size="sm" className="h-9 font-medium">
-              <Link href="/agenda-global"><CalendarCheck className="h-4 w-4" /> Agenda global</Link>
+
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="h-10 gap-2 rounded-xl border-border bg-card px-4 text-sm font-medium text-foreground shadow-none transition-colors hover:bg-accent"
+            >
+              <Link href="/agenda-global">
+                <CalendarCheck className="h-4 w-4" />
+                Agenda global
+              </Link>
             </Button>
-            <PrintAgendaModal date={date || new Date()} appointments={citasActivas} citas={citasActivas} doctors={doctorsList} />
-            <NewAppointmentModal />
-          </div>
+
         </div>
       </div>
 
