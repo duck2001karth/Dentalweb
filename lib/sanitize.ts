@@ -1,4 +1,4 @@
-import DOMPurify from "isomorphic-dompurify"
+import sanitizeHtml from "sanitize-html"
 
 export const escapeHTML = (str?: string | number | null): string => {
   if (str === null || str === undefined) return ""
@@ -10,26 +10,37 @@ export const escapeHTML = (str?: string | number | null): string => {
     .replace(/'/g, "&#039;")
 }
 
+
 export const sanitizeRichHTML = (dirtyHtml?: string | null): string => {
   if (!dirtyHtml) return ""
-  
-  return DOMPurify.sanitize(dirtyHtml, {
-    ALLOWED_TAGS: [
+
+  return sanitizeHtml(dirtyHtml, {
+    allowedTags: [
       "b", "i", "u", "strong", "em", "p", "br", "ul", "ol", "li",
-      "h1", "h2", "h3", "h4", "span", "div", "table", "thead", "tbody", "tr", "th", "td"
+      "h1", "h2", "h3", "h4", "span", "div", "table", "thead", "tbody",
+      "tr", "th", "td",
     ],
-    ALLOWED_ATTR: ["class", "style"],
-    
-    FORBID_TAGS: ["script", "iframe", "object", "embed", "form", "input", "style", "link", "meta", "base"],
-    FORBID_ATTR: ["onerror", "onload", "onclick", "onmouseover", "onfocus", "onblur", "ondrop"],
-    
-    KEEP_CONTENT: false, 
-    
-    RETURN_DOM: false,
-    RETURN_DOM_FRAGMENT: false,
-  }) as string
+    allowedAttributes: {
+      "*": ["class", "style"],
+    },
+    allowedStyles: {
+      "*": {
+        "text-align": [/^(left|right|center|justify)$/i],
+        "color": [/^#[0-9a-f]{3,8}$/i, /^rgba?\([\d\s.,%]+\)$/i],
+        "background-color": [/^#[0-9a-f]{3,8}$/i, /^rgba?\([\d\s.,%]+\)$/i],
+        "font-weight": [/^(normal|bold|[1-9]00)$/i],
+        "font-style": [/^(normal|italic)$/i],
+        "text-decoration": [/^(none|underline|line-through)$/i],
+        "font-size": [/^\d+(\.\d+)?(px|rem|em|%)$/i],
+      },
+    },
+    disallowedTagsMode: "discard",
+    nonTextTags: ["style", "script", "textarea", "option", "noscript"],
+    parser: { lowerCaseTags: true },
+  })
 }
 
+/** Política existente para URL de medios; sin cambios de compatibilidad. */
 export const sanitizeMediaUrl = (url?: string | null, fallback = ""): string => {
   if (!url || typeof url !== "string") return fallback
   const trimmed = url.trim()
