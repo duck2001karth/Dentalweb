@@ -110,7 +110,6 @@ const Header = () => {
   return (
     <header className="sticky top-0 z-40 shrink-0 border-b border-border/60 bg-background/90 backdrop-blur-xl print:hidden">
       <div className="flex h-[60px] min-w-0 items-center gap-2 px-3 sm:h-16 sm:px-4 lg:h-[72px] lg:gap-4 lg:px-6">
-        {/* Celular y tableta: menú lateral accesible. */}
         <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
           <SheetTrigger asChild>
             <button
@@ -154,8 +153,6 @@ const Header = () => {
           <QuickActions />
           <DynamicBreadcrumbs />
         </div>
-
-        {/* Buscador ancho únicamente cuando hay espacio suficiente. */}
         <div className="hidden min-w-0 flex-1 justify-center px-2 sm:flex lg:justify-start">
           <div className="w-full max-w-[700px]">
             <AppCommand />

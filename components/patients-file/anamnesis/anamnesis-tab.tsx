@@ -318,8 +318,7 @@ export function FichaAnamnesisTab({ patientId }: { patientId: string }) {
 
   return (
     <div className="animate-in fade-in duration-300 pb-12 space-y-6">
-      
-      {/* Cabecera Superior limpia (sin botón de impresión innecesario) */}
+
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-5 rounded-2xl border border-border/80 shadow-xs sticky top-0 z-20">
         <div>
           <div className="flex items-center gap-3">

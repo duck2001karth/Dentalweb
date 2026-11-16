@@ -49,6 +49,7 @@ export function DocumentosClinicosTab({
 
   const [documents, setDocuments] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isSaving, setIsSaving] = useState(false)
   const [showVoided, setShowVoided] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
@@ -76,22 +77,59 @@ export function DocumentosClinicosTab({
     }
   }, [patientId, currentPatient.firstName])
 
+  // Mantener separados los estados de error y ausencia real de documentos.
+  // El backend devuelve un array cuando la consulta termina correctamente.
   const fetchDocs = useCallback(async () => {
+    setIsLoading(true)
+    setLoadError(null)
+
     try {
-      const res = await fetch(`/api/clinical-documents?patientId=${patientId}`)
-      if (!res.ok) throw new Error()
-      const data = await res.json()
-      setDocuments(Array.isArray(data) ? data : [])
-    } catch {
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los documentos.",
-        variant: "destructive",
-      })
+      if (!patientId?.trim()) {
+        throw new Error("No se recibió el identificador del paciente.")
+      }
+
+      const res = await fetch(
+        `/api/clinical-documents?patientId=${encodeURIComponent(patientId)}`,
+        { cache: "no-store" }
+      )
+      const data: unknown = await res.json().catch(() => null)
+
+      if (!res.ok) {
+        const apiMessage =
+          data && typeof data === "object" && "error" in data &&
+          typeof data.error === "string"
+            ? data.error
+            : null
+
+        // Para errores internos, evitar presentar detalles sensibles del servidor.
+        const message =
+          res.status >= 500
+            ? "Error del servidor al consultar los documentos. Revisa los registros de Next.js y Prisma."
+            : apiMessage ||
+              (res.status === 401
+                ? "Tu sesión expiró. Vuelve a iniciar sesión."
+                : res.status === 403
+                  ? "No tienes permisos para consultar estos documentos."
+                  : `No se pudo consultar el historial (HTTP ${res.status}).`)
+        throw new Error(message)
+      }
+
+      if (!Array.isArray(data)) {
+        throw new Error("La respuesta del servidor tiene un formato inesperado.")
+      }
+
+      setDocuments(data)
+    } catch (error) {
+      console.error("[Documentos Clínicos] Error de carga:", error)
+      setLoadError(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar los documentos."
+      )
     } finally {
       setIsLoading(false)
     }
-  }, [patientId, toast])
+  }, [patientId])
 
   useEffect(() => {
     fetchDocs()
@@ -332,7 +370,26 @@ export function DocumentosClinicosTab({
         </div>
       </div>
 
-      {displayedDocs.length === 0 ? (
+      {loadError ? (
+        <div
+          role="alert"
+          className="flex min-h-[240px] flex-col items-center justify-center rounded-2xl border border-destructive/25 bg-card px-4 py-10 text-center sm:px-8"
+        >
+          <ShieldAlert className="mb-3 h-9 w-9 text-destructive" aria-hidden="true" />
+          <h3 className="text-base font-semibold text-foreground">
+            No se pudieron cargar los documentos
+          </h3>
+          <p className="mt-2 max-w-lg text-sm text-muted-foreground">{loadError}</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-5 h-10 rounded-xl"
+            onClick={() => void fetchDocs()}
+          >
+            Reintentar consulta
+          </Button>
+        </div>
+      ) : displayedDocs.length === 0 ? (
         <div className="bg-card border border-dashed border-border/80 rounded-2xl p-12 text-center text-muted-foreground flex flex-col items-center justify-center min-h-[300px]">
           <FileText className="w-12 h-12 mb-3 opacity-20" />
           <p className="font-bold text-foreground text-base">Sin Documentos</p>
