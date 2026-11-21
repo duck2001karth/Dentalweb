@@ -83,15 +83,13 @@ export const PATCH = createApiHandler(
         newData: { role: updated.role, isActive: updated.isActive, email: updated.email }, ...meta } })
       return { updated } as const
     })
-    if ("error" in result) return forbidden(result.error, result.status)
+    if ("error" in result) return forbidden(result.error ?? "Error al procesar usuario", result.status ?? 400)
     const { password: ignored, ...safe } = result.updated
     void ignored
     return safe
   },
 )
 
-// La baja física borraba AuditLog en cascada por la relación AuditLog.user.
-// Desde ahora DELETE desactiva la cuenta sin borrar sus registros históricos.
 export const DELETE = createApiHandler(
   { roles: ["ADMIN"] },
   async (_req, { user, searchParams }) => {
@@ -112,7 +110,7 @@ export const DELETE = createApiHandler(
         oldData: { isActive: existing.isActive }, newData: { isActive: updated.isActive }, ...meta } })
       return { success: true } as const
     })
-    if ("error" in result) return forbidden(result.error, result.status)
+    if ("error" in result) return forbidden(result.error ?? "Error al procesar usuario", result.status ?? 400)
     return { success: true, message: "Cuenta desactivada; se conservó el historial" }
   },
 )

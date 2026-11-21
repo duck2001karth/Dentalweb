@@ -1,4 +1,5 @@
-
+/* Dentalweb — responsive móvil para Caja, Inventario y Administración.
+   Activación exclusivamente en pantallas de hasta 639px; otras vistas se mantienen. */
 @media (max-width: 639px) {
   .dw-mobile-admin,
   body.dw-mobile-billing,
@@ -9,7 +10,7 @@
     max-width: 100%;
   }
 
-
+  /* Acciones y filtros: tamaño táctil, distribución flexible, sin recortes. */
   body.dw-mobile-billing main .flex.flex-wrap,
   body.dw-mobile-inventory main .flex.flex-wrap {
     max-width: 100%;
@@ -53,6 +54,7 @@
   body.dw-mobile-admin-route header { min-width: 0; }
   body.dw-mobile-admin-route header > div { min-width: 0; }
 
+  /* Tablas densas convertidas a tarjetas legibles, sin duplicar lógica de datos. */
   :is(body.dw-mobile-billing, body.dw-mobile-billing, body.dw-mobile-inventory,
       body.dw-mobile-admin-users, body.dw-mobile-admin-catalog) table {
     display: block;
@@ -130,7 +132,7 @@
       body.dw-mobile-admin-users, body.dw-mobile-admin-catalog) table tbody > tr > td .group-hover\:opacity-100 {
     opacity: 1;
   }
-
+  /* Etiquetas explícitas: Caja > Movimientos (7 columnas). */
   body.dw-mobile-billing table:has(thead th:nth-child(7)) tbody tr > td:nth-child(1)::before { content: "Fecha / hora"; }
   body.dw-mobile-billing table:has(thead th:nth-child(7)) tbody tr > td:nth-child(2)::before { content: "Recibo"; }
   body.dw-mobile-billing table:has(thead th:nth-child(7)) tbody tr > td:nth-child(3)::before { content: "Paciente"; }
@@ -138,14 +140,14 @@
   body.dw-mobile-billing table:has(thead th:nth-child(7)) tbody tr > td:nth-child(5)::before { content: "Monto"; }
   body.dw-mobile-billing table:has(thead th:nth-child(7)) tbody tr > td:nth-child(6)::before { content: "Estado"; }
   body.dw-mobile-billing table:has(thead th:nth-child(7)) tbody tr > td:nth-child(7)::before { content: "Acciones"; }
-
+  /* Caja > Deudas (6 columnas). */
   body.dw-mobile-billing table:has(thead th:nth-child(6)):not(:has(thead th:nth-child(7))) tbody tr > td:nth-child(1)::before { content: "Paciente"; }
   body.dw-mobile-billing table:has(thead th:nth-child(6)):not(:has(thead th:nth-child(7))) tbody tr > td:nth-child(2)::before { content: "Tratamiento"; }
   body.dw-mobile-billing table:has(thead th:nth-child(6)):not(:has(thead th:nth-child(7))) tbody tr > td:nth-child(3)::before { content: "Doctor"; }
   body.dw-mobile-billing table:has(thead th:nth-child(6)):not(:has(thead th:nth-child(7))) tbody tr > td:nth-child(4)::before { content: "Realizado"; }
   body.dw-mobile-billing table:has(thead th:nth-child(6)):not(:has(thead th:nth-child(7))) tbody tr > td:nth-child(5)::before { content: "Saldo"; }
   body.dw-mobile-billing table:has(thead th:nth-child(6)):not(:has(thead th:nth-child(7))) tbody tr > td:nth-child(6)::before { content: "Acciones"; }
-
+  /* Inventario > Productos y movimientos. */
   body.dw-mobile-inventory table:has(tbody tr > td:first-child > p) tbody tr > td:nth-child(1)::before { content: "Producto"; }
   body.dw-mobile-inventory table:has(tbody tr > td:first-child > p) tbody tr > td:nth-child(2)::before { content: "Mínimo"; }
   body.dw-mobile-inventory table:has(tbody tr > td:first-child > p) tbody tr > td:nth-child(3)::before { content: "Stock"; }
@@ -156,20 +158,20 @@
   body.dw-mobile-inventory table:has(tbody tr > td:first-child > div) tbody tr > td:nth-child(3)::before { content: "Producto"; }
   body.dw-mobile-inventory table:has(tbody tr > td:first-child > div) tbody tr > td:nth-child(4)::before { content: "Cantidad"; }
   body.dw-mobile-inventory table:has(tbody tr > td:first-child > div) tbody tr > td:nth-child(5)::before { content: "Motivo"; }
-  
+  /* Administración > Usuarios. */
   body.dw-mobile-admin-users tbody tr > td:nth-child(1)::before { content: "Usuario"; }
   body.dw-mobile-admin-users tbody tr > td:nth-child(2)::before { content: "Rol"; }
   body.dw-mobile-admin-users tbody tr > td:nth-child(3)::before { content: "Especialidad"; }
   body.dw-mobile-admin-users tbody tr > td:nth-child(4)::before { content: "Acceso"; }
   body.dw-mobile-admin-users tbody tr > td:nth-child(5)::before { content: "Configurar"; }
-
+  /* Administración > Catálogo. */
   body.dw-mobile-admin-catalog tbody tr > td:nth-child(1)::before { content: "Código"; }
   body.dw-mobile-admin-catalog tbody tr > td:nth-child(2)::before { content: "Prestación"; }
   body.dw-mobile-admin-catalog tbody tr > td:nth-child(3)::before { content: "Especialidad"; }
   body.dw-mobile-admin-catalog tbody tr > td:nth-child(4)::before { content: "Precio"; }
   body.dw-mobile-admin-catalog tbody tr > td:nth-child(5)::before { content: "Estado"; }
   body.dw-mobile-admin-catalog tbody tr > td:nth-child(6)::before { content: "Acciones"; }
-
+  /* Paginadores en dos líneas para 320–375px. */
   :is(body.dw-mobile-billing, body.dw-mobile-billing, body.dw-mobile-inventory,
       body.dw-mobile-admin-users, body.dw-mobile-admin-catalog) .border-t:has(button) {
     flex-wrap: wrap;
