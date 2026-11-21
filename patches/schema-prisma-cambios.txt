@@ -1,0 +1,12 @@
+PRISMA — CAMBIO MANUAL OBLIGATORIO en prisma/schema.prisma
+
+Busca dentro de `model AuditLog` las líneas:
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+Reemplaza SOLO `Cascade` por `Restrict` en esas dos líneas:
+  user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+NO cambies `onDelete` de las demás relaciones. Conserva todos los campos.
+La migración SQL incluida debe aplicarse antes de desplegar.

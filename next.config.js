@@ -1,12 +1,15 @@
 /** @type {import('next').NextConfig} */
-
-// Definimos la política como un array para mayor legibilidad y luego la unimos.
+// Seguridad compatible: se elimina unsafe-eval EN PRODUCCIÓN.
+// unsafe-inline sigue siendo necesario con el renderizado actual de Next.js;
+// migrarlo a nonce + renderizado dinámico requiere un despliegue independiente.
+const isDev = process.env.NODE_ENV !== 'production'
 const cspHeader = `
   default-src 'self';
-  script-src 'self' 'unsafe-eval' 'unsafe-inline';
+  script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''};
   style-src 'self' 'unsafe-inline';
   img-src 'self' blob: data: https://lh3.googleusercontent.com;
   font-src 'self' data:;
+  connect-src 'self' https: wss:;
   object-src 'none';
   base-uri 'self';
   form-action 'self';
@@ -16,53 +19,35 @@ const cspHeader = `
 
 const nextConfig = {
   reactStrictMode: true,
-  poweredByHeader: false, 
-  
+  poweredByHeader: false,
   async rewrites() {
-    return [
-      {
-        source: "/comprobantes/:id",
-        destination: "/api/invoices/:id/pdf",
-      },
-    ];
+    return [{ source: '/comprobantes/:id', destination: '/api/invoices/:id/pdf' }]
   },
-  
   async headers() {
     return [
       {
-        source: "/(.*)",
+        source: '/(.*)',
         headers: [
-          { key: "Content-Security-Policy", value: cspHeader },
-          
-          { key: "X-DNS-Prefetch-Control", value: "on" },
-          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-          { key: "X-Frame-Options", value: "DENY" },
-          
-          { key: "X-Content-Type-Options", value: "nosniff" },
-          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          
-          { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(), usb=()" },
+          { key: 'Content-Security-Policy', value: cspHeader },
+          { key: 'X-DNS-Prefetch-Control', value: 'on' },
+          { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
         ],
       },
       {
-        source: "/api/(.*)",
+        source: '/api/(.*)',
         headers: [
-          { key: "Cache-Control", value: "no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate" },
-          { key: "Pragma", value: "no-cache" },
-          { key: "Expires", value: "0" },
+          { key: 'Cache-Control', value: 'no-store, no-cache, max-age=0, must-revalidate, proxy-revalidate' },
+          { key: 'Pragma', value: 'no-cache' },
+          { key: 'Expires', value: '0' },
         ],
       },
-    ];
+    ]
   },
-  
-  images: {
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "lh3.googleusercontent.com",
-      },
-    ],
-  },
-};
+  images: { remotePatterns: [{ protocol: 'https', hostname: 'lh3.googleusercontent.com' }] },
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig
