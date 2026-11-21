@@ -15,7 +15,7 @@ const schema = z.object({
   reason: z.string().trim().max(1000).optional(),
   status: z.nativeEnum(AppointmentStatus).optional(),
   box: z.string().trim().min(1).max(100).optional(),
-  sendWhatsapp: z.boolean().optional(), // Se acepta por compatibilidad; no envía mensajes.
+  sendWhatsapp: z.boolean().optional(), 
 }).strict()
 
 const responseError = (message: string, status: number) => NextResponse.json({ error: message }, { status })
@@ -37,8 +37,6 @@ export const PATCH = createApiHandler(
     const ipAddress = (h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "Desconocido").slice(0, 128)
     const userAgent = (h.get("user-agent") || "Desconocido").slice(0, 512)
 
-    // Bloqueamos las fechas implicadas en orden fijo para evitar deadlocks entre
-    // dos reprogramaciones cruzadas; la lectura ocurre DESPUÉS del bloqueo.
     const result = await prisma.$transaction(async (tx) => {
       const original = await tx.appointment.findUnique({ where: { id } })
       if (!original) return { error: "Cita no encontrada", code: 404 } as const
@@ -56,7 +54,7 @@ export const PATCH = createApiHandler(
       for (const lockDay of [...new Set([oldDay, day])].sort()) {
         await lockAppointmentDay(tx, lockDay)
       }
-      // Releer bajo el bloqueo por si otro proceso cambió la cita entretanto.
+
       const previous = await tx.appointment.findUnique({ where: { id } })
       if (!previous) return { error: "Cita no encontrada", code: 404 } as const
       if (previous.date.toISOString().slice(0, 10) !== oldDay) {
@@ -87,7 +85,6 @@ export const PATCH = createApiHandler(
           box, status: "SCHEDULED", isRescheduled: true,
           previousDate: previous.date,
           rescheduleReason: data.reason ?? previous.rescheduleReason,
-          // El motivo original de consulta se mantiene en `reason`.
         },
         include: {
           doctor: { select: { id: true, name: true } },
@@ -106,12 +103,11 @@ export const PATCH = createApiHandler(
       })
       return { cita: updated } as const
     })
-    if ("error" in result) return responseError(result.error, result.code)
+    if ("error" in result) return responseError(result.error ?? "No se pudo procesar la cita", result.code ?? 500)
     return { success: true, message: "Cita reprogramada y auditada correctamente", cita: result.cita }
   },
 )
 
-// DELETE se mantiene compatible con el comportamiento original del proyecto.
 export const DELETE = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
   async (_req, { user, params }) => {
@@ -147,7 +143,7 @@ export const DELETE = createApiHandler(
       })
       return { success: true } as const
     })
-    if ("error" in result) return responseError(result.error, result.code)
+    if ("error" in result) return responseError(result.error ?? "No se pudo procesar la cita", result.code ?? 500)
     return { success: true, message: "Cita cancelada y auditada correctamente" }
   },
 )
