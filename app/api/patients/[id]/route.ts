@@ -1,152 +1,72 @@
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
+import { NextResponse } from "next/server"
 import { headers } from "next/headers"
 import { patientAdministrativeSelect } from "@/app/api/patients/patient-select"
+import { patientFields, readPatientInput, dateOrNull } from "@/lib/server/patient-validation"
 
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
   async (_req, { params, user }) => {
-    const id = params.id as string
-    if (user.role === "RECEPTIONIST") {
-      const patient = await prisma.patient.findFirst({
-        where: { id, isDeleted: false },
-        select: patientAdministrativeSelect,
-      })
-      if (!patient) throw new Error("NOT_FOUND")
-      return { patient }
-    }
-    const patient = await prisma.patient.findFirst({ where: { id, isDeleted: false } })
+    const patient = await prisma.patient.findFirst({
+      where: { id: params.id as string, isDeleted: false },
+      ...(user.role === "RECEPTIONIST" ? { select: patientAdministrativeSelect } : {}),
+    })
     if (!patient) throw new Error("NOT_FOUND")
     return { patient }
-  }
+  },
 )
 
 export const PATCH = createApiHandler(
-  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"], schema: z.any() },
-  async (req, { params, user, data }) => {
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"], schema: z.unknown() },
+  async (_req, { params, user, data }) => {
     const id = params.id as string
-    const input = data.input || data
-
-    if (!input || Object.keys(input).length === 0) {
-      throw new Error("No se proporcionaron datos para actualizar")
+    const result = patientFields.partial().safeParse(readPatientInput(data))
+    if (!result.success) return NextResponse.json({ error: "Datos inválidos", fields: result.error.flatten().fieldErrors }, { status: 422 })
+    const { rut, birthDate, ...fields } = result.data
+    if (rut !== undefined) return NextResponse.json({ error: "Utilice ci para modificar identificación" }, { status: 422 })
+    if (user.role === "RECEPTIONIST" && (fields.medicalAlerts !== undefined || fields.observaciones !== undefined)) {
+      return NextResponse.json({ error: "Recepción no puede modificar datos clínicos" }, { status: 403 })
     }
-
-    const safeData: any = {
-      ...(input.firstName !== undefined && { firstName: input.firstName }),
-      ...(input.lastName !== undefined && { lastName: input.lastName }),
-      ...(input.ci !== undefined && { ci: input.ci }),
-      ...(input.email !== undefined && { email: input.email }),
-      ...(input.phone !== undefined && { phone: input.phone }),
-      ...(input.address !== undefined && { address: input.address }),
-      ...(input.birthDate !== undefined && { birthDate: input.birthDate ? new Date(input.birthDate) : null }),
-      ...(input.convenio !== undefined && { convenio: input.convenio }),
-      ...(input.medicalAlerts !== undefined && { medicalAlerts: input.medicalAlerts }),
-      ...(input.sexo !== undefined && { sexo: input.sexo }),
-      ...(input.profesion !== undefined && { profesion: input.profesion }),
-      ...(input.eps !== undefined && { eps: input.eps }),
-      ...(input.tipoRegistro !== undefined && { tipoRegistro: input.tipoRegistro }),
-      ...(input.cedulaAcudiente !== undefined && { cedulaAcudiente: input.cedulaAcudiente }),
-      ...(input.tipoIdentificacion !== undefined && { tipoIdentificacion: input.tipoIdentificacion }),
-      ...(input.nombreSocial !== undefined && { nombreSocial: input.nombreSocial }),
-      ...(input.grupoSanguineo !== undefined && { grupoSanguineo: input.grupoSanguineo }),
-      ...(input.pertenenciaEtnica !== undefined && { pertenenciaEtnica: input.pertenenciaEtnica }),
-      ...(input.estadoCivil !== undefined && { estadoCivil: input.estadoCivil }),
-      ...(input.nivelEducativo !== undefined && { nivelEducativo: input.nivelEducativo }),
-      ...(input.tipoPaciente !== undefined && { tipoPaciente: input.tipoPaciente }),
-      ...(input.ciudad !== undefined && { ciudad: input.ciudad }),
-      ...(input.departamento !== undefined && { departamento: input.departamento }),
-      ...(input.zonaResidencia !== undefined && { zonaResidencia: input.zonaResidencia }),
-      ...(input.telefonoFijo !== undefined && { telefonoFijo: input.telefonoFijo }),
-      ...(input.nombreAcompanante !== undefined && { nombreAcompanante: input.nombreAcompanante }),
-      ...(input.telefonoAcompanante !== undefined && { telefonoAcompanante: input.telefonoAcompanante }),
-      ...(input.nombreResponsable !== undefined && { nombreResponsable: input.nombreResponsable }),
-      ...(input.gestante !== undefined && { gestante: Boolean(input.gestante) }),
-      ...(input.observaciones !== undefined && { observaciones: input.observaciones }),
-    }
-
-    if (user.role === "RECEPTIONIST") {
-      delete safeData.medicalAlerts
-      delete safeData.observaciones
-    }
-    if (Object.keys(safeData).length === 0) {
-      throw new Error("No hay campos permitidos para actualizar")
-    }
-
-    const headersList = await headers()
-    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
-
-    const updatedPatient = await prisma.$transaction(async (tx) => {
-      const previousPatient = await tx.patient.findFirst({ where: { id, isDeleted: false } })
-      if (!previousPatient) throw new Error("NOT_FOUND")
-
-      const res = await tx.patient.update({
-        where: { id },
-        data: safeData,
-      })
-      const changedFields = Object.keys(safeData).filter((field) =>
-        JSON.stringify((previousPatient as any)[field]) !== JSON.stringify((res as any)[field])
-      )
-      await tx.auditLog.create({
-        data: {
-          userId: user.id,
-          action: "UPDATE_PATIENT",
-          entity: "PATIENT",
-          entityId: id,
-          patientId: id,
-          details: `Modificación de datos demográficos del paciente: ${res.firstName} ${res.lastName}`,
-          oldData: { changedFields },
-          newData: { changedFields },
-          ipAddress,
-          userAgent,
-        },
-      })
-      return res
+    const changes = { ...fields, ...(birthDate !== undefined ? { birthDate: dateOrNull(birthDate) } : {}) }
+    if (!Object.keys(changes).length) return NextResponse.json({ error: "No hay cambios" }, { status: 422 })
+    const h = await headers()
+    const resultTx = await prisma.$transaction(async tx => {
+      const previous = await tx.patient.findFirst({ where: { id, isDeleted: false } })
+      if (!previous) return null
+      const updated = await tx.patient.update({ where: { id }, data: changes })
+      const changedFields = Object.keys(changes).filter(k => JSON.stringify((previous as any)[k]) !== JSON.stringify((updated as any)[k]))
+      await tx.auditLog.create({ data: {
+        userId: user.id, action: "UPDATE_PATIENT", entity: "PATIENT", entityId: id, patientId: id,
+        details: `Cambios en paciente: ${changedFields.join(", ")}`,
+        oldData: { changedFields }, newData: { changedFields },
+        ipAddress: (h.get("x-forwarded-for")?.split(",")[0]?.trim() || h.get("x-real-ip") || "Desconocido").slice(0,128),
+        userAgent: (h.get("user-agent") || "Desconocido").slice(0,512),
+      } })
+      return updated
     })
-
+    if (!resultTx) throw new Error("NOT_FOUND")
     if (user.role === "RECEPTIONIST") {
-      const { medicalAlerts, observaciones, ...administrativePatient } = updatedPatient
-      return { patient: administrativePatient }
+      // La selección de datos de recepción debe ser igual que en GET, sin filtrado manual incompleto.
+      const safe = await prisma.patient.findUnique({ where: { id }, select: patientAdministrativeSelect })
+      return { patient: safe }
     }
-    return { patient: updatedPatient }
-  }
+    return { patient: resultTx }
+  },
 )
 
 export const DELETE = createApiHandler(
   { roles: ["ADMIN"] },
-  async (req, { params, user }) => {
+  async (_req, { params, user }) => {
     const id = params.id as string
-
-    const headersList = await headers()
-    const ipAddress = headersList.get("x-forwarded-for")?.split(",")[0].trim() || headersList.get("x-real-ip") || "127.0.0.1"
-    const userAgent = headersList.get("user-agent") || "Desconocido"
-
-    await prisma.$transaction(async (tx) => {
-      const previous = await tx.patient.findFirst({ where: { id, isDeleted: false } })
-      if (!previous) throw new Error("NOT_FOUND")
-
-      const deletedPatient = await tx.patient.update({
-        where: { id },
-        data: { isDeleted: true },
-      })
-
-      await tx.auditLog.create({
-        data: {
-          userId: user.id,
-          action: "DELETE_PATIENT",
-          entity: "PATIENT",
-          entityId: id,
-          patientId: id,
-          details: `Eliminación lógica de paciente: ${deletedPatient.firstName} ${deletedPatient.lastName}`,
-          oldData: { isDeleted: previous.isDeleted },
-          newData: { isDeleted: true },
-          ipAddress,
-          userAgent,
-        },
-      })
+    await prisma.$transaction(async tx => {
+      const patient = await tx.patient.findFirst({ where: { id, isDeleted: false } })
+      if (!patient) throw new Error("NOT_FOUND")
+      await tx.patient.update({ where: { id }, data: { isDeleted: true } })
+      await tx.auditLog.create({ data: { userId: user.id, action: "DELETE_PATIENT", entity: "PATIENT", entityId: id,
+        patientId: id, details: "Paciente desactivado (eliminación lógica)", oldData: { isDeleted: false }, newData: { isDeleted: true } } })
     })
-
     return { success: true }
-  }
+  },
 )

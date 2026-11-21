@@ -1,5 +1,5 @@
-
 import "@/styles/globals.css"
+import "@/styles/dentalweb-mobile-fix.css"
 
 import type { Metadata, Viewport } from "next"
 import { Analytics } from "@vercel/analytics/react"
@@ -14,6 +14,7 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/toaster"
 import { NextAuthProvider } from "@/components/providers/session-provider"
 import { ClinicSettingsProvider } from "@/config/clinic-settings"
+import { MobileRouteScope } from "@/components/responsive/mobile-route-scope"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -51,9 +52,7 @@ interface RootLayoutProps {
   children: React.ReactNode
 }
 
-export default function RootLayout({
-  children,
-}: RootLayoutProps) {
+export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="es" suppressHydrationWarning>
       <body
@@ -73,22 +72,18 @@ export default function RootLayout({
           >
             <ClientProvider>
               <ClinicSettingsProvider>
+                <MobileRouteScope />
                 <div className="relative flex min-h-dvh min-w-0 flex-col bg-background">
                   <main className="min-w-0 flex-1">
                     {children}
                   </main>
-
-                  <div className="print:hidden">
-                    <Toaster />
-                  </div>
+                  <div className="print:hidden"><Toaster /></div>
                 </div>
-
                 <TailwindIndicator />
               </ClinicSettingsProvider>
             </ClientProvider>
           </ThemeProvider>
         </NextAuthProvider>
-
         <Analytics />
       </body>
     </html>
