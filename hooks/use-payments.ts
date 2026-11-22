@@ -13,8 +13,7 @@ async function readResponse(res: Response) {
 export function usePayments() {
   const { toast } = useToast()
   const queryClient = useQueryClient()
-  const [localLastClose, setLocalLastClose] = useState<any>(null)
-
+  const [localLastClose, setLocalLastClose] = useState<unknown>(null)
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["payments"],
     queryFn: async () => readResponse(await fetch("/api/payments")),
@@ -28,8 +27,7 @@ export function usePayments() {
   const createMutation = useMutation({
     mutationFn: async ({ payload }: { payload: PaymentFormData }) =>
       readResponse(await fetch("/api/payments", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
       })),
     onSuccess: invalidate,
     onError: (error: Error) => toast({ title: "Error de registro", description: error.message, variant: "destructive" }),
@@ -58,6 +56,7 @@ export function usePayments() {
     isSaving: createMutation.isPending || updateMutation.isPending || deleteMutation.isPending,
     fetchPayments: refetch,
     createPayment: async (payload: PaymentFormData, _processedById?: string) => {
+      void _processedById
       try { await createMutation.mutateAsync({ payload }); return true } catch { return false }
     },
     updatePayment: async (id: string, payload: Partial<PaymentFormData>) => {

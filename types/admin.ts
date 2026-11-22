@@ -73,6 +73,6 @@ export interface SystemLog {
   id: string;
   level: LogLevel;
   message: string;
-  metadata?: any;
+  metadata?: unknown;
   createdAt: string | Date;
 }

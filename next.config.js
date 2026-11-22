@@ -29,6 +29,12 @@ const nextConfig = {
         source: '/(.*)',
         headers: [
           { key: 'Content-Security-Policy', value: cspHeader },
+          // Activación voluntaria para detectar recursos/scripts que bloquearía una CSP sin inline.
+          // Report-Only NO bloquea recursos y NO elimina unsafe-inline de la política efectiva.
+          ...(process.env.CSP_REPORT_ONLY === '1' ? [{
+            key: 'Content-Security-Policy-Report-Only',
+            value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://lh3.googleusercontent.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+          }] : []),
           { key: 'X-DNS-Prefetch-Control', value: 'on' },
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
           { key: 'X-Frame-Options', value: 'DENY' },

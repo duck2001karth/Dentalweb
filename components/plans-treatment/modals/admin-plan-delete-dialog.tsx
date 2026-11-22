@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useState } from "react"
 import { AlertTriangle, Loader2 } from "lucide-react"
 import {
   AlertDialog,
@@ -16,30 +16,33 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 
+interface PlanForDeletion {
+  id?: string
+  name?: string | null
+  totalPaid?: number | string | null
+  status?: string | null
+  items?: Array<{ paidAmount?: number | string | null; isPaid?: boolean | null }> | null
+  payments?: ReadonlyArray<unknown> | null
+}
+
 interface AdminPlanDeleteDialogProps {
   open: boolean
-  plan: any | null
+  plan: PlanForDeletion | null
   permanent: boolean
   loading: boolean
   onClose: () => void
   onConfirm: (reason: string) => Promise<boolean>
 }
 
-export function AdminPlanDeleteDialog({
-  open, plan, permanent, loading, onClose, onConfirm,
-}: AdminPlanDeleteDialogProps) {
+type DeleteDialogFormProps = AdminPlanDeleteDialogProps
+
+function DeleteDialogForm({ plan, permanent, loading, onClose, onConfirm, open }: DeleteDialogFormProps) {
   const [reason, setReason] = useState("")
   const [acknowledged, setAcknowledged] = useState(false)
   const [error, setError] = useState("")
 
-  useEffect(() => {
-    setReason("")
-    setAcknowledged(false)
-    setError("")
-  }, [open, plan?.id, permanent])
-
   const paid = Number(plan?.totalPaid ?? 0)
-  const hasItemPayments = Array.isArray(plan?.items) && plan.items.some((item: any) =>
+  const hasItemPayments = Array.isArray(plan?.items) && plan.items.some((item) =>
     Number(item.paidAmount ?? 0) > 0 || item.isPaid === true
   )
   const hasFinancialHistory = paid !== 0 || hasItemPayments ||
@@ -75,7 +78,6 @@ export function AdminPlanDeleteDialog({
               : "El plan quedará anulado y se conservarán su documentación, firmas y registros. No es una eliminación definitiva."}
           </AlertDialogDescription>
         </AlertDialogHeader>
-
         <div className="space-y-4 py-2">
           <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm">
             <p className="font-semibold">{String(plan?.name || "Plan de tratamiento")}</p>
@@ -133,4 +135,9 @@ export function AdminPlanDeleteDialog({
       </AlertDialogContent>
     </AlertDialog>
   )
+}
+
+export function AdminPlanDeleteDialog(props: AdminPlanDeleteDialogProps) {
+  const key = `${props.plan?.id ?? "sin-plan"}:${props.permanent ? "definitiva" : "papelera"}:${props.open ? "abierto" : "cerrado"}`
+  return <DeleteDialogForm key={key} {...props} />
 }

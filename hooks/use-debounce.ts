@@ -1,23 +1,28 @@
-// @ts-nocheck
+import { useCallback, useEffect, useRef } from "react"
 
-import { useCallback, useRef } from "react"
+/** Debounce de callbacks, con limpieza al desmontar el componente. */
+export default function useDebounce<Args extends unknown[]>(
+  callback: (...args: Args) => void,
+  delay: number,
+): (...args: Args) => void {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const callbackRef = useRef(callback)
 
-function useDebounce(callback, delay) {
-  const timeoutRef = useRef(null)
+  useEffect(() => {
+    callbackRef.current = callback
+  }, [callback])
 
-  const debouncedCallback = useCallback(
-    (...args) => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current)
-      }
-      timeoutRef.current = setTimeout(() => {
-        callback(...args)
-      }, delay)
-    },
-    [callback, delay]
-  )
+  useEffect(() => {
+    return () => {
+      if (timer.current !== null) clearTimeout(timer.current)
+    }
+  }, [])
 
-  return debouncedCallback
+  return useCallback((...args: Args) => {
+    if (timer.current !== null) clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      timer.current = null
+      callbackRef.current(...args)
+    }, delay)
+  }, [delay])
 }
-
-export default useDebounce

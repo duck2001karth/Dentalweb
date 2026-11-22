@@ -5,8 +5,6 @@ import { headers } from "next/headers"
 
 const SETTINGS_ID = "default-clinic-settings"
 
-// Un PATCH parcial debe modificar solo los campos suministrados.
-// Se mantienen imágenes PNG/JPEG/WebP como data URL para los logotipos actuales.
 const optionalText = (max: number) => z.string().trim().max(max).nullable().optional()
 const imageField = z.string().max(1_500_000).refine(
   (value) => value === "" || /^https:\/\/[^\s]+$/i.test(value) ||

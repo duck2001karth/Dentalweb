@@ -5,13 +5,14 @@ import { useTheme } from "next-themes"
 import { Sun, Moon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
+
+const subscribe = () => () => {}
+const getClientSnapshot = () => true
+const getServerSnapshot = () => false
+
 export function ThemeToggle() {
   const { setTheme, theme, resolvedTheme } = useTheme()
-  const [mounted, setMounted] = React.useState(false)
-
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
+  const mounted = React.useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot)
 
   if (!mounted) return <div className="h-10 w-10" />
 

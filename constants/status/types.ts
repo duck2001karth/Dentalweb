@@ -1,10 +1,10 @@
-import { type LucideIcon } from "lucide-react";
+import type { ElementType } from "react"
 
 export type StatusConfig = {
-  value: string;
-  label: string;
-  description?: string;
-  color: string; 
-  bg: string;
-  icon: LucideIcon | React.ComponentType<any>;
-};
+  value: string
+  label: string
+  description?: string
+  color: string
+  bg: string
+  icon: ElementType
+}

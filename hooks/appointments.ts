@@ -1,69 +1,40 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { format } from "date-fns"
-import { 
-  AppointmentWithDetails, 
-  AppointmentInput, 
-  UpdateAppointmentInput,
-  RescheduleAppointmentInput 
-} from "@/types/appointments"
+import type { AppointmentWithDetails, AppointmentInput, UpdateAppointmentInput, RescheduleAppointmentInput } from "@/types/appointments"
 
 interface UseGetAppointmentsParams {
-  fecha?: Date | string;
-  statuses?: string[];
-  search?: string;
-  skip?: boolean;
-  doctorId?: string; 
-  patientId?: string; 
+  fecha?: Date | string
+  statuses?: string[]
+  search?: string
+  skip?: boolean
+  doctorId?: string
+  patientId?: string
 }
 
 export function useGetAppointments(params?: UseGetAppointmentsParams) {
-  const fechaStr = params?.fecha 
-    ? (typeof params.fecha === 'string' ? params.fecha : format(params.fecha, "yyyy-MM-dd"))
+  const fechaStr = params?.fecha
+    ? (typeof params.fecha === "string" ? params.fecha : format(params.fecha, "yyyy-MM-dd"))
     : undefined
-
   const buildUrl = () => {
-    const url = new URL("/api/citas", global?.window?.location.origin || "http://localhost:3000")
-
-    if (fechaStr) {
-      url.searchParams.append("fecha", fechaStr)
-    }
-    if (params?.search) {
-      url.searchParams.append("search", params.search)
-    }
-    if (params?.statuses && params.statuses.length > 0) {
-      url.searchParams.append("statuses", params.statuses.join(","))
-    }
-    if (params?.doctorId && params.doctorId !== "all") {
-      url.searchParams.append("doctorId", params.doctorId)
-    }
-    if (params?.patientId) {
-      url.searchParams.append("patientId", params.patientId)
-    }
-
+    const url = new URL("/api/citas", typeof window !== "undefined" ? window.location.origin : "http://localhost:3000")
+    if (fechaStr) url.searchParams.append("fecha", fechaStr)
+    if (params?.search) url.searchParams.append("search", params.search)
+    if (params?.statuses?.length) url.searchParams.append("statuses", params.statuses.join(","))
+    if (params?.doctorId && params.doctorId !== "all") url.searchParams.append("doctorId", params.doctorId)
+    if (params?.patientId) url.searchParams.append("patientId", params.patientId)
     return url.toString()
   }
-
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ["appointments", { ...params, fecha: fechaStr, doctorId: params?.doctorId, patientId: params?.patientId }],
     queryFn: async () => {
-      const urlString = buildUrl()
-      const response = await fetch(urlString)
-      
-      if (!response.ok) {
-        throw new Error("Error al obtener las citas de la base de datos")
-      }
+      const response = await fetch(buildUrl())
+      if (!response.ok) throw new Error("Error al obtener las citas de la base de datos")
       const json = await response.json()
       return json.citas as AppointmentWithDetails[]
     },
     enabled: !params?.skip,
   })
-
-  return {
-    appointments: data || [],
-    isLoading,
-    error,
-    refetch
-  }
+  return { appointments: data || [], isLoading, error, refetch }
 }
 
 export function useGetAppointment(id: string) {
@@ -77,109 +48,66 @@ export function useGetAppointment(id: string) {
     },
     enabled: !!id,
   })
-
-  return {
-    isLoading,
-    appointment: data,
-    error
-  }
+  return { isLoading, appointment: data, error }
 }
 
 export function useCreateAppointment() {
   const queryClient = useQueryClient()
-
-  const {
-    mutate: createAppointment,
-    isPending: isLoading,
-    isSuccess,
-  } = useMutation({
+  const { mutate: createAppointment, isPending: isLoading, isSuccess } = useMutation({
     mutationFn: async (input: AppointmentInput) => {
-      const response = await fetch('/api/citas', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input }),
+      const response = await fetch("/api/citas", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input }),
       })
-      
       if (!response.ok) {
         const err = await response.json()
-        throw new Error(err.error || 'Error al crear la cita')
+        throw new Error(err.error || "Error al crear la cita")
       }
       return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] })
-      queryClient.invalidateQueries({ queryKey: ["citas"] }) 
+      queryClient.invalidateQueries({ queryKey: ["citas"] })
     },
   })
-
-  return {
-    createAppointment,
-    isLoading,
-    isSuccess
-  }
+  return { createAppointment, isLoading, isSuccess }
 }
 
 export function useUpdateAppointment() {
   const queryClient = useQueryClient()
-
-  const {
-    mutate: updateAppointment,
-    isPending: isLoading,
-    isSuccess,
-  } = useMutation({
+  const { mutate: updateAppointment, isPending: isLoading, isSuccess } = useMutation({
     mutationFn: async ({ id, input }: { id: string; input: UpdateAppointmentInput }) => {
       const response = await fetch(`/api/citas/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input }),
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input }),
       })
-      
       if (!response.ok) throw new Error("Error al actualizar la cita")
       return response.json()
     },
     onMutate: async (updated) => {
       await queryClient.cancelQueries({ queryKey: ["appointment", updated.id] })
-      const previousAppointment = queryClient.getQueryData(["appointment", updated.id])
-      
-      queryClient.setQueryData(["appointment", updated.id], (old: any) => {
-        if (!old) return old
-        return {
-          ...old,
-          ...updated.input,
-        }
-      })
-
+      const previousAppointment = queryClient.getQueryData<AppointmentWithDetails>(["appointment", updated.id])
+      queryClient.setQueryData<AppointmentWithDetails>(["appointment", updated.id], (old) =>
+        old ? { ...old, ...updated.input } : old)
       return { previousAppointment, updated }
     },
-    onError: (err, variables, context: any) => {
-      queryClient.setQueryData(["appointment", context?.updated.id], context?.previousAppointment)
+    onError: (_err, _variables, context) => {
+      if (context?.updated) {
+        queryClient.setQueryData(["appointment", context.updated.id], context.previousAppointment)
+      }
     },
-    onSettled: (data, error, variables) => {
+    onSettled: (_data, _error, variables) => {
       queryClient.invalidateQueries({ queryKey: ["appointment", variables.id] })
       queryClient.invalidateQueries({ queryKey: ["appointments"] })
       queryClient.invalidateQueries({ queryKey: ["citas"] })
     },
   })
-
-  return {
-    updateAppointment,
-    isLoading,
-    isSuccess
-  }
+  return { updateAppointment, isLoading, isSuccess }
 }
 
 export function useDeleteAppointment() {
   const queryClient = useQueryClient()
-
-  const {
-    mutate: deleteAppointment,
-    isPending: isLoading,
-    isSuccess,
-  } = useMutation({
+  const { mutate: deleteAppointment, isPending: isLoading, isSuccess } = useMutation({
     mutationFn: async (id: string) => {
-      const response = await fetch(`/api/citas/${id}`, {
-        method: 'DELETE',
-      })
+      const response = await fetch(`/api/citas/${id}`, { method: "DELETE" })
       if (!response.ok) throw new Error("Error al eliminar la cita")
       return response.json()
     },
@@ -188,42 +116,21 @@ export function useDeleteAppointment() {
       queryClient.invalidateQueries({ queryKey: ["citas"] })
     },
   })
-
-  return {
-    deleteAppointment,
-    isLoading,
-    isSuccess
-  }
+  return { deleteAppointment, isLoading, isSuccess }
 }
 
 export function useRescheduleAppointment() {
   const queryClient = useQueryClient()
-
-  const {
-    mutate: rescheduleAppointment,
-    isPending: isLoading,
-    isSuccess,
-  } = useMutation({
-    mutationFn: async ({
-      appointmentId,
-      newDate,
-      newTime,
-      endTime,
-      box,
-      reason,
-      sendWhatsapp,
-    }: RescheduleAppointmentInput) => {
+  const { mutate: rescheduleAppointment, isPending: isLoading, isSuccess } = useMutation({
+    mutationFn: async ({ appointmentId, newDate, newTime, endTime, box, reason, sendWhatsapp }: RescheduleAppointmentInput) => {
       const response = await fetch(`/api/citas/${appointmentId}/reschedule`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newDate, newTime, endTime, box, reason, sendWhatsapp }),
       })
-
       if (!response.ok) {
         const err = await response.json()
         throw new Error(err.error || "Error al reprogramar la cita")
       }
-
       return response.json()
     },
     onSuccess: (_, variables) => {
@@ -232,10 +139,5 @@ export function useRescheduleAppointment() {
       queryClient.invalidateQueries({ queryKey: ["citas"] })
     },
   })
-
-  return {
-    rescheduleAppointment,
-    isLoading,
-    isSuccess,
-  }
+  return { rescheduleAppointment, isLoading, isSuccess }
 }

@@ -1,10 +1,5 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
-// --- TIPOS ---
 export interface ClinicalNote {
   id: string
   type: "EVOLUTION" | "PRESCRIPTION" | "GENERAL"
@@ -20,108 +15,57 @@ export interface ClinicalNote {
 export type ClinicalNoteInput = Omit<ClinicalNote, "id" | "isSigned" | "createdAt" | "updatedAt">
 export type UpdateClinicalNoteInput = Partial<ClinicalNoteInput> & { isSigned?: boolean }
 
-// --- HOOKS ---
+type NotesResponse = { clinicalNotes: ClinicalNote[] }
+type NoteQueryParams = { patientId?: string; authorId?: string; type?: string; skip?: boolean }
 
-export function useGetClinicalNotes(params?: {
-  patientId?: string
-  authorId?: string
-  type?: string
-  skip?: boolean
-}): {
-  isLoading: boolean
-  clinicalNotes: ClinicalNote[]
-  refetch: Function
-} {
+export function useGetClinicalNotes(params?: NoteQueryParams) {
   const buildUrl = () => {
-    const url = new URL(`${global?.window?.location.origin}/api/clinical-notes`)
-
-    if (!params) return url.href
-
-    if (params?.patientId) {
-      url.searchParams.append("patientId", params.patientId)
-    }
-
-    if (params?.authorId) {
-      url.searchParams.append("authorId", params.authorId)
-    }
-
-    if (params?.type) {
-      url.searchParams.append("type", params.type)
-    }
-
+    const url = new URL("/api/clinical-notes", typeof window !== "undefined" ? window.location.origin : "http://localhost:3000")
+    if (params?.patientId) url.searchParams.append("patientId", params.patientId)
+    if (params?.authorId) url.searchParams.append("authorId", params.authorId)
+    if (params?.type) url.searchParams.append("type", params.type)
     return url.href
   }
 
-  const { isLoading, data, refetch } = useQuery({
+  const { isLoading, data, refetch } = useQuery<NotesResponse>({
     queryKey: ["clinical-notes", params],
     queryFn: async () => {
-      const url = buildUrl()
-      const request = await fetch(url)
-      return request.json()
+      const request = await fetch(buildUrl())
+      return request.json() as Promise<NotesResponse>
     },
     enabled: !params?.skip,
   })
 
-  return {
-    isLoading,
-    clinicalNotes: data?.clinicalNotes,
-    refetch,
-  }
+  return { isLoading, clinicalNotes: data?.clinicalNotes, refetch }
 }
 
 export function useCreateClinicalNote() {
   const queryClient = useQueryClient()
-  
-  const {
-    mutate: createClinicalNote,
-    isPending: isLoading,
-    data,
-    isSuccess,
-    reset,
-  } = useMutation({
+  const { mutate: createClinicalNote, isPending: isLoading, data, isSuccess, reset } = useMutation({
     mutationFn: async (input: ClinicalNoteInput) => {
-      const request = await fetch(`/api/clinical-notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input }),
+      const request = await fetch("/api/clinical-notes", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input }),
       })
       return request.json()
     },
     onMutate: async (newNote) => {
       if (!newNote) return
-
       await queryClient.cancelQueries({ queryKey: ["clinical-notes"] })
-      const previousNotes = queryClient.getQueryData(["clinical-notes"])
-      const newNoteWithId: any = { 
-        ...newNote,
-        id: Math.random().toString(36),
-        isSigned: false,
-        createdAt: new Date().toISOString(),
+      const previousNotes = queryClient.getQueryData<NotesResponse>(["clinical-notes"])
+      const newNoteWithId: ClinicalNote = {
+        ...newNote, id: Math.random().toString(36), isSigned: false,
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       }
-
-      queryClient.setQueryData(
-        ["clinical-notes"],
-        (old: { clinicalNotes: ClinicalNote[] } | undefined) => ({
-          clinicalNotes: old?.clinicalNotes ? [newNoteWithId, ...old.clinicalNotes] : [newNoteWithId],
-        })
-      )
-
+      queryClient.setQueryData<NotesResponse>(["clinical-notes"], (old) => ({
+        clinicalNotes: old?.clinicalNotes ? [newNoteWithId, ...old.clinicalNotes] : [newNoteWithId],
+      }))
       return { previousNotes }
     },
-    onError: (err, newNote, context: any) => {
+    onError: (err, _newNote, context) => {
       console.log(err)
       queryClient.setQueryData(["clinical-notes"], context?.previousNotes)
     },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["clinical-notes"] })
-    },
+    onSettled: () => { queryClient.invalidateQueries({ queryKey: ["clinical-notes"] }) },
   })
-
-  return {
-    createClinicalNote,
-    isSuccess,
-    data,
-    isLoading,
-    reset,
-  }
+  return { createClinicalNote, isSuccess, data, isLoading, reset }
 }

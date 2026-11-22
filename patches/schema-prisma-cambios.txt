@@ -1,12 +1,31 @@
-PRISMA — CAMBIO MANUAL OBLIGATORIO en prisma/schema.prisma
+ARCHIVO: prisma/schema.prisma
+MODELO: AuditLog
 
-Busca dentro de `model AuditLog` las líneas:
+Cambiar exactamente estas dos relaciones:
+
+ANTES:
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
-Reemplaza SOLO `Cascade` por `Restrict` en esas dos líneas:
+DESPUÉS:
   user        User     @relation(fields: [userId], references: [id], onDelete: Restrict)
   patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Restrict)
 
-NO cambies `onDelete` de las demás relaciones. Conserva todos los campos.
-La migración SQL incluida debe aplicarse antes de desplegar.
+NO borrar ni reemplazar el resto del archivo.
+Revisar la base real tras ejecutar migraciones: el SQL controla las claves físicas,
+y schema.prisma la representación de Prisma. Deben estar sincronizados.
+
+AGREGAR AL FINAL DE prisma/schema.prisma (si aún no existe):
+
+model LoginRateLimit {
+  keyHash      String    @id @db.VarChar(64)
+  attempts     Int       @default(0)
+  windowStart  DateTime  @default(now()) @db.Timestamptz(6)
+  blockedUntil DateTime? @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @db.Timestamptz(6)
+
+  @@index([updatedAt], map: "LoginRateLimit_updatedAt_idx")
+}
+
+Es obligatorio mantener el modelo equivalente a la nueva tabla SQL para evitar
+inconsistencias detectadas por Prisma Migrate en futuras migraciones.

@@ -9,8 +9,8 @@ interface CreateAuditLogParams {
   entityId: string
   patientId?: string | null
   details?: string
-  oldData?: Record<string, any> | null
-  newData?: Record<string, any> | null
+  oldData?: Record<string, unknown> | null
+  newData?: Record<string, unknown> | null
 }
 
 const SENSITIVE_KEYS = new Set([
