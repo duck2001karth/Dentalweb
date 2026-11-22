@@ -59,7 +59,7 @@ export const POST = createApiHandler(
         data: {
           itemId: data.itemId,
           quantity: parsedQty,
-          type: data.type as any, 
+          type: data.type, 
           reason: data.reason ? String(data.reason).trim() : null,
         },
       })

@@ -14,7 +14,7 @@ export const GET = createApiHandler(
     
     if (!anamnesis || !anamnesis.data) return { data: null }
 
-    const content: any = typeof anamnesis.data === "string" 
+    const content: unknown = typeof anamnesis.data === "string" 
       ? JSON.parse(anamnesis.data) 
       : anamnesis.data
       

@@ -23,7 +23,7 @@ export const GET = createApiHandler(
       }
 
       return { nextReceipt: `REC-${nextNumber.toString().padStart(5, "0")}` }
-    } catch (error) {
+    } catch {
       return { nextReceipt: `REC-${Date.now().toString().slice(-5)}` }
     }
   }

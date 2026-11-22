@@ -9,7 +9,7 @@ export async function GET() {
   try {
     // BLOQUEO DE SEGURIDAD
     const session = await getServerSession(authOptions)
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
+    if (!session?.user || session.user.role !== "ADMIN") {
       return NextResponse.json({ error: "Acceso denegado al registro de auditoría." }, { status: 403 })
     }
 

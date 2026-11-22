@@ -1,4 +1,5 @@
 import { createApiHandler } from "@/lib/server/api-handler"
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/db"
 import {
   subDays,
@@ -24,7 +25,7 @@ export const GET = createApiHandler(
     const todayStart = startOfDay(now)
     const todayEnd = endOfDay(now)
 
-    const validPaymentsFilter: any = {
+    const validPaymentsFilter: Prisma.PaymentWhereInput = {
       status: "COMPLETED",
       NOT: { notes: { contains: "[PAGO ELIMINADO" } },
     }

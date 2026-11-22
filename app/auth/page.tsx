@@ -57,8 +57,8 @@ export default function AuthenticationPage() {
 
               <blockquote className="space-y-1">
                 <p className="text-base lg:text-lg font-medium leading-relaxed text-slate-900 text-center">
-                  "Transformamos sonrisas con dedicación y tecnología de punta.
-                  Tu salud dental es nuestra prioridad."
+                  &ldquo;Transformamos sonrisas con dedicación y tecnología de punta.
+                  Tu salud dental es nuestra prioridad.&rdquo;
                 </p>
 
                 <footer className="text-xs font-bold text-slate-600 uppercase tracking-widest text-center mt-2">

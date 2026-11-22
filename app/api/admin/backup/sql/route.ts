@@ -10,7 +10,6 @@ const MAX_ROWS_PER_TABLE = 2_000
 const MAX_BYTES = 8 * 1024 * 1024
 
 type SqlRow = Record<string, unknown>
-type SqlValue = string | number | boolean | bigint | Date | null | undefined | SqlValue[] | Record<string, unknown>
 
 function sqlIdentifier(value: string): string {
   return `"${value.replace(/"/g, '""')}"`

@@ -1,5 +1,6 @@
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
+import type { Prisma } from "@prisma/client"
 
 export const dynamic = "force-dynamic"
 
@@ -7,7 +8,7 @@ export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
   async (req, { user }) => {
     const isDoctor = user.role === "DOCTOR"
-    const whereCondition: any = { status: { in: ["ACTIVE", "DRAFT", "COMPLETED"] } }
+    const whereCondition: Prisma.TreatmentPlanWhereInput = { status: { in: ["ACTIVE", "DRAFT", "COMPLETED"] } }
     
     if (isDoctor) whereCondition.doctorId = user.id
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useRef } from "react"
 import { 
-  Database, Download, ShieldCheck, Lock, FileJson, 
+  Database, Lock, FileJson, 
   Loader2, UploadCloud, Users, CreditCard, Stethoscope, 
   Package, FileCode, Clock, Server, CheckCircle2, 
   Layers, HardDrive
@@ -39,8 +39,8 @@ export default function BackupsClient() {
 
       setLastBackup(new Date().toISOString())
       toast({ title: "Respaldo JSON Generado", description: "Base de datos exportada con éxito." })
-    } catch (error: any) {
-      toast({ title: "Error de Seguridad", description: error.message, variant: "destructive" })
+    } catch (error: unknown) {
+      toast({ title: "Error de Seguridad", description: error instanceof Error ? error.message : "Error inesperado", variant: "destructive" })
     } finally {
       setIsExportingJson(false)
     }
@@ -63,8 +63,8 @@ export default function BackupsClient() {
 
       setLastBackup(new Date().toISOString())
       toast({ title: "Script SQL Generado", description: "Sentencias INSERT generadas para restauración directa." })
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message, variant: "destructive" })
+    } catch (error: unknown) {
+      toast({ title: "Error", description: error instanceof Error ? error.message : "Error inesperado", variant: "destructive" })
     } finally {
       setIsExportingSql(false)
     }

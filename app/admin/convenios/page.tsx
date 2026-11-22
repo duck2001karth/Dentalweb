@@ -296,7 +296,7 @@ export default function ConveniosAdminPage() {
               ¿Eliminar Convenio?
             </DialogTitle>
             <DialogDescription className="text-center text-xs text-muted-foreground leading-relaxed">
-              Estás a punto de eliminar el convenio <strong className="text-foreground">"{itemToDelete?.name}"</strong>. Esta acción no se puede deshacer.
+              Estás a punto de eliminar el convenio <strong className="text-foreground">&quot;{itemToDelete?.name}&quot;</strong>. Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
 

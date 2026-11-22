@@ -1,6 +1,7 @@
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
+import type { Prisma } from "@prisma/client"
 
 export const GET = createApiHandler(
   { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
@@ -8,7 +9,7 @@ export const GET = createApiHandler(
     const isDoctor = user.role === "DOCTOR"
     const canSeeFinancialDebts = ["ADMIN", "RECEPTIONIST", "DOCTOR"].includes(user.role)
 
-    const whereClause: any = {}
+    const whereClause: Prisma.NotificationWhereInput = {}
     if (user.role !== "ADMIN") {
       whereClause.OR = [
         { targetRole: user.role },
@@ -26,7 +27,7 @@ export const GET = createApiHandler(
     const debtNotifications: any[] = []
     
     if (canSeeFinancialDebts) {
-      const planWhere: any = {
+      const planWhere: Prisma.TreatmentPlanWhereInput = {
         status: { in: ["ACTIVE", "DRAFT"] },
         ...(isDoctor && { doctorId: user.id }),
       }
