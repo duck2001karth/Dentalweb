@@ -17,7 +17,7 @@ export default function FichaClinicaPage() {
   const { toast } = useToast()
   const { data: session } = useSession()
 
-  const userRole = (session?.user as any)?.role || "DOCTOR"
+  const userRole = session?.user?.role || ""
   const patientId = params.id as string
 
   const patientHook = useGetPatient(patientId) as any

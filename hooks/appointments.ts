@@ -53,7 +53,7 @@ export function useGetAppointment(id: string) {
 
 export function useCreateAppointment() {
   const queryClient = useQueryClient()
-  const { mutate: createAppointment, isPending: isLoading, isSuccess } = useMutation({
+  const { mutate: createAppointment, mutateAsync: createAppointmentAsync, isPending: isLoading, isSuccess } = useMutation({
     mutationFn: async (input: AppointmentInput) => {
       const response = await fetch("/api/citas", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input }),
@@ -69,7 +69,7 @@ export function useCreateAppointment() {
       queryClient.invalidateQueries({ queryKey: ["citas"] })
     },
   })
-  return { createAppointment, isLoading, isSuccess }
+  return { createAppointment, createAppointmentAsync, isLoading, isSuccess }
 }
 
 export function useUpdateAppointment() {

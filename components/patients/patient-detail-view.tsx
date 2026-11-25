@@ -78,16 +78,17 @@ export function PatientDetailView({
     "RECEPTIONIST",
     "RECEPCION",
   ].includes(normalizedRole)
-  const initialTab = tabFromUrl === "ficha" ? "historial" : (tabFromUrl || "datos")
+  const canViewClinical = normalizedRole === "ADMIN" || normalizedRole === "DOCTOR"
+  const initialTab = !canViewClinical && FICHA_CLINICA_TABS.includes(tabFromUrl || "") ? "datos" : tabFromUrl === "ficha" ? "historial" : (tabFromUrl || "datos")
   const [activeTab, setActiveTab] = useState(initialTab)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false)
 
   useEffect(() => {
     if (tabFromUrl) {
-      setActiveTab(tabFromUrl === "ficha" ? "historial" : tabFromUrl)
+      setActiveTab(!canViewClinical && FICHA_CLINICA_TABS.includes(tabFromUrl) ? "datos" : tabFromUrl === "ficha" ? "historial" : tabFromUrl)
     }
-  }, [tabFromUrl])
+  }, [tabFromUrl, canViewClinical])
 
   const calculateAge = (birthDate: string | Date | undefined | null) => {
     if (!birthDate) return "--"
@@ -266,7 +267,7 @@ export function PatientDetailView({
               Datos personales
             </button>
 
-            <button 
+            {canViewClinical && <button 
               onClick={() => handleMainMenuClick("historial")} 
               className={cn(
                 "min-h-11 shrink-0 cursor-pointer whitespace-nowrap border-b-2 px-3 py-3 text-xs font-semibold transition-colors sm:px-4 sm:text-sm", 
@@ -276,7 +277,7 @@ export function PatientDetailView({
               )}
             >
               Ficha clínica
-            </button>
+            </button>}
 
             <button 
               onClick={() => handleMainMenuClick("planes")}
@@ -333,7 +334,7 @@ export function PatientDetailView({
           />
         )}
 
-        {FICHA_CLINICA_TABS.includes(activeTab) && (
+        {canViewClinical && FICHA_CLINICA_TABS.includes(activeTab) && (
           <FichaClinicaLayout patientId={patientId} />
         )}
 

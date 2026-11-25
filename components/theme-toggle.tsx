@@ -1,37 +1,13 @@
 "use client"
-
-import * as React from "react"
+import { useSyncExternalStore } from "react"
 import { useTheme } from "next-themes"
 import { Sun, Moon } from "lucide-react"
-import { Button } from "@/components/ui/button"
-
-
-const subscribe = () => () => {}
-const getClientSnapshot = () => true
-const getServerSnapshot = () => false
-
-export function ThemeToggle() {
-  const { setTheme, theme, resolvedTheme } = useTheme()
-  const mounted = React.useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot)
-
-  if (!mounted) return <div className="h-10 w-10" />
-
-  const isDark = theme === "dark" || resolvedTheme === "dark"
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon"
-      onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="h-10 w-10 rounded-xl hover:bg-accent/60 text-muted-foreground hover:text-[#008bcd] transition-all flex items-center justify-center cursor-pointer"
-      title={isDark ? "Cambiar a Modo Claro" : "Cambiar a Modo Oscuro"}
-    >
-      {isDark ? (
-        <Moon className="h-5 w-5 text-[#008bcd] transition-transform duration-300 hover:rotate-12" />
-      ) : (
-        <Sun className="h-5 w-5 text-amber-500 transition-transform duration-300 hover:rotate-45" />
-      )}
-      <span className="sr-only">Cambiar tema</span>
-    </Button>
-  )
+const subscribe=()=>()=>{}
+export function ThemeToggle(){
+ const {setTheme,resolvedTheme}=useTheme()
+ const mounted=useSyncExternalStore(subscribe,()=>true,()=>false)
+ if(!mounted)return <span className="size-10 shrink-0" aria-hidden="true"/>
+ const dark=resolvedTheme==="dark"
+ const label=dark?"Cambiar a modo claro":"Cambiar a modo oscuro"
+ return <button type="button" aria-label={label} title={label} onClick={()=>setTheme(dark?"light":"dark")} className="inline-flex size-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground hover:text-foreground hover:bg-accent focus-visible:outline-2 focus-visible:outline-primary transition-colors">{dark?<Moon className="size-5" strokeWidth={2}/>:<Sun className="size-5" strokeWidth={2}/>}</button>
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { CalendarIcon, Plus, Loader2, CheckCircle2, ShieldAlert } from "lucide-react"
 import { useSession } from "next-auth/react"
 import { format, addMinutes } from "date-fns"
@@ -77,10 +77,13 @@ export function NewAppointmentModal({
   const defaultUserColor = currentUser?.calendarColor || "#008bcd"
 
   const { patients, isLoading: isLoadingPatients } = useGetPatients()
-  const { createAppointment, isLoading: isSaving } = useCreateAppointment()
+  const { createAppointmentAsync, isLoading: isSaving } = useCreateAppointment()
 
   const [doctorsList, setDoctorsList] = useState<any[]>([])
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(false)
+  const [doctorsError, setDoctorsError] = useState("")
+  const [doctorsRetry, setDoctorsRetry] = useState(0)
+  const submitting = useRef(false)
 
   const defaultBox = settings?.availableBoxes?.[0] || "Box 1"
 
@@ -226,33 +229,7 @@ export function NewAppointmentModal({
         endTime: defaultStartTime ? prev.endTime : autoEndTime,
       }))
 
-      if (isAdminOrStaff && doctorsList.length === 0) {
-        setIsLoadingDoctors(true)
-        fetch("/api/admin/users")
-          .then((res) => res.json())
-          .then((data) => {
-            if (Array.isArray(data)) {
-              setDoctorsList(
-                data
-                  .filter((u: any) => u.role === "DOCTOR")
-                  .map((d: any) => ({
-                    id: d.id,
-                    name: d.name,
-                    specialty: d.specialty,
-                    calendarColor: d.calendarColor || "#008bcd",
-                  }))
-              )
-            }
-          })
-          .catch(() =>
-            toast({
-              title: "Error",
-              description: "No se pudieron cargar los especialistas.",
-              variant: "destructive",
-            })
-          )
-          .finally(() => setIsLoadingDoctors(false))
-      }
+
     }
   }, [
     open,
@@ -262,12 +239,34 @@ export function NewAppointmentModal({
     currentUser?.id,
     isAdminOrStaff,
     settings?.availableBoxes,
-    doctorsList.length,
     toast,
   ])
 
+  useEffect(() => {
+    if (!open || !isAdminOrStaff) return
+    const controller = new AbortController()
+    setDoctorsList([])
+    setDoctorsError("")
+    setIsLoadingDoctors(true)
+    fetch("/api/doctors", { cache: "no-store", signal: controller.signal })
+      .then(async res => {
+        if (!res.ok) throw new Error(res.status === 401 ? "Inicia sesión nuevamente." : res.status === 403 ? "No tienes permisos para consultar especialistas." : "No se pudo consultar la lista de especialistas.")
+        const data = await res.json()
+        if (!Array.isArray(data)) throw new Error("Respuesta de especialistas inválida.")
+        if (!controller.signal.aborted) setDoctorsList(data)
+      })
+      .catch(error => { if (!controller.signal.aborted) setDoctorsError(error.message || "Error de conexión.") })
+      .finally(() => { if (!controller.signal.aborted) setIsLoadingDoctors(false) })
+    return () => controller.abort()
+  }, [open, isAdminOrStaff, currentUser?.id, doctorsRetry])
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (submitting.current || isSaving) return
+    if (isAdminOrStaff && (isLoadingDoctors || doctorsError || !doctorsList.some(d => d.id === formData.doctorId))) {
+      toast({ title: "Selecciona un especialista activo", variant: "destructive" })
+      return
+    }
 
     if (!formData.patientId?.trim()) {
       return toast({
@@ -343,8 +342,9 @@ export function NewAppointmentModal({
       })
     }
 
+    submitting.current = true
     try {
-      await createAppointment({
+      await createAppointmentAsync({
         ...formData,
         reason: formData.reason.trim(),
         date: format(formData.date, "yyyy-MM-dd"),
@@ -364,7 +364,7 @@ export function NewAppointmentModal({
         description: error.message || "Problema de conexión o cruce de horarios.",
         variant: "destructive",
       })
-    }
+    } finally { submitting.current = false }
   }
 
   const selectedPatientObj = patients?.find(
@@ -390,7 +390,7 @@ export function NewAppointmentModal({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={value => { if (!submitting.current && !isSaving) setOpen(value) }}>
         <DialogTrigger asChild>
           {customTrigger ? (
             customTrigger
@@ -436,9 +436,11 @@ export function NewAppointmentModal({
                 doctorsList={doctorsList}
                 isLoadingPatients={isLoadingPatients}
                 isLoadingDoctors={isLoadingDoctors}
+                doctorsError={doctorsError}
+                onRetryDoctors={() => setDoctorsRetry(n => n + 1)}
                 isAdminOrStaff={isAdminOrStaff}
                 currentUser={currentUser}
-                validInitialStatuses={validInitialStatuses}
+                validInitialStatuses={validInitialStatuses.filter(status => status.value === "SCHEDULED")}
               />
 
               {collision && (
@@ -475,7 +477,7 @@ export function NewAppointmentModal({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isSaving || hasAnyConflict || !isFormValid}
+                  disabled={isSaving || hasAnyConflict || !isFormValid || (isAdminOrStaff && (isLoadingDoctors || !!doctorsError || !doctorsList.some(d => d.id === formData.doctorId)))}
                   className="h-10 min-w-[164px] rounded-xl bg-sky-600 px-5 text-sm font-semibold text-white shadow-none transition-colors hover:bg-sky-700 disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100 dark:bg-sky-500 dark:text-slate-950 dark:hover:bg-sky-400 dark:disabled:bg-muted dark:disabled:text-muted-foreground"
                 >
                   {isSaving ? (

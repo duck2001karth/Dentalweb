@@ -22,6 +22,8 @@ interface AppointmentFormProps {
   doctorsList: any[]
   isLoadingPatients: boolean
   isLoadingDoctors: boolean
+  doctorsError?: string
+  onRetryDoctors?: () => void
   isAdminOrStaff: boolean
   currentUser: any
   validInitialStatuses: any[]
@@ -37,6 +39,8 @@ export function AppointmentForm({
   doctorsList,
   isLoadingPatients,
   isLoadingDoctors,
+  doctorsError,
+  onRetryDoctors,
   isAdminOrStaff,
   currentUser,
   validInitialStatuses,
@@ -110,7 +114,7 @@ export function AppointmentForm({
           <Select
             value={formData.doctorId || ""}
             onValueChange={(id) => setFormData({ ...formData, doctorId: id })}
-            disabled={isLoadingDoctors}
+            disabled={isAdminOrStaff && (isLoadingDoctors || !!doctorsError)}
           >
             <SelectTrigger className={fieldClass}>
               <SelectValue placeholder={isLoadingDoctors ? "Cargando especialistas..." : "Seleccionar especialista"} />
@@ -127,7 +131,7 @@ export function AppointmentForm({
                     </SelectItem>
                   ))
                 ) : (
-                  <SelectItem value="empty" disabled>No hay especialistas registrados</SelectItem>
+                  <SelectItem value="empty" disabled>No hay especialistas activos</SelectItem>
                 )
               ) : (
                 <SelectItem value={currentUser?.id || "doctor_default"}>
@@ -139,6 +143,7 @@ export function AppointmentForm({
               )}
             </SelectContent>
           </Select>
+          {isAdminOrStaff && doctorsError && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-foreground"><p>{doctorsError}</p><Button type="button" variant="outline" size="sm" className="mt-2" onClick={onRetryDoctors}>Reintentar</Button></div>}
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
