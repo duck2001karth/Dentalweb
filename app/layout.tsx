@@ -1,3 +1,4 @@
+import { KeyboardShortcutsProvider } from "@/components/providers/keyboard-shortcuts-provider"
 import "@/styles/globals.css"
 import "@/styles/dentalweb-mobile-fix.css"
 
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
           >
             <ClientProvider>
               <ClinicSettingsProvider>
+                <KeyboardShortcutsProvider>
                 <MobileRouteScope />
                 <div className="relative flex min-h-dvh min-w-0 flex-col bg-background">
                   <main className="min-w-0 flex-1">
@@ -80,6 +82,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
                   <div className="print:hidden"><Toaster /></div>
                 </div>
                 <TailwindIndicator />
+                </KeyboardShortcutsProvider>
               </ClinicSettingsProvider>
             </ClientProvider>
           </ThemeProvider>

@@ -1,5 +1,6 @@
 "use client"
 
+import { ShortcutActionTarget } from "@/components/providers/keyboard-shortcuts-provider"
 import React from "react"
 import { addDays, format } from "date-fns"
 import { es } from "date-fns/locale"
@@ -196,7 +197,7 @@ export const AgendaHeader: React.FC<AgendaHeaderProps> = ({
               <strong className="font-semibold text-foreground">{activeAppointmentsCount}</strong> citas
             </span>
             <div className="shrink-0 [&_button]:h-10 [&_button]:rounded-xl [&_button]:px-4 [&_button]:text-sm">
-              <NewAppointmentModal defaultDate={currentWeekStart} />
+              <ShortcutActionTarget action="appointment"><NewAppointmentModal defaultDate={currentWeekStart} /></ShortcutActionTarget>
             </div>
           </div>
 

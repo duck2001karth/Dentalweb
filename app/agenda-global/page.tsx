@@ -28,7 +28,7 @@ export default function AgendaGlobalPage() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      router.push("/login")
+      router.push("/auth")
     }
   }, [status, router])
 
@@ -60,8 +60,8 @@ export default function AgendaGlobalPage() {
 
   useEffect(() => {
     if (isGlobalStaff) {
-      fetch("/api/admin/users")
-        .then(res => res.json())
+      fetch("/api/doctors", { cache: "no-store" })
+        .then(res => { if (!res.ok) throw new Error("No se pudieron cargar los especialistas"); return res.json() })
         .then(data => {
           if (Array.isArray(data)) {
             const doctores = data
@@ -80,7 +80,7 @@ export default function AgendaGlobalPage() {
   }, [isGlobalStaff])
 
   const DOCTORES = useMemo(() => {
-    if (isGlobalStaff && doctoresDeLaClinica.length > 0) return doctoresDeLaClinica
+    if (isGlobalStaff) return doctoresDeLaClinica
     return [
       {
         id: currentUser?.id || "doc-1",

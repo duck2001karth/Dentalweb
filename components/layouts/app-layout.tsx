@@ -1,5 +1,6 @@
 "use client"
 
+import { ShortcutTrigger } from "@/components/providers/keyboard-shortcuts-provider"
 import type { ReactNode } from "react"
 import { useEffect, useState } from "react"
 import dynamic from "next/dynamic"
@@ -7,7 +8,6 @@ import { usePathname } from "next/navigation"
 import { Menu, Search, X } from "lucide-react"
 import { useSession } from "next-auth/react"
 
-import { useSearch } from "../providers/search-provider"
 import { cn } from "@/lib/utils"
 import { NotificationsHelp } from "@/components/notifications/notifications-help"
 import { NotificationsDropdown } from "@/components/notifications/notifications-tab"
@@ -33,18 +33,7 @@ const ProfilePicture = dynamic(() => import("../auth/profile-picture").then((mod
 const ThemeToggle = dynamic(() => import("../theme-toggle").then((mod) => mod.ThemeToggle))
 
 export const AppLayout = ({ children }: { children: ReactNode }) => {
-  const { toggle } = useSearch()
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key.toLowerCase() === "b" && (event.metaKey || event.ctrlKey)) {
-        event.preventDefault()
-        toggle()
-      }
-    }
-    document.addEventListener("keydown", onKeyDown)
-    return () => document.removeEventListener("keydown", onKeyDown)
-  }, [toggle])
 
   return (
     <div className="min-h-dvh w-full min-w-0 bg-background font-sans text-foreground antialiased">
@@ -196,6 +185,7 @@ const Header = () => {
           <div style={{ "--hover-accent": accentColor } as React.CSSProperties} className={iconControlClass}>
             <NotificationsDropdown />
           </div>
+          <ShortcutTrigger />
           <div className={iconControlClass}><ThemeToggle /></div>
           <div className="flex shrink-0 items-center pl-1"><ProfilePicture /></div>
         </div>

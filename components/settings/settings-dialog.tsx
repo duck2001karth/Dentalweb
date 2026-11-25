@@ -1,5 +1,6 @@
 "use client"
 
+import { ShortcutsTab } from "@/components/shortcuts/shortcuts-tab"
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { useTheme } from "next-themes"
@@ -10,7 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { X, Command, ShieldCheck, BellRing, Eye } from "lucide-react"
+import { X, ShieldCheck, BellRing, Eye } from "lucide-react"
 
 import { SettingsSidebar } from "@/components/settings/settings-sidebar"
 import { SettingsHomeTab } from "@/components/settings/tabs/settings-home-tab"
@@ -131,21 +132,7 @@ export function SettingsDialog({
                 <LanguageRegionSettings accentColor={liveAccentColor} />
               </div>
             )}
-            {activeSubTab === "shortcuts" && (
-              <div className="space-y-4 max-w-lg animate-in fade-in duration-200">
-                <div className="flex items-center gap-2">
-                  <Command className="w-5 h-5" style={{ color: liveAccentColor }} />
-                  <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Atajos de Teclado</h3>
-                </div>
-                <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  Presiona{" "}
-                  <kbd className={`px-1.5 py-0.5 rounded border text-[10px] font-mono font-bold ${isDark ? "bg-[#111827] border-[#1e293b] text-slate-200" : "bg-slate-200 border-slate-300 text-slate-800"}`}>
-                    Ctrl + K
-                  </kbd>{" "}
-                  para abrir el buscador global de pacientes.
-                </p>
-              </div>
-            )}
+            {activeSubTab === "shortcuts" && <ShortcutsTab accentColor={liveAccentColor} />}
 
             {/* 3. CUENTA (MODULARIZADO) */}
             {activeSubTab === "profile" && (

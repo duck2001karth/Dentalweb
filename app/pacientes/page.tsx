@@ -1,5 +1,6 @@
 "use client"
 
+import { ShortcutActionTarget } from "@/components/providers/keyboard-shortcuts-provider"
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import {
@@ -132,7 +133,7 @@ export default function PatientsPage() {
               <p className="mt-1 text-sm text-muted-foreground">Busca, gestiona y accede a las fichas clínicas.</p>
             </div>
           </div>
-          <div className="w-full shrink-0 sm:w-auto"><NewPatientModal onSuccess={onCreated} /></div>
+          <div className="w-full shrink-0 sm:w-auto"><ShortcutActionTarget action="patient"><NewPatientModal onSuccess={onCreated} /></ShortcutActionTarget></div>
         </div>
         <section aria-label="Resumen del directorio" className={`grid grid-cols-2 gap-3 ${canViewMedicalAlerts ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
           <div className="col-span-2 flex items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-sm sm:col-span-1">

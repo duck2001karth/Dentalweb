@@ -64,16 +64,7 @@ export function AppCommand({ className, ...props }: any) {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  React.useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if ((e.key === "b" || e.key === "B") && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        ref.current?.focus()
-      }
-    }
-    document.addEventListener("keydown", down)
-    return () => document.removeEventListener("keydown", down)
-  }, [])
+
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -133,7 +124,7 @@ export function AppCommand({ className, ...props }: any) {
               <Loader2 className="animate-spin" style={{ color: accentColor }} size={18} />
             ) : (
               <kbd className="hidden sm:inline-flex h-6 items-center gap-1 rounded border bg-muted/50 px-2 text-[10px] font-medium text-muted-foreground opacity-70 select-none">
-                <span className="text-xs">⌘</span>B
+                Ctrl+B / Ctrl+K
               </kbd>
             )}
           </div>
