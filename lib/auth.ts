@@ -4,23 +4,53 @@ import GoogleProvider from "next-auth/providers/google"
 import { PrismaAdapter } from "@next-auth/prisma-adapter"
 import { prisma } from "@/lib/db"
 import bcrypt from "bcryptjs"
+import { getToken } from "next-auth/jwt"
+import { headers } from "next/headers"
 import { claimLoginAttempt, resetLoginFailures } from "@/lib/security/login-rate-limit"
 import { logAuditEvent } from "@/lib/audit"
 
 const allowed = (role: unknown) => ["ADMIN", "DOCTOR", "RECEPTIONIST"].includes(String(role))
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const adapter = PrismaAdapter(prisma)
+const safeCode = (error: unknown) => {
+  const code = (error as { code?: unknown } | null)?.code
+  return typeof code === "string" && /^[A-Z0-9_]{1,32}$/.test(code) ? code : "UNKNOWN"
+}
 export const authOptions: NextAuthOptions = {
   adapter: { ...adapter, async createUser() { throw new Error("AccessDenied") } } as NextAuthOptions["adapter"],
   secret: process.env.NEXTAUTH_SECRET,
+  logger: {
+    error(code, metadata) { console.error("[NEXTAUTH]", code, safeCode(metadata), safeCode((metadata as { error?: unknown } | undefined)?.error)) },
+    warn(code) { console.warn("[NEXTAUTH]", code) },
+    debug() {},
+  },
   session: { strategy: "jwt", maxAge: 8 * 60 * 60 },
   pages: { signIn: "/auth", error: "/auth" },
   providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      authorization: { params: { prompt: "select_account" } },
-    }),
+  GoogleProvider({
+  clientId: process.env.GOOGLE_CLIENT_ID!,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+
+  authorization: {
+    params: {
+      prompt: "select_account",
+    },
+  },
+
+  // La vinculación debe estar protegida por el callback signIn.
+  allowDangerousEmailAccountLinking: true,
+
+  profile(profile) {
+    return {
+      id: profile.sub,
+      name: profile.name ?? null,
+      email: profile.email?.trim().toLowerCase() ?? null,
+      image: profile.picture ?? null,
+      role: "DOCTOR",
+      isActive: false,
+    }
+  },
+}),
     CredentialsProvider({
       name: "Credentials",
       credentials: { email: { label: "Correo", type: "email" }, password: { label: "Contraseña", type: "password" } },
@@ -36,8 +66,8 @@ export const authOptions: NextAuthOptions = {
           }
           await resetLoginFailures(email)
           return { id: user.id, name: user.name, email: user.email, image: user.image, role: user.role, isActive: user.isActive, phoneNumber: user.phoneNumber, specialty: user.specialty, calendarColor: user.calendarColor }
-        } catch {
-          console.error("[AUTH] Fallo interno de autenticación por credenciales")
+        } catch (error) {
+          console.error("[AUTH] Fallo interno de autenticación por credenciales", safeCode(error))
           throw new Error("AuthUnavailable")
         }
       },
@@ -54,13 +84,20 @@ export const authOptions: NextAuthOptions = {
           if (!existing?.isActive || !allowed(existing.role)) return false
           const where = { provider_providerAccountId: { provider: "google", providerAccountId: account.providerAccountId } }
           const linked = await prisma.account.findUnique({ where })
-          if (linked) return linked.userId === existing.id
+          if (linked && linked.userId !== existing.id) return false
+          // Evitar vincular una cuenta nueva a la sesión de otro usuario.
+          const h = await headers()
+          const req = { headers: { cookie: h.get("cookie") || "" } } as any
+          for (const secureCookie of [true, false]) {
+            const current = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, secureCookie })
+            if (current && String(current.id || current.sub) !== existing.id) return "/auth?error=SwitchAccount"
+          }
+          if (linked) return true
+          // Solo Google es autoridad sobre Gmail y Workspace; no otros correos.
           if (!email.endsWith("@gmail.com") && !google.hd) return false
-          const result = await prisma.account.upsert({ where, update: {}, create: {
-            userId: existing.id, provider: "google", providerAccountId: account.providerAccountId, type: account.type,
-          } })
-          return result.userId === existing.id
-        } catch { console.error("[AUTH] Fallo de validación Google"); return "/auth?error=AuthUnavailable" }
+          // NextAuth gestiona la vinculación con el usuario existente por email.
+          return true
+        } catch (error) { console.error("[AUTH] Fallo de validación Google", safeCode(error)); return "/auth?error=AuthUnavailable" }
       }
       return account?.provider === "credentials" && user.isActive === true && allowed(user.role)
     },
