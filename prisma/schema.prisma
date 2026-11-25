@@ -114,6 +114,7 @@ model User {
   specialty     String?   
   isActive      Boolean   @default(true)
   lastLogin     DateTime?
+  lastSeenAt    DateTime?
 
   signatureBase64   String?   @db.Text 
   professionalCard  String?            
@@ -889,4 +890,13 @@ model TreatmentApproval {
   evidence Json?
 
   @@index([treatmentPlanId, approvedAt])
+}
+
+model LoginRateLimit {
+  keyHash      String    @id @db.VarChar(64)
+  attempts     Int       @default(0)
+  windowStart  DateTime  @default(now()) @db.Timestamptz(6)
+  blockedUntil DateTime? @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @db.Timestamptz(6)
+  @@index([updatedAt], map: "LoginRateLimit_updatedAt_idx")
 }

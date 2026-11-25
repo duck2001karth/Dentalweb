@@ -1,0 +1,892 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  //directUrl = env("DIRECT_URL")
+}
+
+// ==========================================
+// 1. ROLES Y LOGS (Sistema Base)
+// ==========================================
+
+enum UserRole {
+  ADMIN
+  DOCTOR
+  RECEPTIONIST
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  action      String   
+  entity      String?   
+  entityId    String?   
+  
+  details     String?  
+  oldData     Json?    
+  newData     Json?    
+  
+  ipAddress   String?  
+  userAgent   String?  
+  
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  patientId   String?
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime @default(now())
+
+  @@index([patientId])
+  @@index([entity, entityId])
+  @@index([userId])
+}
+
+model SystemLog {
+  id        String   @id @default(uuid())
+  level     LogLevel @default(INFO)
+  message   String
+  metadata  Json?    
+  createdAt DateTime @default(now())
+}
+
+// ==========================================
+// 2. NEXT-AUTH (Autenticación y Usuarios)
+// ==========================================
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+// ==========================================
+// MÓDULOS Usuario
+// ==========================================
+model User {
+  id            String    @id @default(uuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  phoneNumber   String?
+  password      String?   
+  calendarColor String?
+  language      String?    @default("es-EC")
+  
+  role          UserRole  @default(DOCTOR)
+  specialty     String?   
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+
+  signatureBase64   String?   @db.Text 
+  professionalCard  String?            
+  sealStampUrl      String?   @db.Text 
+  
+  accounts      Account[]
+  sessions      Session[]
+  
+  odontogramRecords OdontogramRecord[]
+  periodontograms Periodontogram[]
+
+  documents PatientDocument[]
+  prescriptions Prescription[]
+
+  clinicalDocument ClinicalDocument[]
+  treatmentPlans TreatmentPlan[]
+  
+  appointments  Appointment[]  @relation("DoctorAppointments")
+  clinicalNotes ClinicalNote[] @relation("DoctorNotes")
+  auditLogs     AuditLog[]   
+
+  notifications Notification[]
+
+  comments      PatientComment[] @relation("DoctorComments")
+  assignedTasks PatientTask[]    @relation("TaskAssignee")
+  createdTasks  PatientTask[]    @relation("TaskCreator")
+
+  paymentsProcessed Payment[]     @relation("UserPayments")
+  liquidations      Liquidation[] @relation("DoctorLiquidations")
+
+  createdTemplates DocumentTemplate[] @relation("CreatedTemplates")
+  cashRegisterCloses CashRegisterClose[] @relation("UserCashCloses")
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ==========================================
+// 3. MÓDULOS CLÍNICOS
+// ==========================================
+
+model Patient {
+  id                    String    @id @default(uuid())
+  ci                    String    @unique // Cédula de Identidad 
+  firstName             String
+  lastName              String
+  email                 String?
+  phone                 String?   
+  birthDate             DateTime?
+  address               String?
+  
+  tipoRegistro          String?   
+  cedulaAcudiente       String?
+  tipoIdentificacion    String?   
+  nombreSocial          String?
+  sexo                  String?
+  genero                String?
+  grupoSanguineo        String?
+  pertenenciaEtnica     String?
+  estadoCivil           String?
+  nivelEducativo        String?
+  profesion             String?
+  tipoPaciente          String?   
+  eps                   String?   
+  ciudad                String?
+  departamento          String?
+  zonaResidencia        String?   
+  telefonoFijo          String?
+
+  nombreAcompanante     String?
+  telefonoAcompanante   String?
+  nombreResponsable     String?
+  telefonoResponsable   String?
+  parentescoResponsable String?
+
+  convenio              String?   
+  gestante              Boolean   @default(false)
+  observaciones         String?   @db.Text
+  medicalAlerts         String?   @db.Text 
+  
+  signatureBase64 String?   @db.Text
+
+  appointments          Appointment[]
+  clinicalNotes         ClinicalNote[] 
+
+  anamnesis     Anamnesis?
+  odontogramRecords OdontogramRecord[]
+
+  periodontograms Periodontogram[]
+  documents PatientDocument[]
+
+  prescriptions Prescription[]
+  clinicalDocument ClinicalDocument[]
+
+  treatmentPlans        TreatmentPlan[]
+
+  comments              PatientComment[]
+  tasks                 PatientTask[]
+
+  taxDocuments TaxDocument[]
+  payments          Payment[]
+  agreements Agreement[]
+  auditLogs       AuditLog[]
+
+  isDeleted             Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+enum AppointmentStatus {
+  SCHEDULED     
+  WAITING       
+  IN_PROGRESS   
+  COMPLETED     
+  CANCELLED     
+  NO_SHOW       
+}
+
+enum PaymentStatus {
+  UP_TO_DATE    
+  DEBT          
+  EVALUATION    
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  date        DateTime          
+  startTime   String            
+  endTime     String            
+  
+  status      AppointmentStatus @default(SCHEDULED)
+  payment     PaymentStatus     @default(UP_TO_DATE)
+  box         String?           
+  reason      String?  
+
+  isRescheduled Boolean   @default(false)
+  rescheduleReason String? 
+  previousDate  DateTime?         
+  
+  patientId   String
+  patient     Patient           @relation(fields: [patientId], references: [id])
+  
+  doctorId    String
+  doctor      User              @relation("DoctorAppointments", fields: [doctorId], references: [id])
+
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+enum NoteType {
+  EVOLUTION    
+  PRESCRIPTION 
+  GENERAL      
+}
+
+model ClinicalNote {
+  id                    String   @id @default(uuid())
+  type                  NoteType @default(EVOLUTION)
+  content               String   @db.Text
+  status                String?
+  
+  // Campos multimedia
+  fileUrl               String?  @db.Text // Para la foto adjunta
+  professionalSignature String?  @db.Text // Firma del doctor (Base64)
+  patientSignature      String?  @db.Text // Firma del paciente (Base64)
+  
+  patientId             String
+  patient               Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  authorId              String
+  author                User     @relation("DoctorNotes", fields: [authorId], references: [id])
+  
+  isSigned              Boolean  @default(false) 
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Anamnesis {
+  id        String   @id @default(uuid())
+  patientId String   @unique // Relación 1 a 1 con el paciente
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  data      Json     
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OdontogramRecord {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  planId        String?  
+  treatmentPlan TreatmentPlan? @relation(fields: [planId], references: [id])
+
+  toothNumber Int      // Número de pieza (ej: 18, 11, 48)
+  surfaces    String[] // Array de caras: ["distal", "occlusal", "mesial", "vestibular", "palatina"]
+  status      String   // "CARIES", "RESTAURACION", "AUSENTE", "SANO", etc.
+  notes       String?
+  
+  isEvolution Boolean  @default(false) // Si es diagnóstico o evolución
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  
+  createdAt   DateTime @default(now())
+}
+
+model Periodontogram {
+  id        String   @id @default(uuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  data      Json     
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PatientDocument {
+  id        String   @id @default(uuid())
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  name      String
+  type      String
+  size      String
+  url       String   @db.Text // Guardaremos el archivo en Base64 aquí
+  
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Prescription {
+  id           String   @id @default(uuid())
+  patientId    String
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  medications  String   @db.Text
+  indications  String   @db.Text
+  observations    String?  @db.Text
+  
+  authorId     String?
+  author       User?    @relation(fields: [authorId], references: [id])
+  doctorSignature String?  @db.Text
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model ClinicalDocument {
+  treatmentPlanId String?
+  treatmentPlan TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+  id               String   @id @default(uuid())
+  patientId        String
+  patient          Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  title            String
+  content          String   @db.Text
+  
+  specialistName   String?
+  specialistIdDoc  String?  
+  
+  authorId         String?
+  author           User?    @relation(fields: [authorId], references: [id])
+  
+  doctorSignature  String?  @db.Text 
+  patientSignature String?  @db.Text 
+  
+  isVoided         Boolean  @default(false) 
+  @@index([treatmentPlanId])
+
+  createdAt        DateTime @default(now())
+}
+
+model TreatmentPlan {
+  approvals TreatmentApproval[]
+  clinicalDocuments ClinicalDocument[]
+  id          String   @id @default(cuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  doctorId    String?
+  doctor      User?    @relation(fields: [doctorId], references: [id])
+  agreementId String?
+  agreement Agreement? @relation(fields: [agreementId], references: [id])
+  commercialDiscount Float @default(0)
+
+  collaborators String[] @default([])
+
+  name        String   
+  status      String   @default("DRAFT")
+  
+  totalCost   Float    @default(0) 
+  totalPaid   Float    @default(0) 
+  
+  odontogramRecords OdontogramRecord[]
+  commentsToPatient String? @db.Text
+
+  payments          Payment[]
+  sections          TreatmentSection[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  items       TreatmentItem[]
+  
+}
+
+model TreatmentSection {
+  id              String        @id @default(cuid())
+  name            String       
+  order           Int           @default(0)
+  
+  treatmentPlanId String
+  plan            TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+  
+  items           TreatmentItem[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([treatmentPlanId])
+}
+
+model TreatmentItem {
+  id              String            @id @default(cuid())
+  treatmentPlanId String
+  plan            TreatmentPlan     @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+
+  // --- RELACIÓN CON LA SECCIÓN ---
+  sectionId       String?
+  section         TreatmentSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  discount        Float             @default(0)
+  paidAmount      Float             @default(0)
+  isPaid          Boolean           @default(false)
+
+  tooth           String?       
+  procedureName   String        
+  cost            Float             @default(0)
+  isCompleted     Boolean           @default(false) 
+
+  progress        Int?              @default(0) 
+  evolutionNote   String?           @db.Text    
+  isPrivate       Boolean           @default(false) 
+  fileUrl         String?           @db.Text    
+  hasIncident     Boolean           @default(false) 
+  hasAdverseEvent Boolean           @default(false) 
+  performedById   String?       
+
+  createdAt       DateTime?          @default(now())
+  updatedAt       DateTime?          @updatedAt
+
+  @@index([sectionId])
+}
+
+model EvolutionTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  text      String   @db.Text
+  category  String?  @default("General")
+  createdAt DateTime @default(now())
+}
+
+model Laboratory {
+  id            String   @id @default(cuid())
+  name          String
+  details       String?  @db.Text
+  balance       Float    @default(0)
+  contactPerson String?
+  phone         String?
+  email         String?
+  address       String?
+  notes         String?  @db.Text
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ==========================================
+// 4. MÓDULOS DE GESTIÓN INTERNA 
+// ==========================================
+
+model PatientComment {
+  id        String   @id @default(uuid())
+  text      String   @db.Text
+
+  patientId String
+  patient   Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  authorId  String
+  author    User     @relation("DoctorComments", fields: [authorId], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PatientTask {
+  id          String   @id @default(uuid())
+  title       String
+  isCompleted Boolean  @default(false)
+  dueDate     DateTime? 
+  
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  assignedToId String?
+  assignedTo   User?    @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  
+  creatorId   String
+  creator     User     @relation("TaskCreator", fields: [creatorId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+model Notification {
+  id          String   @id @default(cuid())
+  title       String
+  message     String
+  type        String   
+  targetRole  String   
+  isRead      Boolean  @default(false)
+  
+
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+// ==========================================
+// 5. MÓDULO ADMINISTRATIVO (Catálogos y Config)
+// ==========================================
+
+model ProcedureCatalog {
+  id          String   @id @default(cuid())
+  code        String?  @unique 
+  name        String  
+  category    String   
+  basePrice   Float    @default(0)
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ==========================================
+// 6. MÓDULOS ADMINISTRATIVOS PREMIUM (Carmo Dental)
+// ==========================================
+
+enum PaymentMethod {
+  CASH          // Efectivo
+  CREDIT_CARD   // Tarjeta de Crédito
+  DEBIT_CARD    // Tarjeta de Débito
+  TRANSFER      // Transferencia bancaria o QR
+  INSURANCE     // Seguro Médico / Convenios
+  OTHER
+}
+
+enum PaymentState {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum LiquidationStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum MovementType {
+  INCOMING      
+  OUTGOING      
+}
+
+// -- FACTURACIÓN / PAGOS --
+model Payment {
+  id              String        @id @default(uuid())
+  amount          Float         
+  method          PaymentMethod @default(CASH)
+  status          PaymentState  @default(COMPLETED)
+  reference       String?
+  receiptNumber   String?       @unique 
+  receiptImage    String?
+  notes           String?       @db.Text
+
+  taxDocuments    TaxDocument[]
+  
+  patientId       String
+  patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  
+  treatmentPlanId String?
+  treatmentPlan   TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+
+  processedById   String?
+  processedBy     User?          @relation("UserPayments", fields: [processedById], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([patientId])
+  @@index([treatmentPlanId])
+  @@index([processedById])
+}
+
+
+
+// -- HISTORIAL DE MOVIMIENTOS DE INVENTARIO (Premium para Auditoría) --
+model InventoryMovement {
+  id              String        @id @default(uuid())
+  itemId          String
+  item            InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  
+  quantity        Int           
+  type            MovementType
+  reason          String?       
+  
+  createdAt       DateTime      @default(now())
+}
+
+// -- LIQUIDACIONES (Cálculo de comisiones a Doctores) --
+model Liquidation {
+  id              String            @id @default(uuid())
+  doctorId        String
+  doctor          User              @relation("DoctorLiquidations", fields: [doctorId], references: [id], onDelete: Cascade)
+  
+  amount          Float             
+  periodStart     DateTime          
+  periodEnd       DateTime          
+  status          LiquidationStatus @default(PENDING) 
+  notes           String?           @db.Text
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model ClinicSettings {
+  id              String   @id @default("default-clinic-settings")
+  clinicName      String   @default("Carmo Dental")
+  
+  ruc             String? 
+  slogan          String? 
+  razonSocial     String?  
+  estabCode       String?  @default("001") 
+  ptoEmiCode      String?  @default("001") 
+  obligadoContab  Boolean  @default(false) 
+ 
+  taxRate         Float    @default(0) 
+  currency        String   @default("USD")
+ 
+  logoUrl         String?  @db.Text
+  logoScale       Int?     @default(100)
+  watermarkUrl    String?  @db.Text
+  
+ 
+  address         String?
+  city              String? 
+  country          String  @default("Ecuador")
+  timezone         String   @default("America/Guayaquil") 
+  timeFormat       String   @default("24h")
+
+  phone           String?
+  whatsappNumber  String? 
+  email           String?
+  website         String?
+  watermarkOpacity Int?     @default(15)  
+  watermarkScale   Int?     @default(100)
+
+  defaultPrintMode  String?  @default("color")
+  availableBoxes  String[] @default(["Box 1", "Box 2", "Box 3"])
+  footerText      String?  @db.Text
+
+  updatedAt       DateTime @updatedAt
+}
+
+
+model InventoryItem {
+  id                String    @id @default(uuid())
+  name              String    
+  sku               String?   @unique 
+  category          String?   
+  
+  registroSanitario String?
+  marca             String?
+  concentracion     String?
+  unidadMedida      String?
+  presentacion      String?  
+  lote              String?
+  fechaExpiracion   DateTime?
+  
+  stock             Int       @default(0)
+  minStock          Int       @default(5)
+  unitCost          Float     @default(0)
+  supplier          String?
+
+  isActive          Boolean   @default(true)
+  movements         InventoryMovement[]
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+// ==========================================
+// 7. FACTURACIÓN ELECTRÓNICA SRI ECUADOR
+// ==========================================
+
+enum TaxDocType {
+  FACTURA        
+  NOTA_CREDITO   
+  RETENCION      
+}
+
+enum TaxDocStatus {
+  PENDING       
+  RECEIVED     
+  AUTHORIZED     
+  REJECTED       
+  VOIDED         
+}
+
+enum SriEnvironment {
+  TEST           
+  PRODUCTION     
+}
+
+model TaxDocument {
+  id                String         @id @default(uuid())
+  
+  // Datos del Comprobante Fiscal
+  docType           TaxDocType     @default(FACTURA)
+  secuencial        String         
+  accessKey         String?        @unique 
+  authorizationNum  String?        
+  authorizationDate DateTime?
+  status            TaxDocStatus   @default(PENDING)
+  environment       SriEnvironment @default(PRODUCTION)
+
+  // Datos del Receptor (Paciente)
+  idType            String         
+  identification    String         
+  businessName      String         
+  email             String         
+  address           String?
+
+  // Desglose Tributario Ecuador (Servicios Odontológicos IVA 0%)
+  subtotal0         Float          @default(0) 
+  subtotal15        Float          @default(0) 
+  ivaAmount         Float          @default(0)
+  total             Float          @default(0)
+
+  // Archivos Digitales Generados
+  xmlUrl            String?        @db.Text
+  ridePdfUrl        String?        @db.Text
+  sriResponse       String?        @db.Text 
+
+  // Relaciones Clínicas
+  patientId         String
+  patient           Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  paymentId         String?
+  payment           Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+}
+enum DiscountType {
+  PERCENTAGE 
+  FIXED_AMOUNT
+}
+
+model Agreement {
+  id              String         @id @default(cuid())
+  name            String         
+  institutionName String         
+  contactPerson   String?       
+  contactPhone    String?
+  contactEmail    String?
+  discountType    DiscountType   @default(PERCENTAGE)
+  discountValue   Decimal        @db.Decimal(10, 2) 
+  isActive        Boolean        @default(true)
+  startDate       DateTime       @default(now())
+  endDate         DateTime?
+  notes           String?
+  
+  // Relaciones
+  treatmentPlans  TreatmentPlan[]
+  patients        Patient[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@map("agreements")
+}
+// Tipo o categoría de documento clínico
+enum ClinicalDocType {
+  CONSENT         
+  CERTIFICATE     
+  PRESCRIPTION    
+  REPORT          
+  AUTHORIZATION   
+  INSTRUCTIONS    
+}
+
+model DocumentTemplate {
+  id              String           @id @default(uuid())
+  title           String           
+  type            ClinicalDocType  @default(CONSENT)
+  category        String?          
+  content         String           @db.Text
+  
+  requiresPatientSignature Boolean @default(true)
+  requiresDoctorSignature  Boolean @default(true)
+  
+  isActive        Boolean          @default(true)
+  isDefault       Boolean          @default(false) 
+  
+  createdById     String?
+  createdBy       User?            @relation("CreatedTemplates", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([type])
+  @@index([isActive])
+}
+
+// ==========================================
+// 8. CIERRES Y ARQUEOS DE CAJA (Carmo Dental)
+// ==========================================
+
+enum CashCloseStatus {
+  BALANCED  
+  SURPLUS  
+  DEFICIT   
+}
+
+model CashRegisterClose {
+  id           String          @id @default(uuid())
+  userId       String
+  user         User            @relation("UserCashCloses", fields: [userId], references: [id], onDelete: Cascade)
+
+  expectedCash Float          
+  countedCash  Float          
+  difference   Float           
+  status       CashCloseStatus @default(BALANCED)
+  
+  notes        String?         @db.Text // Justificación obligatoria en descuadres
+  breakdown    Json?           
+
+  createdAt    DateTime        @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+model TreatmentApproval {
+  id String @id @default(cuid())
+  treatmentPlanId String
+  treatmentPlan TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Restrict)
+  patientId String
+  approvedById String
+  approvedAt DateTime @default(now())
+  approvedAmount Float
+  snapshotHash String
+  snapshot Json
+  signatureBase64 String @db.Text
+  evidence Json?
+
+  @@index([treatmentPlanId, approvedAt])
+}

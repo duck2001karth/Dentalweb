@@ -1,153 +1,44 @@
 "use client"
-
 import * as React from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { Mail, Lock, Eye, EyeOff } from "lucide-react"
-
+import { Mail, Lock, Eye, EyeOff, ShieldAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Icons } from "@/components/icons"
-import { useToast } from "@/hooks/use-toast"
-
-interface UserAuthFormProps extends React.HTMLAttributes<HTMLDivElement> {}
-
-export function UserAuthForm({ className, ...props }: UserAuthFormProps) {
+const messages: Record<string,string> = { CredentialsSignin: "Correo o contraseña incorrectos, o acceso temporalmente bloqueado.", AccessDenied: "Cuenta no autorizada. Contacta al administrador.", AccountDisabled: "Tu cuenta está deshabilitada.", AccountSuspended: "Tu cuenta está deshabilitada.", OAuthAccountNotLinked: "No se pudo vincular tu cuenta de Google. Contacta al administrador.", AuthUnavailable: "El servicio de acceso no está disponible temporalmente." }
+const safeMessage = (code: string) => (Object.prototype.hasOwnProperty.call(messages, code) ? messages[code] : undefined) || "No se pudo iniciar sesión. Inténtalo nuevamente más tarde."
+export function UserAuthForm({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   const router = useRouter()
-  const { toast } = useToast()
-
-  const [isLoading, setIsLoading] = React.useState(false)
-  const [isGoogleLoading, setIsGoogleLoading] = React.useState(false)
-  
-  const [email, setEmail] = React.useState("")
-  const [password, setPassword] = React.useState("")
-  const [showPassword, setShowPassword] = React.useState(false)
-
-  const handleCredentialsSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!email || !password) return
-
-    setIsLoading(true)
-
+  const [email,setEmail] = React.useState("")
+  const [password,setPassword] = React.useState("")
+  const [show,setShow] = React.useState(false)
+  const [busy,setBusy] = React.useState<"credentials"|"google"|null>(null)
+  const [error,setError] = React.useState("")
+  const lock = React.useRef(false)
+  React.useEffect(() => { const code = new URLSearchParams(window.location.search).get("error"); if (code) setError(safeMessage(code)) }, [])
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); if (lock.current) return; lock.current=true; setBusy("credentials"); setError("")
     try {
-      const res = await signIn("credentials", {
-        redirect: false,
-        email: email.toLowerCase().trim(),
-        password,
-      })
-
-      if (res?.error) {
-        toast({
-          title: "Acceso denegado",
-          description: res.error || "Credenciales incorrectas",
-          variant: "destructive",
-        })
-      } else {
-        router.push("/")
-        router.refresh()
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Ocurrió un error al intentar iniciar sesión.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsLoading(false)
-    }
+      const res = await signIn("credentials", { redirect:false, email:email.trim().toLowerCase(), password })
+      if (!res?.ok || res.error) { setError(safeMessage(res?.error || "AuthUnavailable")); setPassword(""); setShow(false); return }
+      router.replace("/"); router.refresh()
+    } catch { setError("No se pudo conectar. Inténtalo nuevamente.") } finally { lock.current=false; setBusy(null) }
   }
-
-  const handleGoogleSignIn = async () => {
-    try {
-      setIsGoogleLoading(true)
-      await signIn("google", { callbackUrl: "/" })
-    } catch (error) {
-      console.error("Error signing in with Google:", error)
-    } finally {
-      setIsGoogleLoading(false)
-    }
+  async function google() {
+    if (lock.current) return; lock.current=true; setBusy("google"); setError("")
+    try { await signIn("google", { callbackUrl:"/" }) } catch { setError("No se pudo conectar con Google.") } finally { lock.current=false; setBusy(null) }
   }
-
-  return (
-    <div className={cn("grid gap-5 font-sans antialiased", className)} {...props}>
-      <form onSubmit={handleCredentialsSignIn} className="grid gap-3.5">
-        <div className="grid gap-1.5 text-left">
-          <label className="text-xs font-semibold text-foreground">
-            Correo institucional
-          </label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              type="email"
-              placeholder="doctor@carmodental.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={isLoading || isGoogleLoading}
-              required
-              className="pl-9 h-10 rounded-xl bg-background border-border text-xs"
-            />
-          </div>
-        </div>
-
-        <div className="grid gap-1.5 text-left">
-          <label className="text-xs font-semibold text-foreground">
-            Contraseña
-          </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              type={showPassword ? "text" : "password"}
-              placeholder="••••••••"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              disabled={isLoading || isGoogleLoading}
-              required
-              className="pl-9 pr-9 h-10 rounded-xl bg-background border-border text-xs"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-            </button>
-          </div>
-        </div>
-
-        <Button
-          type="submit"
-          disabled={isLoading || isGoogleLoading}
-          className="bg-[#008bcd] hover:bg-[#0074a8] text-white font-bold h-10 rounded-xl text-xs shadow-xs cursor-pointer mt-1 transition-all"
-        >
-          {isLoading && <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />}
-          Iniciar Sesión
-        </Button>
-      </form>
-
-      {/* Separador */}
-      <div className="relative flex items-center justify-center">
-        <div className="w-full border-t border-border" />
-        <span className="bg-card px-3 text-[11px] font-medium text-muted-foreground uppercase absolute">
-          o continuar con
-        </span>
-      </div>
-
-      {/* Botón de Google */}
-      <Button
-        variant="outline"
-        type="button"
-        onClick={handleGoogleSignIn}
-        disabled={isLoading || isGoogleLoading}
-        className="h-10 rounded-xl text-xs font-semibold border-border bg-background hover:bg-muted/40 text-foreground cursor-pointer transition-colors"
-      >
-        {isGoogleLoading ? (
-          <Icons.spinner className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <Icons.google className="mr-2 h-4 w-4" />
-        )}
-        Google
-      </Button>
-    </div>
-  )
+  return <div className={cn("grid gap-5",className)} {...props}>
+    {error && <div role="alert" className="flex gap-3 rounded-xl border border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 p-4 text-sm text-rose-800 dark:text-rose-200"><ShieldAlert className="w-5 h-5 shrink-0"/><div><p className="font-bold">No se pudo iniciar sesión</p><p className="mt-1">{error}</p></div></div>}
+    <form onSubmit={submit} className="grid gap-4">
+      <label htmlFor="login-email" className="text-sm font-semibold">Correo autorizado</label><div className="relative"><Mail className="absolute left-3 top-3 w-5 h-5 text-muted-foreground"/><Input id="login-email" type="email" autoComplete="username" maxLength={254} required value={email} disabled={!!busy} onChange={e=>setEmail(e.target.value)} className="h-12 pl-10 rounded-xl bg-background"/></div>
+      <label htmlFor="login-password" className="text-sm font-semibold">Contraseña</label><div className="relative"><Lock className="absolute left-3 top-3 w-5 h-5 text-muted-foreground"/><Input id="login-password" type={show?"text":"password"} autoComplete="current-password" maxLength={200} required value={password} disabled={!!busy} onChange={e=>setPassword(e.target.value)} className="h-12 pl-10 pr-12 rounded-xl bg-background"/><button type="button" aria-label={show?"Ocultar contraseña":"Mostrar contraseña"} aria-pressed={show} onClick={()=>setShow(!show)} className="absolute right-3 top-3 text-muted-foreground">{show?<EyeOff size={20}/>:<Eye size={20}/>}</button></div>
+      <Button type="submit" disabled={!!busy} className="h-12 rounded-xl font-bold">{busy==="credentials"&&<Icons.spinner className="mr-2 h-4 w-4 animate-spin"/>}Iniciar sesión</Button>
+    </form>
+    <div className="flex items-center gap-3 text-xs text-muted-foreground"><span className="flex-1 border-t"/>O continuar con<span className="flex-1 border-t"/></div>
+    <Button type="button" variant="outline" onClick={google} disabled={!!busy} className="h-12 rounded-xl font-semibold">{busy==="google"?<Icons.spinner className="mr-2 h-4 w-4 animate-spin"/>:<Icons.google className="mr-2 h-4 w-4"/>}Google</Button>
+    <p className="text-xs text-muted-foreground text-center">Solo cuentas autorizadas por la clínica.</p>
+  </div>
 }
