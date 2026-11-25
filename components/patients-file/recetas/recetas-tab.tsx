@@ -123,7 +123,7 @@ export function RecetasTab({ patientId }: { patientId: string }) {
   const patientFullName = patient ? `${patient.firstName} ${patient.lastName}` : "Cargando..."
   const patientDocId = patient?.ci || "No registrado"
   const patientAge = calculateAge(patient?.birthDate)
-  const patientAllergies = patient?.medicalAlerts || "Ninguna registrada"
+  const patientAllergies = patient?.medicalAlerts || "No consta en esta vista"
   const patientPhone = patient?.phone || ""
 
   const fetchPrescriptions = useCallback(async () => {
@@ -237,63 +237,28 @@ export function RecetasTab({ patientId }: { patientId: string }) {
     }
   }
 
+  const deliveryCredentials = (p: any) => ({
+    ...p,
+    doctorSignature: p.doctorSignature || null,
+    doctorLicense: p.doctorLicense || p.author?.professionalCard || "",
+    doctorSpecialty: p.author?.specialty || "No registrada",
+    doctorName: p.author?.name || "Profesional no registrado",
+  })
   const handleWhatsApp = async (p: any) => {
-    let sig = p.doctorSignature || p.author?.signatureBase64 || currentUser?.signatureBase64 || null
-    let license = p.doctorLicense || p.author?.professionalCard || p.author?.licenseNumber || currentUser?.professionalCard || ""
-
-    if (!sig) {
-      try {
-        const res = await fetch("/api/users/signature")
-        if (res.ok) {
-          const creds = await res.json()
-          if (creds?.signatureBase64) sig = creds.signatureBase64
-          if (creds?.professionalCard) license = creds.professionalCard
-        }
-      } catch {}
+    if (!p.doctorSignature) {
+      toast({ title: "Receta pendiente de firma", description: "Solicita al profesional una receta firmada.", variant: "destructive" })
+      return
     }
-
-    const docWithDoctorCredentials = {
-      ...p,
-      doctorSignature: sig,
-      doctorLicense: license,
-      doctorSpecialty: p.author?.specialty || currentUser?.specialty || "Ortodoncia",
-      doctorName: p.author?.name || currentUser?.name || "Dr. Especialista",
-    }
-
-    setSharingRecipe(docWithDoctorCredentials)
+    setSharingRecipe(deliveryCredentials(p))
     setIsShareModalOpen(true)
   }
-
   const handlePrintClick = async (p: any) => {
-    let sig = p.doctorSignature || p.author?.signatureBase64 || currentUser?.signatureBase64 || null
-    let license = p.doctorLicense || p.author?.professionalCard || p.author?.licenseNumber || currentUser?.professionalCard || ""
-
-    if (!sig) {
-      try {
-        const res = await fetch("/api/users/signature")
-        if (res.ok) {
-          const creds = await res.json()
-          if (creds?.signatureBase64) sig = creds.signatureBase64
-          if (creds?.professionalCard) license = creds.professionalCard
-        }
-      } catch {}
+    if (!p.doctorSignature) {
+      toast({ title: "Receta pendiente de firma", variant: "destructive" })
+      return
     }
-
-    const docToPrint = {
-      ...p,
-      doctorSignature: sig,
-      doctorLicense: license,
-      doctorSpecialty: p.author?.specialty || currentUser?.specialty || "Ortodoncia",
-      doctorName: p.author?.name || currentUser?.name || "Dr. Especialista",
-    }
-
-    setPrintingDoc(docToPrint)
-    setTimeout(() => {
-      window.print()
-      setTimeout(() => {
-        setPrintingDoc(null)
-      }, 500)
-    }, 600)
+    setPrintingDoc(deliveryCredentials(p))
+    setTimeout(() => { window.print(); setTimeout(() => setPrintingDoc(null), 500) }, 600)
   }
 
   const filteredPrescriptions = prescriptions.filter(p => {
@@ -597,15 +562,15 @@ export function RecetasTab({ patientId }: { patientId: string }) {
           patientAllergies={patientAllergies}
           recipeData={sharingRecipe}
           patientDocId={patientDocId}
-          doctorSignature={sharingRecipe.doctorSignature || currentUser?.signatureBase64 || null}
+          doctorSignature={sharingRecipe.doctorSignature || null}
           doctorLicense={
             sharingRecipe.doctorLicense ||
             currentUser?.professionalCard ||
             currentUser?.licenseNumber ||
             ""
           }
-          doctorName={sharingRecipe.doctorName || currentUser?.name || "Dr. Especialista"}
-          doctorSpecialty={sharingRecipe.doctorSpecialty || currentUser?.specialty || "Ortodoncia"}
+          doctorName={sharingRecipe.doctorName || "Profesional no registrado"}
+          doctorSpecialty={sharingRecipe.doctorSpecialty || "No registrada"}
         />
       )}
     </div>

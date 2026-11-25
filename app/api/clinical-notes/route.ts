@@ -112,7 +112,7 @@ export const GET = createApiHandler(
         where: { patientId, type: NoteType.GENERAL, fileUrl: { not: null } },
         select: {
           id: true, patientId: true, authorId: true, type: true, content: true,
-          status: true, isSigned: true, createdAt: true, updatedAt: true,
+          status: true, fileUrl: true, isSigned: true, createdAt: true, updatedAt: true,
           author: { select: { id: true, name: true, specialty: true, professionalCard: true } },
         },
         orderBy: { createdAt: "desc" },

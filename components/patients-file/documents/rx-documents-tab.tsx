@@ -38,6 +38,7 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
   const userRole = String(currentUser?.role || "").toUpperCase().trim()
   const canDeleteDocs = userRole === "ADMIN" || userRole === "ADMINISTRADOR" || userRole === "ADMINISTRATION"
   
+  const [documentCategory, setDocumentCategory] = useState("Otros")
   const [isDragging, setIsDragging] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -48,6 +49,7 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
   const fetchDocuments = useCallback(async () => {
     try {
       const res = await fetch(`/api/clinical-notes?patientId=${patientId}`)
+      if (!res.ok) throw new Error("No se pudieron cargar los adjuntos")
       const data = await res.json()
       const docsOnly = (data.clinicalNotes || data).filter((note: any) => note.type === "GENERAL" && note.fileUrl)
       setFiles(docsOnly)
@@ -85,9 +87,10 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
   }
 
   const processFiles = async (uploadedFiles: File[]) => {
+    if (isUploading || !["ADMIN", "DOCTOR", "RECEPTIONIST"].includes(userRole)) return
     const validFiles = uploadedFiles.filter(f => {
       const isTypeValid = ALLOWED_IMAGE_TYPES.includes(f.type) || ALLOWED_DOC_TYPES.includes(f.type)
-      const isSizeValid = f.size <= MAX_FILE_SIZE_MB * 1024 * 1024
+      const isSizeValid = f.size > 0 && f.name.length + documentCategory.length + 3 <= 255 && f.size <= MAX_FILE_SIZE_MB * 1024 * 1024
       return isTypeValid && isSizeValid
     })
 
@@ -113,11 +116,11 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
             body: JSON.stringify({
               input: {
                 type: "GENERAL",
-                content: file.name, 
+                content: `[${documentCategory}] ${file.name}`, 
                 patientId,
                 authorId: currentUser?.id,
                 fileUrl: base64String,
-                status: documentStatuses.COMPLETED.value
+                status: "COMPLETED"
               }
             })
           })
@@ -225,6 +228,7 @@ export function RxDocumentsTab({ patientId }: { patientId: string }) {
           </div>
         </div>
 
+        <label className="flex flex-col gap-1 text-xs font-medium text-foreground">Categoría del adjunto<select value={documentCategory} disabled={isUploading} onChange={e => setDocumentCategory(e.target.value)} className="rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground">{["Radiografía", "Fotografía clínica", "Tomografía", "Examen de laboratorio", "Historia clínica externa", "Consentimiento escaneado", "Otros"].map(category => <option key={category} value={category}>{category}</option>)}</select></label>
         {/* MODAL GUÍA DE ARCHIVOS MEJORADO */}
         <Dialog>
           <DialogTrigger asChild>

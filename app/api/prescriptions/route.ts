@@ -31,8 +31,8 @@ function boundedInt(value: string | null, fallback: number, max: number): number
 
 // El listado clínico completo solo se entrega a personal clínico autorizado.
 export const GET = createApiHandler(
-  { roles: ["ADMIN", "DOCTOR"] },
-  async (_req, { searchParams }) => {
+  { roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"] },
+  async (_req, { user, searchParams }) => {
     const patientId = searchParams.get("patientId")?.trim()
     const page = boundedInt(searchParams.get("page"), 1, 10000)
     const limit = boundedInt(searchParams.get("limit"), 100, 200)
@@ -44,6 +44,7 @@ export const GET = createApiHandler(
     const prescriptions = await prisma.prescription.findMany({
       where: {
         patientId,
+        ...(user.role === "RECEPTIONIST" ? { AND: [{ doctorSignature: { not: null } }, { doctorSignature: { not: "" } }] } : {}),
         patient: { is: { isDeleted: false } },
       },
       select: {

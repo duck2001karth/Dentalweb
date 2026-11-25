@@ -39,10 +39,10 @@ export function FichaClinicaLayout({ patientId }: { patientId: string }) {
 
   const visibleTabs = useMemo(() => {
     if (isReceptionist) {
-      return SUB_TABS.filter((tab) => ["historial", "rx", "recetas"].includes(tab.id))
+      return SUB_TABS.filter((tab) => ["historial", "rx", "recetas", "documentos", "consentimientos"].includes(tab.id))
     }
-    return SUB_TABS
-  }, [isReceptionist])
+    return ["ADMIN", "DOCTOR"].includes(userRole) ? SUB_TABS : []
+  }, [isReceptionist, userRole])
 
   const tabFromUrl = searchParams.get("tab")
   const defaultTab = visibleTabs[0]?.id || "historial"
@@ -95,15 +95,20 @@ export function FichaClinicaLayout({ patientId }: { patientId: string }) {
 
       {/* Vistas clínicas por subpestaña */}
       <div className="flex-1 w-full">
-        {activeTab === "historial" && <HistorialTab patientId={patientId} />}
+        {visibleTabs.some(t => t.id === activeTab) && <>
+        {activeTab === "historial" && isReceptionist && <RxDocumentsTab patientId={patientId} />}
+        {activeTab === "historial" && !isReceptionist && <HistorialTab patientId={patientId} />}
         {activeTab === "evoluciones" && !isReceptionist && <EvolucionesTab patientId={patientId} />}
         {activeTab === "anamnesis" && !isReceptionist && <FichaAnamnesisTab patientId={patientId} />}
         {activeTab === "odontograma" && !isReceptionist && <OdontogramaTab patientId={patientId} />}
         {activeTab === "periodontograma" && !isReceptionist && <PeriodontogramaTab patientId={patientId} />}
         {activeTab === "rx" && <RxDocumentsTab patientId={patientId} />}
         {activeTab === "recetas" && <RecetasTab patientId={patientId} />}
+        {activeTab === "documentos" && isReceptionist && <RxDocumentsTab patientId={patientId} />}
         {activeTab === "documentos" && !isReceptionist && <DocumentosClinicosTab patientId={patientId} />}
+        {activeTab === "consentimientos" && isReceptionist && <RxDocumentsTab patientId={patientId} />}
         {activeTab === "consentimientos" && !isReceptionist && <ConsentimientosTab patientId={patientId} />}
+        </>}
       </div>
     </div>
   )

@@ -78,7 +78,7 @@ export function PatientDetailView({
     "RECEPTIONIST",
     "RECEPCION",
   ].includes(normalizedRole)
-  const canViewClinical = normalizedRole === "ADMIN" || normalizedRole === "DOCTOR"
+  const canViewClinical = normalizedRole === "ADMIN" || normalizedRole === "DOCTOR" || normalizedRole === "RECEPTIONIST"
   const initialTab = !canViewClinical && FICHA_CLINICA_TABS.includes(tabFromUrl || "") ? "datos" : tabFromUrl === "ficha" ? "historial" : (tabFromUrl || "datos")
   const [activeTab, setActiveTab] = useState(initialTab)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)

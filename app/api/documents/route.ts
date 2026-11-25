@@ -119,7 +119,7 @@ export const GET = createApiHandler(
 
 export const POST = createApiHandler(
   {
-    roles: ["ADMIN", "DOCTOR"],
+    roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],
     schema: createDocumentSchema,
   },
   async (_req, { user, data }) => {

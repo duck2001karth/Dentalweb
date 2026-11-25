@@ -114,9 +114,11 @@ export function RecipeShareModal({
   const { settings } = useClinicSettings()
   const [phone, setPhone] = useState("")
   const [isActionLoading, setIsActionLoading] = useState(false)
+  const [confirmed, setConfirmed] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
+      setConfirmed(false)
       let clean = patientPhone ? patientPhone.replace(/\D/g, "") : ""
       if (clean.length > 0 && !clean.startsWith("593")) {
         if (clean.startsWith("0")) clean = clean.substring(1)
@@ -152,22 +154,8 @@ export function RecipeShareModal({
     const rightColX = middleX + margin
     const colWidth = 120
 
-    let signatureBase64Clean: string | null =
-      doctorSignature ||
-      recipeData?.doctorSignature ||
-      recipeData?.author?.signatureBase64 ||
-      null
-    if (!signatureBase64Clean) {
-      try {
-        const sigRes = await fetch("/api/users/signature")
-        if (sigRes.ok) {
-          const sigData = await sigRes.json()
-          if (sigData?.signatureBase64) {
-            signatureBase64Clean = sigData.signatureBase64
-          }
-        }
-      } catch {}
-    }
+    const signatureBase64Clean = recipeData?.doctorSignature || null
+    if (!signatureBase64Clean || !/^data:image[/](png|jpeg|webp);base64,/.test(signatureBase64Clean)) throw new Error("Receta sin firma válida")
 
     const [logoData, watermarkData] = await Promise.all([
       loadImageData(logoUrl),
@@ -340,7 +328,7 @@ export function RecipeShareModal({
 
           doc.addImage(signatureBase64Clean, "PNG", sigX, sigY, sigW, sigH, undefined, "FAST")
         } catch (err) {
-          console.error("Error al inyectar firma en jsPDF:", err)
+          throw new Error("No se pudo incorporar la firma original al PDF")
         }
       }
 
@@ -435,7 +423,7 @@ export function RecipeShareModal({
 
   const handleSendAndOpenWhatsApp = async () => {
     const cleanDigits = phone.replace(/\D/g, "")
-    if (!cleanDigits || cleanDigits.length < 9) {
+    if (!confirmed || !/^[1-9][0-9]{8,14}$/.test(cleanDigits)) {
       toast({
         title: "Número incorrecto",
         description: "Verifica el número de WhatsApp con código de país.",
@@ -448,6 +436,8 @@ export function RecipeShareModal({
       const { doc, fileName } = await generateRecipePDF()
       doc.save(fileName)
 
+      const auditResponse = await fetch(`/api/prescriptions/${recipeData.id}/share`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmed: true }) })
+      if (!auditResponse.ok) throw new Error("No se pudo registrar la entrega")
       const msg =
         `Hola *${patientName}*,\n` +
         `Aquí tienes tu receta médica emitida por *${clinicName}*:\n\n` +
@@ -455,9 +445,9 @@ export function RecipeShareModal({
         `📋 *Indicaciones:*\nVer archivo PDF adjunto\n\n` +
         `_Que te mejores pronto._`
 
-      window.open(`https://wa.me/${cleanDigits}?text=${encodeURIComponent(msg)}`, "_blank")
+      window.open(`https://wa.me/${cleanDigits}?text=${encodeURIComponent(msg)}`, "_blank", "noopener,noreferrer")
       toast({
-        title: "¡Receta descargada y WhatsApp abierto!",
+        title: "PDF descargado; confirma el envío en WhatsApp",
         description: "Arrastra el archivo PDF descargado a la conversación para enviarlo.",
       })
       onClose()
@@ -494,20 +484,21 @@ export function RecipeShareModal({
               <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={(e) => { setPhone(e.target.value); setConfirmed(false) }}
                 className="pl-10 h-11 rounded-xl font-mono text-sm border-border/80 focus-visible:ring-[#25D366]"
                 placeholder="+593 999999999"
               />
             </div>
           </div>
 
+          <label className="flex items-start gap-2 text-sm text-foreground"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-1" /> Confirmo el número del destinatario y la autorización del paciente para compartir esta receta.</label>
           <div className="bg-sky-50 border border-sky-200/80 p-3.5 rounded-2xl space-y-1.5 shadow-xs">
             <p className="text-xs font-bold text-sky-950 flex items-center gap-1.5">
               <AlertCircle className="w-4 h-4 text-[#008bcd] shrink-0" /> Flujo rápido sin fricción
             </p>
             <p className="text-[11px] text-slate-700 leading-relaxed font-normal">
               Al hacer clic en <strong className="text-slate-900">&quot;Abrir Chat y Descargar&quot;</strong> se
-              guardará el PDF oficial con tu firma y matrícula institucional en tu equipo y se abrirá el chat de
+              guardará el PDF con la firma y matrícula del profesional emisor en tu equipo y se abrirá el chat de
               WhatsApp del paciente para adjuntarlo.
             </p>
           </div>
@@ -530,7 +521,7 @@ export function RecipeShareModal({
 
           <Button
             onClick={handleSendAndOpenWhatsApp}
-            disabled={isActionLoading || phone.length < 8}
+            disabled={isActionLoading || !confirmed || phone.length < 8}
             className="w-full sm:w-auto bg-[#25D366] hover:bg-[#1ebc59] text-white rounded-xl h-10 px-6 text-xs font-bold shadow-md shadow-[#25D366]/20 gap-2 transition-all active:scale-95 cursor-pointer"
           >
             {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
