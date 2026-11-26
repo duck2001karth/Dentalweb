@@ -1,44 +1,7 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";
-
-export async function GET() {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
-
-    const notifications = await prisma.notification.findMany({
-      where: {
-        targetRole: { in: ['ADMIN', 'ALL'] }
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 10
-    });
-    return NextResponse.json(notifications);
-  } catch {
-    return NextResponse.json({ error: "Error al cargar notificaciones" }, { status: 500 });
-  }
-}
-
-export async function PATCH() {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user || session.user.role !== "ADMIN") {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
-
-    await prisma.notification.updateMany({
-      where: { 
-        targetRole: { in: ['ADMIN', 'ALL'] },
-        isRead: false 
-      },
-      data: { isRead: true }
-    });
-    return NextResponse.json({ success: true });
-  } catch {
-    return NextResponse.json({ error: "Error al actualizar notificaciones" }, { status: 500 });
-  }
-}
+import { createApiHandler } from "@/lib/server/api-handler"
+import { workflowNotices,markWorkflowNotices } from "@/lib/server/workflow-notices"
+import { getSessionUser } from "@/lib/server/get-session-user"
+import { NextResponse } from "next/server"
+export const dynamic="force-dynamic"
+export const GET=createApiHandler({roles:["ADMIN"]},async(_,{user})=>workflowNotices(user))
+export async function PATCH(){try{const user=await getSessionUser();if(user.role!=="ADMIN")return NextResponse.json({error:"No autorizado"},{status:403});return NextResponse.json(await markWorkflowNotices(user,(await workflowNotices(user)).map(n=>n.id)))}catch{return NextResponse.json({error:"No se pudo actualizar"},{status:500})}}

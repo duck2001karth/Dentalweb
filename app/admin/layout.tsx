@@ -7,6 +7,7 @@ const mobileAdminLinks = [
   { label: "Convenios", href: "/admin/convenios" },
   { label: "Catálogo", href: "/admin/catalogo" },
   { label: "Usuarios", href: "/admin/usuarios" },
+  { label: "Papelera", href: "/admin/papelera" },
   { label: "Auditoría", href: "/admin/auditoria" },
   { label: "Respaldos", href: "/admin/respaldos" },
   { label: "Volver a clínica", href: "/" },

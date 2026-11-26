@@ -25,6 +25,7 @@ type NavItemConfig = {
 const mainNavItems: NavItemConfig[] = [
   { name: "Panel de Inicio", href: "/", icon: Home },
   { name: "Agenda de Citas", href: "/agenda-global", icon: Calendar },
+  { name: "Centro de Atención", href: "/centro-atencion", icon: Calendar },
   { name: "Pacientes", href: "/pacientes", icon: Users },
 ]
 

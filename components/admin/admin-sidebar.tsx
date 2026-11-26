@@ -4,6 +4,7 @@ import React, { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { 
+  Trash2,
   LayoutDashboard, 
   ListTree, 
   Users, 
@@ -20,6 +21,7 @@ const adminLinks = [
   { name: "Convenios y Tarifas", href: "/admin/convenios", icon: Handshake, isNew: true },
   { name: "Catálogo de Precios", href: "/admin/catalogo", icon: ListTree },
   { name: "Gestión de Usuarios", href: "/admin/usuarios", icon: Users },
+  { name: "Papelera de pacientes", href: "/admin/papelera", icon: Trash2 },
   { name: "Auditoría de Sistema", href: "/admin/auditoria", icon: History },
   { name: "Respaldos y Seguridad", href: "/admin/respaldos", icon: Database },
 ]

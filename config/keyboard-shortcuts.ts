@@ -5,6 +5,8 @@ const clinical = ["ADMIN", "DOCTOR"] as const
 const admin = ["ADMIN"] as const
 const cash = ["ADMIN", "RECEPTIONIST"] as const
 export const shortcuts: readonly Shortcut[] = [
+ {id:"workflow",label:"Centro de Atención",key:"Alt+H",group:"Navegación",roles:all,route:"/centro-atencion"},
+ {id:"notices",label:"Centro de notificaciones",key:"Alt+M",group:"Sistema",roles:all,route:"/notificaciones"},
  {id:"search",label:"Buscar pacientes o acciones",key:"Ctrl+B / Ctrl+K",group:"Sistema",roles:all},
  {id:"help",label:"Atajos de teclado",key:"Alt+K",group:"Sistema",roles:all},
  {id:"theme",label:"Cambiar tema",key:"Alt+T",group:"Sistema",roles:all},

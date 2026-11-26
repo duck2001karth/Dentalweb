@@ -35,7 +35,7 @@ const getIcon = (type: string) => {
 export function NotificationsDropdown() {
   const router = useRouter()
   const { data: session } = useSession()
-  const { notifications = [], isLoading, markAsRead } = useNotifications()
+  const { notifications = [], isLoading, isError, markAsRead } = useNotifications()
   const currentUser = session?.user as any
   const userRole = String(currentUser?.role || "RECEPTIONIST").toUpperCase().trim()
 
@@ -111,7 +111,7 @@ export function NotificationsDropdown() {
 
         {/* Lista de Notificaciones */}
         <div className="max-h-[380px] overflow-y-auto custom-scrollbar bg-background divide-y divide-border/40">
-          {isLoading ? (
+          {isError ? <p role="alert" className="p-4 text-sm text-destructive">No se pudieron cargar los avisos.</p> : isLoading ? (
             <div className="p-8 flex justify-center">
               <Loader2 className="w-6 h-6 animate-spin text-[#008bcd]" />
             </div>
@@ -182,7 +182,7 @@ export function NotificationsDropdown() {
                       </span>
 
                       <div className="flex items-center gap-1.5 opacity-90 group-hover:opacity-100">
-                        {isDebt && notif.patientPhone && (userRole === "ADMIN" || userRole === "RECEPCION" || userRole === "RECEPCIONISTA") && (
+                        {isDebt && notif.patientPhone && (userRole === "ADMIN" || userRole === "RECEPTIONIST" || userRole === "RECEPCION" || userRole === "RECEPCIONISTA") && (
                           <button
                             type="button"
                             onClick={(e) => handleSendWhatsApp(notif, e)}
@@ -215,6 +215,7 @@ export function NotificationsDropdown() {
             })
           )}
         </div>
+      <button type="button" onClick={()=>router.push("/notificaciones")} className="w-full border-t p-3 text-xs font-semibold text-primary hover:bg-accent">Ver todas las notificaciones</button>
       </DropdownMenuContent>
     </DropdownMenu>
   )

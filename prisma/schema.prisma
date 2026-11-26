@@ -41,7 +41,8 @@ model AuditLog {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   patientId   String?
-  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  archivedPatientId String?
+  patient     Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
   
   createdAt   DateTime @default(now())
 

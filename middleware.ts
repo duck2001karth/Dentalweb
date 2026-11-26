@@ -85,6 +85,6 @@ export const config = {
     "/historia-clinica/:path*", "/odontograma/:path*",
     "/evoluciones/:path*", "/tratamientos/:path*",
     "/tratamiento/:path*", "/plans-treatment/:path*",
-    "/comprobantes/:path*", "/api/((?!auth).*)",
+    "/comprobantes/:path*", "/centro-atencion/:path*", "/notificaciones/:path*", "/api/((?!auth).*)",
   ],
 }

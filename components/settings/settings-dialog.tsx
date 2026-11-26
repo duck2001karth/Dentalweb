@@ -1,5 +1,6 @@
 "use client"
 
+import { NotificationPreferences } from "@/components/notifications/notification-preferences"
 import { ShortcutsTab } from "@/components/shortcuts/shortcuts-tab"
 import React, { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
@@ -11,7 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { X, ShieldCheck, BellRing, Eye } from "lucide-react"
+import { X, ShieldCheck, Eye } from "lucide-react"
 
 import { SettingsSidebar } from "@/components/settings/settings-sidebar"
 import { SettingsHomeTab } from "@/components/settings/tabs/settings-home-tab"
@@ -186,17 +187,7 @@ export function SettingsDialog({
               </div>
             )}
 
-            {activeSubTab === "notifications" && (
-              <div className="space-y-4 max-w-lg animate-in fade-in duration-200">
-                <div className="flex items-center gap-2">
-                  <BellRing className="w-5 h-5" style={{ color: liveAccentColor }} />
-                  <h3 className={`text-base font-bold ${isDark ? "text-white" : "text-slate-900"}`}>Notificaciones</h3>
-                </div>
-                <p className={`text-xs leading-relaxed ${isDark ? "text-slate-400" : "text-slate-500"}`}>
-                  Gestión de recordatorios automáticos por WhatsApp y avisos de llegada de pacientes.
-                </p>
-              </div>
-            )}
+            {activeSubTab === "notifications" && <NotificationPreferences />}
 
             {activeSubTab === "accessibility" && (
               <div className="space-y-4 max-w-lg animate-in fade-in duration-200">

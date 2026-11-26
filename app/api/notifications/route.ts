@@ -1,3 +1,5 @@
+import { prisma as workflowDb } from "@/lib/db"
+import { workflowNotices, markWorkflowNotices } from "@/lib/server/workflow-notices"
 import { createApiHandler } from "@/lib/server/api-handler"
 import { prisma } from "@/lib/db"
 import { z } from "zod"
@@ -9,21 +11,7 @@ export const GET = createApiHandler(
     const isDoctor = user.role === "DOCTOR"
     const canSeeFinancialDebts = ["ADMIN", "RECEPTIONIST", "DOCTOR"].includes(user.role)
 
-    const whereClause: Prisma.NotificationWhereInput = {}
-    if (user.role !== "ADMIN") {
-      whereClause.OR = [
-        { targetRole: user.role },
-        { targetRole: "ALL" },
-        { userId: user.id },
-      ]
-    }
-
-    const standardNotifications = await prisma.notification.findMany({
-      where: whereClause,
-      orderBy: { createdAt: "desc" },
-      take: 15,
-    })
-
+    const standardNotifications = await workflowNotices(user)
     const debtNotifications: any[] = []
     
     if (canSeeFinancialDebts) {
@@ -102,7 +90,9 @@ export const GET = createApiHandler(
       }
     }
 
-    const combined = [...debtNotifications, ...standardNotifications].sort(
+    const read = await workflowDb.$queryRaw<Array<{noticeId:string}>>`SELECT "noticeId" FROM public."WorkflowNoticeRead" WHERE "userId"=${user.id}`
+    const seen=new Set(read.map(r=>r.noticeId))
+    const combined = [...debtNotifications.map(n=>({...n,isRead:seen.has(n.id)})), ...standardNotifications].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     )
 
@@ -110,24 +100,4 @@ export const GET = createApiHandler(
   }
 )
 
-export const PATCH = createApiHandler(
-  {
-    roles: ["ADMIN", "DOCTOR", "RECEPTIONIST"],
-    schema: z.object({
-      ids: z.array(z.string()),
-    }),
-  },
-  async (req, { data }) => {
-    if (data.ids.length === 0) return { success: true }
-    const realDbIds = data.ids.filter((id) => !id.startsWith("debt-"))
-
-    if (realDbIds.length > 0) {
-      await prisma.notification.updateMany({
-        where: { id: { in: realDbIds } },
-        data: { isRead: true },
-      })
-    }
-
-    return { success: true }
-  }
-)
+export const PATCH = createApiHandler({roles:["ADMIN","DOCTOR","RECEPTIONIST"],schema:z.object({ids:z.array(z.string().max(250)).max(250)})},async(_,{user,data})=>markWorkflowNotices(user,data.ids))
