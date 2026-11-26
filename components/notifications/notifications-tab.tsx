@@ -8,7 +8,6 @@ import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { formatDistanceToNow } from "date-fns"
 import { es } from "date-fns/locale"
-import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 import { useNotifications } from "@/hooks/notifications"
@@ -74,16 +73,17 @@ export function NotificationsDropdown() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative h-12 w-12 rounded-full hover:bg-muted transition-colors cursor-pointer"
+        <button
+          type="button"
+          aria-label={unreadCount > 0 ? `Notificaciones: ${unreadCount} sin leer` : "Notificaciones"}
+          title="Notificaciones"
+          className="relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Bell size={28} className="text-muted-foreground" />
+          <Bell className="h-[22px] w-[22px] shrink-0" strokeWidth={2} aria-hidden="true" />
           {unreadCount > 0 && (
-            <span className="absolute top-2.5 right-2.5 w-3 h-3 bg-red-500 rounded-full border-2 border-background animate-pulse" />
+            <span aria-hidden="true" className="absolute right-[6px] top-[6px] h-[10px] w-[10px] rounded-full bg-red-500 ring-2 ring-card" />
           )}
-        </Button>
+        </button>
       </DropdownMenuTrigger>
 
       <DropdownMenuContent

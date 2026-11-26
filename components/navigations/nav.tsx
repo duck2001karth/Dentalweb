@@ -25,7 +25,7 @@ type NavItemConfig = {
 const mainNavItems: NavItemConfig[] = [
   { name: "Panel de Inicio", href: "/", icon: Home },
   { name: "Agenda de Citas", href: "/agenda-global", icon: Calendar },
-  { name: "Centro de Atención", href: "/centro-atencion", icon: Calendar },
+  { name: "Centro de Atención", href: "/centro-atencion", icon: Activity },
   { name: "Pacientes", href: "/pacientes", icon: Users },
 ]
 
@@ -37,6 +37,9 @@ const clinicaNavItems: NavItemConfig[] = [
 
 const adminNavItems: NavItemConfig[] = [
   { name: "Admin Center", href: "/admin", icon: Briefcase, roles: ["ADMIN"] },
+ ]
+
+const operationalNavItems: NavItemConfig[] = [
   { name: "Caja y Arqueo", href: "/cajas", icon: CreditCard, roles: ["ADMIN", "RECEPTIONIST"] },
   { name: "Inventario", href: "/inventario", icon: Box, roles: ["ADMIN", "RECEPTIONIST"] },
 ]
@@ -46,7 +49,7 @@ const configNavItems: NavItemConfig[] = [
   { name: "Plantillas Clínicas", href: "/ajustes/plantillas", icon: FileCode, roles: ["ADMIN"] },
 ]
 
-type ModuleKey = "clinica" | "admin" | "config"
+type ModuleKey = "clinica" | "operational" | "admin" | "config"
 
 interface NavProps {
   /** En el Sheet móvil, las etiquetas siempre deben estar visibles. */
@@ -72,6 +75,14 @@ export const Nav = ({ mobile = false, onNavigate }: NavProps) => {
   const { settings } = useClinicSettings()
 
   const isExpanded = mobile || isHovered
+  const visibleClinicalItems = React.useMemo(
+    () => ["ADMIN", "DOCTOR"].includes(userRole) ? clinicaNavItems : [],
+    [userRole]
+  )
+  const visibleOperationalItems = React.useMemo(
+    () => operationalNavItems.filter(item => !item.roles || item.roles.includes(userRole)),
+    [userRole]
+  )
   const visibleAdminItems = React.useMemo(
     () => adminNavItems.filter(item => !item.roles || item.roles.includes(userRole)),
     [userRole]
@@ -94,17 +105,19 @@ export const Nav = ({ mobile = false, onNavigate }: NavProps) => {
   }, [settings?.logoScale])
 
   React.useEffect(() => {
-    if (clinicaNavItems.some(i => matchesRoute(pathname, i.href))) {
+    if (visibleClinicalItems.some(i => matchesRoute(pathname, i.href))) {
       setActiveOpenModule("clinica")
+    } else if (visibleOperationalItems.some(i => matchesRoute(pathname, i.href))) {
+      setActiveOpenModule("operational")
     } else if (visibleAdminItems.some(i => matchesRoute(pathname, i.href))) {
       setActiveOpenModule("admin")
     } else if (visibleConfigItems.some(i => matchesRoute(pathname, i.href))) {
       setActiveOpenModule("config")
     } else {
       // En el móvil, ofrecer inicialmente el área clínica sin ocupar demasiado.
-      setActiveOpenModule(mobile ? "clinica" : null)
+      setActiveOpenModule(mobile ? (visibleClinicalItems.length ? "clinica" : visibleOperationalItems.length ? "operational" : null) : null)
     }
-  }, [pathname, visibleAdminItems, visibleConfigItems, mobile])
+  }, [pathname, visibleClinicalItems, visibleOperationalItems, visibleAdminItems, visibleConfigItems, mobile])
 
   const toggleModule = (key: ModuleKey) => {
     setActiveOpenModule(prev => (prev === key ? null : key))
@@ -168,6 +181,7 @@ export const Nav = ({ mobile = false, onNavigate }: NavProps) => {
             )}
           </div>
 
+          {visibleClinicalItems.length > 0 && (
           <NavSection
             title="Área Clínica"
             icon={Stethoscope}
@@ -176,10 +190,26 @@ export const Nav = ({ mobile = false, onNavigate }: NavProps) => {
             onToggle={() => toggleModule("clinica")}
             accentColor={accentColor}
           >
-            {clinicaNavItems.map(item => (
+            {visibleClinicalItems.map(item => (
               <NavItem key={item.href} item={item} isSubItem isExpanded={isExpanded} accentColor={accentColor} onNavigate={onNavigate} />
             ))}
           </NavSection>
+          )}
+
+          {visibleOperationalItems.length > 0 && (
+            <NavSection
+              title="Gestión Operativa"
+              icon={CreditCard}
+              isExpanded={isExpanded}
+              isOpen={activeOpenModule === "operational"}
+              onToggle={() => toggleModule("operational")}
+              accentColor={accentColor}
+            >
+              {visibleOperationalItems.map(item => (
+                <NavItem key={item.href} item={item} isSubItem isExpanded={isExpanded} accentColor={accentColor} onNavigate={onNavigate} />
+              ))}
+            </NavSection>
+          )}
 
           {visibleAdminItems.length > 0 && (
             <NavSection

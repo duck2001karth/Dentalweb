@@ -19,6 +19,7 @@ export function DynamicBreadcrumbs() {
 
   const getBreadcrumbData = () => {
     if (pathname.startsWith("/pacientes")) return { parent: "Directorio", label: "Pacientes", href: "/pacientes" }
+    if (pathname === "/centro-atencion" || pathname.startsWith("/centro-atencion/")) return { parent: "Agenda", label: "Centro de Atención", href: "/agenda-global" }
     if (pathname.startsWith("/agenda")) return { parent: "Agenda", label: "Calendario Global", href: "/agenda" }
     
     if (pathname.startsWith("/finanzas")) {
